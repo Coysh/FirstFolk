@@ -148,22 +148,46 @@ export const BALANCE = {
    * fills its Crown, `crownRate` a second (`crownTended` with a stockade standing watch). The Crown
    * is full at `crownNeed`. Rivals' progress drains at `crownDecay` while someone else keeps the stone.
    */
-  crownNeed: 1200,
-  crownRate: 2,
-  crownTended: 3,
-  crownDecay: 2,
+  crownNeed: 1300,
+  /** The Crown opens at this tick: from then it fills, a point a second for each voice of the valley you hold beyond the rival's (at most `crownDiffCap`), and one more while a manned Stockade tends the Kingstone you keep. */
+  crownOpens: secs(9 * 60),
+  crownRate: 1,
+  crownTended: 1,
+  crownDiffCap: 2,
+  /** The Kingstone is worth this many voices to whoever keeps it alone; a steading is worth one. */
+  kingstoneVoices: 2,
   /** The Kingstone's light shields whoever keeps it alone: their posts beside it fight this much harder. */
   crownWard: 40,
-  /** Challenges: the first is called at 7:00, then one every 3½–4½ minutes after the last ends. */
-  firstChallenge: secs(7 * 60),
-  challengeGap: [secs(210), secs(270)] as [number, number],
+  /**
+   * Steadings (see steadings.ts): the first Want is posted `wantFirst` in, then a new one `wantGap` after the
+   * last ends; each lasts `wantTicks`. Winning one is worth `wantWin` favour (the loser's rival loses `wantSnub`),
+   * a gift that is not wanted is worth up to `giftFavour`. A steading sides with whoever has `allyFavour` and
+   * leads by `allyLead`, and keeps them while they hold `keepFavour` and lead by `keepLead`. Favour fades by one
+   * every `favourFade`. A guard Want asks for `guardTicks` of a manned post beside it. Sworn steadings send a gift
+   * every `giftEvery`.
+   */
+  wantFirst: secs(150),
+  wantGap: [secs(50), secs(80)] as [number, number],
+  wantTicks: secs(170),
+  wantWin: 35,
+  wantSnub: 8,
+  giftFavour: 6,
+  allyFavour: 50,
+  allyLead: 20,
+  keepFavour: 40,
+  keepLead: 5,
+  favourFade: secs(20),
+  guardTicks: secs(80),
+  giftEvery: secs(60),
+  /** A steading that stands with you pushes your border out: radius and power. */
+  steadingReach: [7, 70] as [number, number],
+  /** Caravans: a cart's pace (movement progress per tick), the most a settlement runs at once, and the biggest load. */
+  caravanSpeed: 130,
+  caravanMax: 2,
+  caravanLoad: 40,
   /** Star-fall: a new landmark lands between the settlements from this tick (≡ 5 mod 10). */
   starfallAt: secs(14 * 60) + 5,
 
-  /** Market Day: each lot sold gluts that good by this much (percent), easing 1 point every 2 s. */
-  glutPerSale: 25,
-  /** Standing trade orders sell a lot this often (a multiple of 20 ticks). */
-  routeEvery: secs(20),
 
   /** Family deeds: how many houses sit on the council, and how far an Expedition may reach past the border. */
   councilSize: 4,

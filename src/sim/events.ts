@@ -1,3 +1,4 @@
+import { crownSite } from './crown';
 import { BALANCE, secs } from './balance';
 import { starfallTick } from './happenings';
 import { addRenown } from './renown';
@@ -213,7 +214,7 @@ export const VALLEY_EVENTS: ValleyEventDef[] = [
     text: 'An old stargazer begs an audience. “The star that led you here is not done. It will fall again between your folk and theirs, soon. Whoever keeps what it leaves will be crowned.”',
     weight: 8,
     once: true,
-    when: (w, o) => o === 0 && w.players.length > 1 && w.scenario.victory === 'crown' && !w.crown && w.tick >= starfallTick(w) - secs(240) && w.tick < starfallTick(w) - secs(45),
+    when: (w, o) => o === 0 && w.players.length > 1 && w.scenario.victory === 'crown' && !crownSite(w) && w.tick >= starfallTick(w) - secs(240) && w.tick < starfallTick(w) - secs(45),
     options: [
       { label: 'Raise a camp at the hill', detail: 'Reveals the middle of the valley; +8 logs, +4 planks', apply: (w, o) => seerHill(w, o) },
       { label: 'Keep faith at home', detail: '+12 food and every house power ready', apply: (w, o) => (give(w, o, 'berries', 12), bless(w, o)) },

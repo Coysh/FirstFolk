@@ -1,5 +1,5 @@
 import { BALANCE, secs } from './balance';
-import { crownPct } from './crown';
+import { crownPct, crownSite } from './crown';
 import type { World } from './world';
 
 /**
@@ -54,7 +54,7 @@ export const SAGA: SagaBeat[] = [
     title: 'The Star Falls',
     text: ['It comes down on the old crowning-hill between your folk and theirs, and wakes the Kingstone.', 'The songs are plain: keep a spear beside the stone, alone, and its light will crown your people.'],
     goal: 'Raise a manned post within 9 tiles of the Kingstone. Burn any post the {rival} raise there.',
-    when: (w) => !!w.crown,
+    when: (w) => !!crownSite(w),
   },
   {
     id: 'rising',

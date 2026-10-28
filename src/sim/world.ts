@@ -14,14 +14,13 @@ import { DIFFICULTY, type Difficulty, type Rules } from './rules';
 import { NO_OWNER, onBuildingComplete, recomputeTerritory, updateExploration } from './territory';
 import { updateRenown, type RenownSource } from './renown';
 import type { DeedId } from './deeds';
-import { updateMarket } from './market';
+import { initSteadings, updateCaravans, updateSteadings, type Caravan, type SteadingState } from './steadings';
 import { emptyCalling, updateCallings, callingTier, type CallingId } from './callings';
 import { updateBridges, type Bridge } from './bridges';
 import { updateCrown, type Crown } from './crown';
 import { updateScouts, type Scout } from './scouts';
 import { updateSaga } from './saga';
 import { updateHappenings } from './happenings';
-import { updateChallenges } from './challenges';
 import { FOUNDING_HOUSES, offerHouse, playerMod, seatHouse, updateHouses, type HouseId, type HouseOffer, type Mod, type Seat } from './houses';
 import { ORIGINS, rivalOrigin, type Dynasty, type OriginId } from './origins';
 import { hasOmen, type OmenId } from './omens';
@@ -98,6 +97,8 @@ export interface Discovery {
   claimedBy: number;
   /** Landmarks: who holds it now (follows the border), or -1. */
   heldBy: number;
+  /** Steadings only (see steadings.ts): the people, favour, Want and allegiance. */
+  st?: SteadingState;
 }
 
 export type BuildingAlert = '' | 'noWorker' | 'noResource' | 'full' | 'noInput' | 'materials';
@@ -196,11 +197,15 @@ export type SimEvent =
   | { type: 'scoutHome'; owner: number; found: number }
   | { type: 'crownKeeper'; keeper: number; was: number; x: number; y: number }
   | { type: 'crownQuarter'; owner: number; quarter: number }
-  | { type: 'challenge'; def: string }
-  | { type: 'challengeWon'; def: string; winner: number; prize: number }
-  | { type: 'challengeExpired'; def: string }
+  | { type: 'wantPosted'; siteId: number; kind: 'goods' | 'guard'; good: Good; n: number }
+  | { type: 'wantWon'; siteId: number; owner: number; kind: 'goods' | 'guard'; good: Good; n: number }
+  | { type: 'wantExpired'; siteId: number; kind: 'goods' | 'guard' }
+  | { type: 'steadingAlly'; siteId: number; owner: number; was: number }
+  | { type: 'steadingGift'; siteId: number; owner: number; good: Good; n: number }
+  | { type: 'caravanSent'; owner: number; siteId: number; good: Good; n: number }
+  | { type: 'caravanArrived'; owner: number; siteId: number; good: Good; n: number; won: boolean }
+  | { type: 'caravanHome'; owner: number }
   | { type: 'starfall'; siteId: number; x: number; y: number }
-  | { type: 'sold'; owner: number; good: Good; n: number; renown: number }
   | { type: 'workBegun'; owner: number; buildingType: BuildingType }
   | { type: 'workLost'; owner: number; buildingType: BuildingType; winner: number }
   | { type: 'raidLaunched'; owner: number; defender: number; targetId: number; buildingType: BuildingType; x: number; y: number; strength: number; eta: number }
@@ -245,8 +250,8 @@ export interface PlayerState {
   calling: { id: CallingId | ''; tier: number };
   /** Landmarks taken from another settlement. */
   taken: number;
-  /** Challenges won (see challenges.ts). */
-  challengesWon: number;
+  /** Goods this settlement has carried to steadings by caravan (the Merchants calling reads it). */
+  caravanned: number;
   /** Families build their own huts when there's room and timber (see population.ts). */
   autoHomes: boolean;
   /** The furthest this player has trailed the leader in renown (for comeback honours). */
@@ -257,11 +262,6 @@ export interface PlayerState {
   legends: Legend[];
   /** The settlement's crafts: XP from all work, shared by everyone (see trades.ts). */
   crafts: Skills;
-  /** Market glut per good (percent) and goods sold, see market.ts. */
-  glut: Stock;
-  sold: number;
-  /** Standing trade orders: good → reserve to keep (see market.ts). */
-  routes: Partial<Record<Good, number>>;
   /** Founding origin ('' when the founders chose a boon instead). */
   origin: OriginId | '';
   /** Deed effects running until a tick. */
@@ -375,15 +375,13 @@ export class World {
   /** Caches for the bridge search (see bridges.ts): the shoreline, and each owner's reach from home. */
   shoreCache: Int32Array | null = null;
   bridgeReach: ({ version: number; seen: Uint8Array } | undefined)[] = [];
-  /** The valley's running challenge (see challenges.ts), when the next is called, and the last one. */
-  challenge: { def: string; endsAt: number; start: number[] } | null = null;
-  nextChallengeAt = BALANCE.firstChallenge;
-  lastChallenge = '';
+  /** Caravans on the road to steadings (see steadings.ts). */
+  caravans: Caravan[] = [];
   /** How many beats of the valley's story have been told (see saga.ts). */
   saga = 0;
   /** Scouts out across the fog (see scouts.ts). */
   scouts: Scout[] = [];
-  /** The Crown (see crown.ts): null until the Kingstone falls. */
+  /** The Crown (see crown.ts): null until it opens. */
   crown: Crown | null = null;
   /** Raiding parties on the march (see warfare.ts), and when reavers next come ashore. */
   warbands: Warband[] = [];
@@ -422,7 +420,8 @@ export class World {
     if (opts.blank) return;
     const seams = hasOmen(this, 'richSeams') ? 2 : 1;
     for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y, 0, n.kind === 'rock' ? (n.max ?? BALANCE.rockStone) * seams : n.max);
-    for (const site of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER, heldBy: NO_OWNER });
+    for (const { char: _c, ...site } of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER, heldBy: NO_OWNER });
+    initSteadings(this, this.map.sites.map((s) => s.char));
     this.setupPlayer(0, this.map.starts[0], opts.origin, opts.dynasty);
     if (this.scenario.rival) this.addRival(opts.rivalStyle);
   }
@@ -616,7 +615,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', onceEvents: [], rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, rallyReady: 0, scoutReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', onceEvents: [], rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, caravanned: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, origin: originId ?? '', style: 'balanced', raidReady: 0, rallyReady: 0, scoutReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -822,18 +821,18 @@ export class World {
     updateWarbands(this);
     updateCrown(this);
     updateScouts(this);
+    updateCaravans(this);
 
     updateSeasons(this);
     if (this.tick % 10 === 0) this.updateNature();
     if (this.tick % 20 === 15) {
       recomputeTerritory(this);
-      updateMarket(this);
     }
     if (this.tick % BALANCE.renownTick === 55) updateRenown(this);
     if (this.tick % 10 === 5) {
       updateExploration(this);
       updateHappenings(this);
-      updateChallenges(this);
+      updateSteadings(this);
       updateReavers(this);
       updateHouses(this);
       updateValleyEvents(this);
@@ -907,7 +906,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'challenge', 'challengeWon', 'starfall', 'crownKeeper', 'crownQuarter', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'wantPosted', 'wantWon', 'steadingAlly', 'caravanArrived', 'starfall', 'crownKeeper', 'crownQuarter', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);

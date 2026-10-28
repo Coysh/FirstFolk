@@ -16,10 +16,14 @@ export function hashWorld(world: World): string {
   for (const p of world.players) parts.push(p.hungry ? 1 : 0, p.mealAccum, p.newcomerCooldown, p.claimed, p.rank, p.winters, p.nextEventAt, p.event?.def ?? '', p.renown, p.taken, ...Object.values(p.crafts));
   for (const f of world.families.values()) parts.push(f.id, f.homeId, f.birthCooldown);
   for (const p of world.players) for (const seat of p.seats) parts.push(seat.house, seat.familyId, seat.ready);
-  for (const site of world.sites) parts.push(site.id, site.revealed, site.claimedBy, site.heldBy);
+  for (const site of world.sites) {
+    parts.push(site.id, site.revealed, site.claimedBy, site.heldBy);
+    if (site.st) parts.push(site.st.ally, site.st.nextWantAt, site.st.want ? `${site.st.want.good}${site.st.want.n}:${site.st.want.progress.join()}` : '-', ...site.st.favour);
+  }
+  for (const c of world.caravans) parts.push(c.id, c.owner, c.x, c.y, c.step, c.n);
   let t = 0;
   for (let i = 0; i < world.territory.length; i++) t = (t * 31 + world.territory[i] + 2 * world.explored[i]) | 0;
-  parts.push(t, world.challenge?.def ?? '-', world.challenge?.endsAt ?? 0, world.nextChallengeAt);
+  parts.push(t);
   parts.push(world.nextReaversAt);
   parts.push(world.saga);
   for (const s of world.scouts) parts.push(s.id, s.x, s.y, s.step);

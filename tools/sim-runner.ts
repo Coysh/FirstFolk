@@ -57,6 +57,8 @@ for (let g = 0; g < games; g++) {
     console.log('territory/min:', r.territoryByMinute.join(' '));
     console.log('renown/min (you:rival):', r.renownByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
     console.log('renown sources:', JSON.stringify(r.renownBy));
+    console.log('voices/min (you:rival):', r.voicesByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
+    console.log('crown score/min (you minus rival):', r.scoreByMinute.join(' '));
   }
   if (!quiet || games === 1)
     console.log(
@@ -71,7 +73,7 @@ if (games > 1) {
     `\n${reports.length} games · P wins ${reports.filter((r) => r.winner === 0).length} · rival wins ${reports.filter((r) => r.winner === 1).length} · by time ${reports.filter((r) => r.byTime).length} · undecided ${reports.length - won.length}` +
       `\nlength min/median/max ${lengths[0]?.toFixed(1)}/${lengths[Math.floor(lengths.length / 2)]?.toFixed(1)}/${lengths.at(-1)?.toFixed(1)} min` +
       `\navg lead changes ${avg((r) => r.leadChanges)} · comebacks (winner was ≥100 behind) ${reports.filter((r) => r.winnerDeficit >= 100).length} · avg landmark flips ${avg((r) => r.holdingFlips)}` +
-      `\nchallenges won P/R ${reports.reduce((n, r) => n + r.challenges[0], 0)}/${reports.reduce((n, r) => n + r.challenges[1], 0)} · by acclaim ${reports.filter((r) => r.acclaim).length}` +
+      `\nwants won P/R ${reports.reduce((n, r) => n + r.wantsWon[0], 0)}/${reports.reduce((n, r) => n + r.wantsWon[1], 0)} · allegiance flips ${avg((r) => r.allegianceFlips)} a game · caravans sent P/R ${avg((r) => r.caravans[0])}/${avg((r) => r.caravans[1])} a game` +
       `\nbattles the player saw: avg ${avg((r) => r.battles)} · games with none ${reports.filter((r) => !r.battles).length}` +
       `\navg idle ${avg((r) => r.idleAdultPct)}% · avg hungry ${avg((r) => r.hungryPct)}% (worst ${Math.max(...reports.map((r) => r.hungryPct))}%) · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg stock@20m ${avg((r) => r.stockAt[1] ?? 0)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)}`,
   );

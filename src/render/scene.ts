@@ -18,6 +18,7 @@ import { Footpaths } from './paths';
 import { pickGround } from './picking';
 import { isWinter } from '../sim/seasons';
 import { SitesView } from './sites';
+import { CaravansView } from './caravans';
 import { SettlersView } from './settlers';
 import { SKY, Sky } from './sky';
 import { HeightField, TerrainMesh, Water } from './terrain';
@@ -69,6 +70,7 @@ export class GameRenderer {
   private wildlife!: Wildlife;
   private decor!: THREE.Group;
   sites!: SitesView;
+  caravans!: CaravansView;
   private sun!: THREE.DirectionalLight;
   private hemi!: THREE.HemisphereLight;
   /** 1 in full daylight, 0 in deep night: eased towards the sun's height. */
@@ -145,9 +147,10 @@ export class GameRenderer {
     const home = wagon ? { x: wagon.x + 1, y: wagon.y + 1 } : { x: world.size / 2, y: world.size / 2 };
     this.wildlife = new Wildlife(world.map, this.hf, home);
     this.sites = new SitesView(this.hf);
+    this.caravans = new CaravansView(this.hf);
     this.bridges = new BridgesView(this.hf, this.buildings.material, this.ghostMat.clone());
     this.scene.add(this.bridges.group);
-    this.scene.add(this.buildings.group, this.settlers.group, this.wildlife.group, this.sites.group);
+    this.scene.add(this.buildings.group, this.settlers.group, this.wildlife.group, this.sites.group, this.caravans.group);
     this.buildings.update(world, 0);
 
     await progress(0.75, 'Gathering the folk');
@@ -484,6 +487,7 @@ export class GameRenderer {
     this.buildings.update(this.world, dt);
     this.bridges.update(this.world);
     this.sites.update(this.world, this.time);
+    this.caravans.update(this.world);
     this.settlers.update(this.world, alpha, this.time, dt);
     this.paths.update(dt);
     this.wildlife.update(this.time, dt);

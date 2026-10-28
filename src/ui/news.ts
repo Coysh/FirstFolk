@@ -4,7 +4,7 @@ import { DEEDS } from '../sim/deeds';
 import { HOUSES } from '../sim/houses';
 import { NO_OWNER } from '../sim/territory';
 import { CONTESTED } from '../sim/crown';
-import { challengeDef } from '../sim/challenges';
+import { STEADING_CHAR } from '../sim/steadingDefs';
 import { TRADES } from '../sim/trades';
 import type { SimEvent, World } from '../sim/world';
 
@@ -114,13 +114,23 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
       if (e.defender === me) return e.won ? { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🔥 Your ${name} burned (${e.attack} vs ${e.defence})`, tone: 'warn' } : { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🛡 Your ${name} held: +${e.renown}★`, tone: 'big' };
       return null;
     }
-    case 'challenge': {
-      const def = challengeDef(e.def)!;
-      return { channel: 'toast', priority: 2, icon: ICONS.renown, text: `${def.icon} ${def.title}: +${def.prize}★`, sub: def.text, tone: 'big' };
+    case 'wantPosted': {
+      const st = world.sites.find((s) => s.id === e.siteId)?.st;
+      if (!st) return null;
+      const ask = e.kind === 'guard' ? 'a manned post beside them' : `${e.n} ${e.good}`;
+      return { channel: 'toast', priority: 1, icon: ICONS.scroll, text: `${STEADING_CHAR[st.char].icon} ${st.name} want ${ask}`, sub: 'The first to deliver wins their favour', tone: 'info', key: `want${e.siteId}` };
     }
-    case 'challengeWon': {
-      const def = challengeDef(e.def)!;
-      return e.winner === me ? { channel: 'toast', priority: 3, icon: ICONS.renown, text: `${def.icon} You won ${def.title}: +${e.prize}★`, tone: 'big' } : { channel: 'toast', priority: 2, icon: ICONS.renown, text: `Rival won ${def.title}`, tone: 'warn' };
+    case 'wantWon': {
+      const st = world.sites.find((s) => s.id === e.siteId)?.st;
+      if (!st) return null;
+      return e.owner === me ? { channel: 'toast', priority: 3, icon: ICONS.renown, text: `🏆 ${st.name} thank you: +favour`, tone: 'big' } : { channel: 'toast', priority: 2, icon: ICONS.renown, text: `The rival won the favour of ${st.name}`, tone: 'warn' };
+    }
+    case 'steadingAlly': {
+      const st = world.sites.find((s) => s.id === e.siteId)?.st;
+      if (!st) return null;
+      if (e.owner === me) return { channel: 'toast', priority: 3, icon: ICONS.renown, text: `🏘 ${st.name} now stand with you`, sub: 'A voice of the valley: the Crown fills for whoever holds more', tone: 'big' };
+      if (e.owner >= 0) return { channel: 'toast', priority: 3, icon: ICONS.renown, text: `🏘 ${st.name} swear to the rival`, sub: 'Win them back with a Want, or burn the post that keeps them', tone: 'warn' };
+      return e.was === me ? { channel: 'toast', priority: 3, icon: ICONS.renown, text: `${st.name} no longer stand with you`, sub: 'Their favour has faded: send a cart', tone: 'warn' } : null;
     }
     case 'starfall':
       return { channel: 'banner', priority: 3, icon: ICONS.renown, text: '☄️ A star has fallen: the Kingstone!', sub: 'Keep a manned post beside it, alone, and the Crown fills. First to fill it rules the valley', tone: 'big' };

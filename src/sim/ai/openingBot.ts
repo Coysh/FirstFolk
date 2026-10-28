@@ -1,9 +1,10 @@
 import { BRIDGE_RANK, bestBridge } from '../bridges';
-import { BUILDINGS, DISCOVERIES, FOODS, GOODS, GREAT_WORKS, type BuildingType, type Good, type NodeKind } from '../defs';
+import { BUILDINGS, DISCOVERIES, GREAT_WORKS, type BuildingType, type Good, type NodeKind } from '../defs';
 import { deedCost, deedWait, outpostSpot } from '../deeds';
 import { HOUSES, HOUSE_TIMEOUT } from '../houses';
 import { workOwner } from '../works';
-import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../market';
+import type { Discovery } from '../world';
+import { caravanMax, caravanProblem, steadingsOf, suggestLoad } from '../steadings';
 import type { World } from '../world';
 import { NO_OWNER } from '../territory';
 import { BALANCE } from '../balance';
@@ -103,7 +104,7 @@ export class OpeningBot {
     const target = this.frontierTarget(world);
     if (!this.ablate.has('deed') && this.useDeed(world, target)) return;
     if (!this.ablate.has('raid') && this.raid(world)) return;
-    if (!this.ablate.has('trade') && this.trade(world)) return;
+    if (!this.ablate.has('caravan') && this.caravan(world)) return;
     if (!this.ablate.has('bridge') && world.tick % (this.thinkEvery * 4) === 0 && this.bridge(world)) return;
     const hungry = world.larder(this.owner) < 12;
     const home: BuildingType = world.isUnlocked(this.owner, 'longhouse') && this.affordable(world, 'longhouse') ? 'longhouse' : 'hut';
@@ -163,7 +164,7 @@ export class OpeningBot {
       [count('woodcutter') < Math.ceil(pop / 7) && world.stored(this.owner, 'logs') < 80, 'woodcutter'],
       [emptyHuts === 0, 'hut'],
       [count('quarry') < Math.ceil(pop / 12) && world.stored(this.owner, 'stone') < 60, 'quarry'],
-      // Hands with nothing to do: put them to work, since everything sells on Market Day.
+      // Hands with nothing to do: put them to work; steadings always want something.
       [idle > 4 && count('sawpit') < 1 + count('woodcutter') / 4, 'sawpit'],
       [idle > 4, idleJob],
     ];
@@ -188,7 +189,8 @@ export class OpeningBot {
     let bestD = Infinity;
     for (const site of world.sites) {
       if (!(site.revealed & (1 << this.owner))) continue;
-      const open = site.claimedBy === NO_OWNER || (!!DISCOVERIES[site.kind].renown && site.heldBy !== this.owner);
+      // Steadings are worth reaching with the border while they don't stand with us (a manned post beside one wins a guard Want).
+      const open = site.st ? site.st.ally !== this.owner : site.claimedBy === NO_OWNER || (!!DISCOVERIES[site.kind].renown && site.heldBy !== this.owner);
       if (!open || this.stuckOn(world, site)) continue;
       // Landmarks are worth a longer reach.
       const d = Math.max(Math.abs(site.x - wagon.x), Math.abs(site.y - wagon.y)) - (DISCOVERIES[site.kind].renown ?? 0) * 2;
@@ -200,21 +202,41 @@ export class OpeningBot {
     return best;
   }
 
-  /** Sell a lot of whatever is piling up, if the market still pays. */
-  private trade(world: World): boolean {
-    if (!marketOpen(world, this.owner)) return false;
-    const st = STYLES[this.style];
-    // A trading town works the market hard (several lots a turn, even at a lean price); the rest trickle.
-    const trader = st.focus === 'trader';
-    let sold = 0;
-    for (const g of GOODS) {
-      const keep = FOODS.includes(g) ? Math.max(60, world.population(this.owner)) : st.sellKeep;
-      if (world.stored(this.owner, g) - FAIR_LOT >= keep && fairPrice(world, this.owner, g) * 10 >= FAIR_VALUE[g] * (trader ? 4 : 6)) {
-        world.enqueue({ type: 'sell', owner: this.owner, good: g });
-        if (!trader || ++sold >= 3) return true;
+  /**
+   * Send a cart to a steading: what a Want asks for if the stores can spare it (the race is won by whoever
+   * delivers first), else a gift of what we have most of to a steading that isn't ours yet.
+   */
+  private caravan(world: World): boolean {
+    if (world.caravans.filter((c) => c.owner === this.owner).length >= caravanMax(world, this.owner)) return false;
+    const hall = hallOf(world, this.owner);
+    if (!hall) return false;
+    const trader = STYLES[this.style].focus === 'trader';
+    const keep: Record<Good, number> = { logs: 22, planks: 8, stone: 10, berries: 26, fish: 26 };
+    let best: { site: Discovery; good: Good; n: number; score: number } | null = null;
+    for (const s of steadingsOf(world)) {
+      const st = s.st!;
+      if (world.caravans.some((c) => c.owner === this.owner && c.siteId === s.id)) continue;
+      const load = suggestLoad(world, this.owner, s);
+      if (!load) continue;
+      const spare = world.stored(this.owner, load.good) - (trader ? keep[load.good] >> 1 : keep[load.good]);
+      const dist = Math.max(Math.abs(s.x - hall.x), Math.abs(s.y - hall.y));
+      let n = Math.min(load.n, spare);
+      let score = 0;
+      if (load.wanted && st.want) {
+        const need = Math.max(1, st.want.n - st.want.progress[this.owner]);
+        // Worth sending only if it will finish the job, or most of it.
+        if (n < need && n < Math.ceil(need * 0.7)) continue;
+        score = 100 + (st.ally !== this.owner ? 30 : 0) - dist / 2 - (st.want.progress[1 - this.owner] ?? 0);
+      } else {
+        n = Math.min(n, 16);
+        if (n < 12 || st.favour[this.owner] >= 70 || (st.ally === this.owner && st.favour[this.owner] >= 55)) continue;
+        score = 20 - dist / 3;
       }
+      if (n >= 1 && !caravanProblem(world, this.owner, s.id, load.good, n) && (!best || score > best.score)) best = { site: s, good: load.good, n, score };
     }
-    return sold > 0;
+    if (!best) return false;
+    world.enqueue({ type: 'caravan', owner: this.owner, siteId: best.site.id, good: best.good, n: best.n });
+    return true;
   }
 
   /** A Great Work to begin: none under way, still unclaimed in the valley, the one we can best afford. */

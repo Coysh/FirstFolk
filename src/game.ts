@@ -110,8 +110,8 @@ export class Game {
   readonly deedPreview = signal<DeedPreview | null>(null);
   readonly raidPreview = signal<RaidPreview | null>(null);
   ledgerTaught = false;
-  /** The Market Day popover is open. */
-  readonly marketOpen = signal(false);
+  /** The steading whose card is open in the Valley panel, if any. */
+  readonly steadingOpen = signal<number | null>(null);
   readonly banner = signal<{ title: string; sub: string } | null>(null);
   /** True when the last placement interaction came from touch (shows a confirm button). */
   readonly touchPlacing = signal(false);
@@ -411,8 +411,11 @@ export class Game {
             else if (e.owner !== NO_OWNER) setTimeout(() => this.rivalVoice('repelled', {}), 2500);
           }
           break;
-        case 'sold':
-          if (mine) audio.play('deliver');
+        case 'caravanSent':
+          if (e.owner === PLAYER) audio.play('click');
+          break;
+        case 'caravanArrived':
+          if (e.owner === PLAYER) audio.play('deliver');
           break;
         case 'workBegun':
           if (!mine) audio.play('warn');
@@ -420,12 +423,13 @@ export class Game {
         case 'workLost':
           audio.stinger('loss');
           break;
-        case 'challenge':
-          audio.stinger('moot');
+        case 'wantWon':
+          audio.stinger(e.owner === PLAYER ? 'landmark' : 'loss');
+          setTimeout(() => this.rivalVoice(e.owner === PLAYER ? 'youWon' : 'theyWon'), 2400);
           break;
-        case 'challengeWon':
-          audio.stinger(e.winner === PLAYER ? 'landmark' : 'loss');
-          setTimeout(() => this.rivalVoice(e.winner === PLAYER ? 'youWon' : 'theyWon'), 2400);
+        case 'steadingAlly':
+          if (e.owner === PLAYER) audio.stinger('landmark');
+          else if (e.owner >= 0 || e.was === PLAYER) audio.stinger('loss');
           break;
         case 'starfall':
           setTimeout(() => this.rivalVoice('starfall'), 6500);
@@ -797,13 +801,9 @@ export class Game {
     this.world.enqueue({ type: 'setAutoHomes', owner: PLAYER, on });
   }
 
-  sell(good: Good): void {
-    this.world.enqueue({ type: 'sell', owner: PLAYER, good });
-  }
-
-  setTrade(good: Good, keep: number | null): void {
-    audio.play('click');
-    this.world.enqueue({ type: 'setTrade', owner: PLAYER, good, keep });
+  /** Send a cart to a steading: what its Want asks for, or a gift of what the stores hold most of. */
+  sendCaravan(siteId: number, good: Good, n: number): void {
+    this.world.enqueue({ type: 'caravan', owner: PLAYER, siteId, good, n });
   }
 
   demolish(id: number): void {

@@ -52,7 +52,7 @@ export class SitesView {
         group.rotation.y = ((site.id * 2.39) % 6.28) - 3.14;
         this.group.add(group);
         let flag: THREE.Group | null = null;
-        if (DISCOVERIES[site.kind].renown) {
+        if (DISCOVERIES[site.kind].renown || site.st) {
           // Landmarks fly the holder's banner, so you can see at a glance who has what.
           flag = new THREE.Group();
           const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 2.6, 6).translate(0, 1.3, 0), new THREE.MeshStandardMaterial({ color: 0x5a3b22, flatShading: true }));
@@ -67,13 +67,15 @@ export class SitesView {
         this.views.set(site.id, v);
       }
       const open = site.claimedBy === NO_OWNER;
-      v.beacon.visible = open;
+      // A steading's smoke shows until it stands with someone; their banner flies afterwards.
+      v.beacon.visible = site.st ? site.st.ally === NO_OWNER : open;
       if (open) v.beacon.scale.set(1 + Math.sin(time * 1.6 + v.phase) * 0.12, 1, 1 + Math.sin(time * 1.6 + v.phase) * 0.12);
       if (v.flag) {
-        v.flag.visible = site.heldBy !== NO_OWNER;
-        if (site.heldBy !== NO_OWNER) {
+        const holder = site.st ? site.st.ally : site.heldBy;
+        v.flag.visible = holder !== NO_OWNER;
+        if (holder !== NO_OWNER) {
           const cloth = v.flag.getObjectByName('cloth') as THREE.Mesh;
-          (cloth.material as THREE.MeshStandardMaterial).color.setHex(HOLDER_COLORS[site.heldBy === this.player ? 0 : 1]);
+          (cloth.material as THREE.MeshStandardMaterial).color.setHex(HOLDER_COLORS[holder === this.player ? 0 : 1]);
           cloth.rotation.y = Math.sin(time * 2.1 + v.phase) * 0.18;
         }
       }

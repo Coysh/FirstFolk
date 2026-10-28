@@ -70,6 +70,20 @@ describe('the long game (headless playtests)', () => {
     expect(late).toBeGreaterThanOrEqual(3.5);
   });
 
+  it('the folk of the valley matter: Wants are posted and won, steadings change sides, carts are sent', () => {
+    for (const r of runs) {
+      expect(r.timeline.some((l) => l.includes('a steading wants')), `seed ${r.seed}`).toBe(true);
+      expect(r.wantsWon[0] + r.wantsWon[1], `seed ${r.seed}`).toBeGreaterThanOrEqual(3);
+      expect(r.caravans[0] + r.caravans[1], `seed ${r.seed}`).toBeGreaterThanOrEqual(3);
+    }
+    expect(mean(runs.map((r) => r.allegianceFlips))).toBeGreaterThanOrEqual(2);
+  });
+
+  it('there are choices all game long: the player decides something every minute', () => {
+    for (const r of runs) expect(r.longestBoredMinutes, `seed ${r.seed}`).toBeLessThanOrEqual(2);
+    expect(mean(runs.map((r) => mean(r.decisionsByMinute.slice(5, 15))))).toBeGreaterThanOrEqual(2.2);
+  });
+
   it('the clash is a fight, not a die roll: battles happen, and they take time', () => {
     for (const r of runs) expect(r.battles, `seed ${r.seed}`).toBeGreaterThanOrEqual(2);
   });

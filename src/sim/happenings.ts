@@ -16,7 +16,10 @@ export function starfallTick(world: World): number {
 }
 
 export function updateHappenings(world: World): void {
-  if (world.tick !== starfallTick(world) || world.scenario.victory !== 'crown') return;
+  if (world.scenario.victory !== 'crown') return;
+  // The Crown opens a little before the first steadings have been won, and fills for whoever holds more of the valley.
+  if (!world.crown && world.tick >= BALANCE.crownOpens - 10) world.crown = newCrown(0, world.players.length);
+  if (world.tick !== starfallTick(world)) return;
   const [a, b] = world.map.starts;
   const mx = Math.round((a.x + b.x) / 2) + world.rng.range(-4, 4);
   const my = Math.round((a.y + b.y) / 2) + world.rng.range(-4, 4);
@@ -28,11 +31,10 @@ export function updateHappenings(world: World): void {
   const all = (1 << world.players.length) - 1;
   const site = { id: world.newId(), kind: 'kingstone' as const, x: spot.x, y: spot.y, revealed: all, claimedBy: NO_OWNER, heldBy: NO_OWNER };
   world.sites.push(site);
-  world.crown = newCrown(site.id, world.players.length);
+  world.crown ??= newCrown(0, world.players.length);
+  world.crown.siteId = site.id;
   world.emit({ type: 'starfall', siteId: site.id, x: site.x, y: site.y });
   updateHoldings(world);
-  // The race to the stone starts at once (unless a challenge is already running).
-  if (!world.challenge) world.nextChallengeAt = world.tick;
 }
 
 /**

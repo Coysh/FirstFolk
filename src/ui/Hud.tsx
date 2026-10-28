@@ -22,18 +22,19 @@ import { HowTo, SettingsPanel } from './Screens';
 import { DEED_KEYS, HOTKEYS } from '../input/input';
 import { lockLabel } from '../sim/commands';
 import { DEEDS, activePowers, deedCooldown, deedProblem, deedWait } from '../sim/deeds';
-import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../sim/market';
+import { caravanMax, caravanProblem, steadingsOf, suggestLoad } from '../sim/steadings';
+import { STEADING_CHAR } from '../sim/steadingDefs';
 import { renownRate } from '../sim/renown';
-import { CONTESTED, crownEta, crownPct, crownRate, crownSite, watchers } from '../sim/crown';
+import { CONTESTED, crownEta, crownPace, crownPct, crownSite } from '../sim/crown';
 import { starfallTick } from '../sim/happenings';
 import { SAGA } from '../sim/saga';
-import { challengeDef, challengeProgress } from '../sim/challenges';
 import { OMENS } from '../sim/omens';
 import { ORIGINS } from '../sim/origins';
 import { workOwner } from '../sim/works';
 import { workSlots } from '../sim/settlers';
 import { defenceOf, hallOf, huscarls, raidStrength } from '../sim/warfare';
 
+const plural_ = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
 /** Subscribe a component to the periodic world refresh (signals skip prop-identical re-renders). */
@@ -52,7 +53,6 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       <Frontier game={game} />
       <Ledger game={game} />
       <InfoPanel game={game} />
-      {game.marketOpen.value && <Market game={game} />}
       <Threats game={game} />
       {game.mode.value.kind === 'select' && <Council game={game} />}
       {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : game.mode.value.kind === 'scout' ? <ScoutBar game={game} /> : game.mode.value.kind === 'bridge' ? <BridgeBar game={game} /> : <BuildBar game={game} />}
@@ -115,11 +115,6 @@ function TopBar({ game }: { game: Game }) {
             title={w.players[PLAYER].autoHomes ? 'Families build their own huts when every home is full. Click to stop.' : 'Let families build their own huts when every home is full'}
           >
             🏠 <span>Auto-homes</span>
-          </button>
-        )}
-        {marketOpen(w, PLAYER) && (
-          <button class={`market-btn ${game.marketOpen.value ? 'on' : ''}`} onClick={() => (game.marketOpen.value = !game.marketOpen.value)} title="Market Day: sell what piles up for renown">
-            ⚖️ <span>Market</span>
           </button>
         )}
         {hungry && <span class="hungry pulse">Hungry!</span>}
@@ -282,6 +277,8 @@ function Goals({ game }: { game: Game }) {
 /** The race at a glance: the Crown (the win), renown (rank, and the tie-break) and the clock. */
 function RaceBar({ game }: { game: Game }) {
   useWorldRefresh(game);
+  // On a phone the steadings fold away behind a tap, so the race card stays a few lines tall.
+  const [folk, setFolk] = useState(false);
   const w = game.world;
   if (w.scenario.victory !== 'crown') return null;
   const limit = w.scenario.timeLimit ?? 0;
@@ -289,13 +286,14 @@ function RaceBar({ game }: { game: Game }) {
   const c = w.crown;
   const site = crownSite(w);
   const fallIn = Math.max(0, starfallTick(w) - w.tick);
-  const watching = watchers(w);
+  const opensIn = Math.max(0, BALANCE.crownOpens - w.tick);
   const crownRow = (owner: number, label: string) => {
     const pct = crownPct(w, owner);
-    const keeping = !!c && c.keeper === owner;
+    const pace = crownPace(w, owner);
     const eta = crownEta(w, owner);
+    const voices = c?.voices[owner] ?? 0;
     return (
-      <div class={`race-row crown ${owner === PLAYER ? 'me' : 'them'} ${keeping ? 'keeping' : ''}`} title={`${label}: the Crown is ${pct}% full${keeping ? `, full in ${formatTime(eta * TICK_HZ)}` : ''}`}>
+      <div class={`race-row crown ${owner === PLAYER ? 'me' : 'them'} ${pace > 0 ? 'keeping' : ''}`} title={`${label}: the Crown is ${pct}% full and ${pace > 0 ? `filling, full in ${formatTime(eta * TICK_HZ)}` : pace < 0 ? 'draining' : 'still'}. ${voices} voice${voices === 1 ? '' : 's'} of the valley.`}>
         <span class="race-name">{label}</span>
         <div class="race-track">
           <div style={{ width: `${pct}%` }} />
@@ -304,32 +302,40 @@ function RaceBar({ game }: { game: Game }) {
           {pct}
           <small>%</small>
         </span>
-        <span class="race-rate">{keeping ? `+${crownRate(!!watching.find((x) => x.owner === owner)?.tended)}/s` : ''}</span>
-        <span class="race-rank">{keeping && eta < 99999 ? formatTime(eta * TICK_HZ) : ''}</span>
+        <span class="race-rate">{pace > 0 ? `+${pace}/s` : pace < 0 ? `${pace}/s` : ''}</span>
+        <span class="race-voices" title="Voices of the valley: steadings that stand with you, and the Kingstone (worth two)">
+          {'●'.repeat(voices)}
+          {voices === 0 ? '○' : ''}
+        </span>
       </div>
     );
   };
-  const mine = c?.keeper === PLAYER;
-  const status = !c
-    ? `☄️ A star falls in ${formatTime(fallIn)}: the Kingstone, and the Crown with it. Claim land toward the middle now.`
-    : c.keeper === PLAYER
-      ? '👑 You keep the Kingstone: the Crown is filling. Guard that post!'
-      : c.keeper === CONTESTED
-        ? '⚔️ Contested: both have a post beside the stone, so nothing fills. Burn theirs!'
-        : c.keeper >= 0
-          ? '🔥 The rival keeps the Kingstone and your Crown is draining. Burn the post beside it, then hold it yourself.'
-          : '👑 The Kingstone is unkept: raise a manned post within 9 tiles and start filling the Crown.';
+  const mine = c?.voices[PLAYER] ?? 0;
+  const theirs = c?.voices[1] ?? 0;
+  const status = !c || w.tick < BALANCE.crownOpens
+    ? `🏘 The Crown opens in ${formatTime(opensIn)}: win the favour of steadings with carts of what they want. Voices fill it.`
+    : mine > theirs
+      ? `👑 You hold more of the valley (${plural_(mine, 'voice')} to ${theirs}): your Crown is filling. ${site ? 'Guard it!' : ''}`
+      : mine < theirs
+        ? `🔥 The rival holds more of the valley (${plural_(theirs, 'voice')} to ${mine}): your Crown is draining. Win a steading, or take the Kingstone${site ? '' : ' when the star falls'}.`
+        : mine === 0
+          ? '⚖️ Nobody holds the valley yet. The first steading to stand with you starts the Crown filling.'
+          : `⚖️ Level at ${mine} voices each: the Crown is frozen. Win a Want, or take the Kingstone${site ? '' : ' when it falls'}.`;
+  const tone = mine > theirs ? 'mine' : mine < theirs ? 'theirs' : 'contested';
   const rp = (owner: number) => w.players[owner]?.renown ?? 0;
   const rate = (owner: number) => {
     const r = renownRate(w, owner);
     return r.landmarks + r.land;
   };
   return (
-    <section class="race" aria-label="The race for the Crown">
+    <section class={`race ${folk ? 'folk-open' : ''}`} aria-label="The race for the Crown">
       <div class="race-head">
         <span>
           <b>👑 The Crown</b>
         </span>
+        <button class="race-toggle" onClick={() => setFolk(!folk)} aria-pressed={folk} title="Show the steadings">
+          🏘 {steadingsOf(w).filter((x) => x.st!.ally === PLAYER).length}/{steadingsOf(w).length}
+        </button>
         {left <= secs(5 * 60) ? <span class="race-clock pulse">⏳ {formatTime(left)} left</span> : limit ? <span class="race-clock">ends {formatTime(limit)}</span> : null}
       </div>
       {w.omens.length > 0 && (
@@ -343,8 +349,9 @@ function RaceBar({ game }: { game: Game }) {
       )}
       {crownRow(PLAYER, 'You')}
       {w.players[1] && crownRow(1, 'Rival')}
-      <button class={`race-status ${mine ? 'mine' : c && c.keeper >= 0 ? 'theirs' : c?.keeper === CONTESTED ? 'contested' : ''}`} onClick={() => site && game.lookAt(site.x, site.y)} disabled={!site} title={site ? 'Look at the Kingstone' : undefined}>
+      <button class={`race-status ${tone}`} onClick={() => (site ? game.lookAt(site.x, site.y) : undefined)} disabled={!site} title={site ? 'Look at the Kingstone' : undefined}>
         {status}
+        {c && site && c.keeper !== NO_OWNER ? <small> The Kingstone: {c.keeper === PLAYER ? 'yours (2 voices)' : c.keeper === CONTESTED ? 'contested (nobody’s voice)' : 'the rival’s (2 voices)'}.</small> : null}
       </button>
       <div class="race-renown" title="Renown raises your rank, and settles a tie when the clock runs out">
         <span>★ You {rp(PLAYER)}</span>
@@ -356,34 +363,59 @@ function RaceBar({ game }: { game: Game }) {
           </>
         )}
       </div>
-      <Contest game={game} />
+      <Steadings game={game} />
+      {fallIn > 0 && w.tick >= BALANCE.crownOpens && !site && <div class="race-renown faint">☄️ A star falls in {formatTime(fallIn)}: the Kingstone, worth two voices.</div>}
     </section>
   );
 }
 
-/** The running challenge: what it is, the clock, and both settlements' progress. */
-function Contest({ game }: { game: Game }) {
+/** The folk of the valley: each steading's favour for both settlements, what it wants, and a cart to send. */
+function Steadings({ game }: { game: Game }) {
   const w = game.world;
-  const c = w.challenge;
-  const def = c && challengeDef(c.def);
-  if (!c || !def) return null;
-  const left = Math.max(0, c.endsAt - w.tick);
-  const bar = (owner: number) => {
-    const [n, target] = challengeProgress(w, owner);
-    return (
-      <div class={`contest-bar ${owner === PLAYER ? 'me' : 'them'}`} title={`${owner === PLAYER ? 'You' : 'Rival'}: ${Math.min(n, target)}/${target}`}>
-        <div style={{ width: `${Math.min(100, (n / target) * 100)}%` }} />
-      </div>
-    );
-  };
+  const rows = steadingsOf(w).filter((s) => s.revealed & 1);
+  if (!rows.length) return null;
+  const carts = w.caravans.filter((c) => c.owner === PLAYER).length;
   return (
-    <div class="contest" title={`${def.title}: ${def.text} +${def.prize} renown to the winner.`}>
-      <span class="contest-name">
-        {def.icon} {def.title} <b>+{def.prize}★</b>
-      </span>
-      <span class={`contest-clock ${left < 300 ? 'pulse' : ''}`}>{formatTime(left)}</span>
-      {bar(PLAYER)}
-      {bar(1)}
+    <div class="steadings" aria-label="The steadings of the valley">
+      {rows.map((s) => {
+        const st = s.st!;
+        const ch = STEADING_CHAR[st.char];
+        const want = st.want;
+        const load = suggestLoad(w, PLAYER, s);
+        const problem = load ? caravanProblem(w, PLAYER, s.id, load.good, Math.max(1, load.n)) : 'Nothing to send';
+        const left = want ? Math.max(0, want.endsAt - w.tick) : 0;
+        const askText = !want ? 'no Want right now' : want.kind === 'guard' ? `a manned post beside them: ${want.progress[PLAYER]}/${want.n}s` : `${want.progress[PLAYER]}/${want.n} ${want.good}`;
+        const who = st.ally === PLAYER ? 'mine' : st.ally >= 0 ? 'theirs' : 'open';
+        return (
+          <div class={`stead ${who}`} key={s.id}>
+            <button class="stead-name" onClick={() => game.lookAt(s.x, s.y)} title={`${st.name}: ${ch.blurb} Sends ${ch.giftN} ${ch.gift} a minute to whoever they stand with.`}>
+              {ch.icon} {st.name}
+            </button>
+            <div class="stead-favour" title={`Favour: you ${st.favour[PLAYER]}, rival ${st.favour[1] ?? 0}. At 50 with a lead of 20 they stand with you.`}>
+              <div class="f-me" style={{ width: `${st.favour[PLAYER] / 2}%` }} />
+              <div class="f-them" style={{ width: `${(st.favour[1] ?? 0) / 2}%` }} />
+              <i class="f-mark" />
+            </div>
+            <div class="stead-want">
+              <span class={want?.kind === 'guard' ? 'guard' : ''}>
+                {want ? '📣 ' : ''}
+                {askText}
+              </span>
+              {want && <small class={left < 300 ? 'pulse' : ''}>{formatTime(left)}</small>}
+              {want && (want.progress[1] ?? 0) > 0 && <small class="rival-progress">rival {want.kind === 'guard' ? `${want.progress[1]}s` : `${want.progress[1]}`}</small>}
+            </div>
+            <button
+              class="stead-send"
+              disabled={!!problem || !load || load.n < 1}
+              onClick={() => load && game.sendCaravan(s.id, load.good, load.n)}
+              title={problem || (load!.wanted ? `Send what they asked for: ${load!.n} ${load!.good}` : `Send a gift of ${load!.n} ${load!.good}: it earns a little favour`)}
+            >
+              🛒 {load && load.n > 0 ? `${load.n} ${load.good}` : 'Send'}
+              {carts ? <small>{carts}/{caravanMax(w, PLAYER)}</small> : null}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -671,47 +703,6 @@ function DeedBar({ game }: { game: Game }) {
   );
 }
 
-/** Market Day: sell a lot of anything for renown, or set a standing order; prices drop as you sell and recover. */
-function Market({ game }: { game: Game }) {
-  useWorldRefresh(game);
-  const w = game.world;
-  const routes = w.players[PLAYER].routes;
-  return (
-    <section class="market panel" aria-label="Market Day">
-      <header>
-        <strong>⚖️ Market Day</strong>
-        <button class="close" onClick={() => (game.marketOpen.value = false)} aria-label="Close">
-          ✕
-        </button>
-      </header>
-      <p class="muted small">Traders take {FAIR_LOT} at a time; each sale floods the market for a while. A standing order sells whatever is above the reserve, every 20 s.</p>
-      {GOODS.map((g) => {
-        const price = fairPrice(w, PLAYER, g);
-        const have = w.stored(PLAYER, g);
-        const keep = routes[g];
-        const reserve = FOODS.includes(g) ? Math.max(40, Math.ceil(w.population(PLAYER) / 10) * 10) : 60;
-        return (
-          <div class="mk-row" key={g}>
-            <img src={ICON[g]} alt={GOOD_INFO[g].name} />
-            <span class="mk-have">{have}</span>
-            <span class={`mk-price ${price < FAIR_VALUE[g] ? 'low' : ''}`}>{price}★</span>
-            <button disabled={have < FAIR_LOT || price <= 0} onClick={() => game.sell(g)}>
-              Sell {FAIR_LOT}
-            </button>
-            <button
-              class={`mk-route ${keep !== undefined ? 'on' : ''}`}
-              onClick={() => game.setTrade(g, keep === undefined ? reserve : null)}
-              title={keep !== undefined ? `Selling everything above ${keep}. Click to stop.` : `Keep selling ${GOOD_INFO[g].name.toLowerCase()} above a reserve of ${reserve}`}
-            >
-              {keep !== undefined ? `↻ above ${keep}` : '↻ Order'}
-            </button>
-          </div>
-        );
-      })}
-    </section>
-  );
-}
-
 /**
  * The ledger: decisions wait here as sealed letters instead of popping up over the game.
  * Open one whenever it suits you; each shows how long it will wait before it is settled
@@ -885,7 +876,7 @@ function HouseLetter({ game }: { game: Game }) {
 function Frontier({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
-  const open = w.sites.filter((s) => s.revealed & 1 && (s.claimedBy === NO_OWNER || (DISCOVERIES[s.kind].renown && s.heldBy !== PLAYER)));
+  const open = w.sites.filter((s) => !s.st && s.revealed & 1 && (s.claimedBy === NO_OWNER || (DISCOVERIES[s.kind].renown && s.heldBy !== PLAYER)));
   const mine = w.sites.filter((s) => s.heldBy === PLAYER).length;
   if (!open.length && !mine) return null;
   const box = territoryBox(w, PLAYER);
@@ -1250,7 +1241,7 @@ function Toasts({ game }: { game: Game }) {
   return (
     <div class="toasts" aria-live="polite">
       {game.toasts.value.map((t) => (
-        <div key={t.id} class={`toast ${t.tone}`}>
+        <div key={t.id} class={`toast ${t.tone === 'info' ? '' : t.tone}`}>
           <img src={t.icon} alt="" />
           <span>{t.text}</span>
         </div>
@@ -1282,8 +1273,6 @@ const SOURCE_NAMES: Record<string, string> = {
   deeds: 'Deeds',
   legends: 'Legends',
   works: 'Great Works',
-  trade: 'Market Day',
-  contests: 'Challenges',
   raids: 'Raids',
   defence: 'Holding the line',
   hearth: 'Hearth',
@@ -1300,12 +1289,14 @@ function Awards({ w, won }: { w: World; won: boolean }) {
   if (me.taken >= 3) list.push(['⚑', 'Landmark Lord', `${me.taken} landmarks taken from your rival`]);
   if (works >= 2) list.push(['🏛️', 'Wonder Builder', `${works} Great Works raised`]);
   if (me.legends.length >= 3) list.push(['🕯️', 'Keeper of Legends', `${me.legends.length} legends`]);
-  if ((me.renownBy.trade ?? 0) >= 150) list.push(['⚖️', 'Merchant Prince', `${me.renownBy.trade} renown from Market Day`]);
+  if (me.caravanned >= 300) list.push(['🛒', 'Merchant Prince', `${me.caravanned} goods carried to steadings`]);
+  if (steadingsOf(w).filter((s) => s.st!.ally === PLAYER).length >= 3) list.push(['🏘', 'Voice of the Valley', 'Three steadings stood with you']);
   if (outposts >= 4) list.push(['🧭', 'Pathfinder', `${outposts} outposts`]);
   if (me.deedsUsed >= 20) list.push(['✦', 'Great Houses', `${me.deedsUsed} house powers called`]);
   if (me.raidsWon >= 3) list.push(['🔥', 'Warlord', `${me.raidsWon} rival posts burned`]);
   if (me.repelled >= 3) list.push(['🛡️', 'Unbroken', `${me.repelled} raids driven off`]);
-  if (me.challengesWon >= 3) list.push(['🏆', 'Champion of the Valley', `${me.challengesWon} challenges won`]);
+  const wants = steadingsOf(w).reduce((n, x) => n + x.st!.won[PLAYER], 0);
+  if (wants >= 4) list.push(['🏆', 'Friend of the Folk', `${wants} Wants won`]);
   if (!list.length) return null;
   return (
     <div class="awards">
@@ -1322,10 +1313,10 @@ function Awards({ w, won }: { w: World; won: boolean }) {
 /** The roads to renown, in plain words: what a game's renown says about how it was won, and one to try next. */
 const PATHS: { id: string; name: string; sources: string[]; tip: string }[] = [
   { id: 'realm', name: 'the Realm', sources: ['landmarks', 'land', 'discoveries'], tip: 'Push the border, hold landmarks, and guard them.' },
-  { id: 'trade', name: 'Trade', sources: ['trade'], tip: 'Build storehouses, run a surplus, and sell it: Merchants earn 20% more a tier.' },
+  { id: 'trade', name: 'Trade', sources: ['caravans'], tip: 'Build storehouses, run a surplus, and send carts to the steadings: Merchants earn 25% more favour a tier.' },
   { id: 'craft', name: 'Craft', sources: ['works', 'masters', 'legends'], tip: 'Quarries, sawpits and the Great Works: Masons raise them for less and are paid more.' },
   { id: 'hearth', name: 'the Hearth', sources: ['hearth', 'events'], tip: 'Fields, fish and full cradles: a big, well-fed town earns renown every minute.' },
-  { id: 'war', name: 'War', sources: ['raids', 'defence', 'contests'], tip: 'A Mustering Hall, raids on rival posts, and a Stockade at every landmark.' },
+  { id: 'war', name: 'War', sources: ['raids', 'defence'], tip: 'A Mustering Hall, raids on rival posts, and a Stockade at every landmark.' },
 ];
 
 function Victory({ game, shell }: { game: Game; shell: Shell }) {
@@ -1350,7 +1341,7 @@ function Victory({ game, shell }: { game: Game; shell: Shell }) {
         <Awards w={w} won={won} />
         {(() => {
           // How the renown was earned, as roads: the biggest, and one the town has barely walked.
-          const by = me.renownBy as Record<string, number>;
+          const by = { ...me.renownBy, caravans: Math.round(me.caravanned * 1.5) + steadingsOf(w).reduce((n, x) => n + x.st!.won[PLAYER] * 60, 0) } as Record<string, number>;
           const totals = PATHS.map((p) => ({ ...p, n: p.sources.reduce((n, k) => n + (by[k] ?? 0), 0) })).sort((a, b) => b.n - a.n);
           const top = totals[0];
           const next = totals[totals.length - 1];
@@ -1400,7 +1391,7 @@ function Victory({ game, shell }: { game: Game; shell: Shell }) {
                 {w.population(PLAYER)} folk · {me.deedsUsed} house powers called · {me.raidsWon} posts burned, {me.repelled} raids held
               </li>
               <li>
-                {me.taken} landmark{me.taken === 1 ? '' : 's'} taken from your rival · {me.challengesWon} challenge{me.challengesWon === 1 ? '' : 's'} won
+                {me.taken} landmark{me.taken === 1 ? '' : 's'} taken from your rival · {steadingsOf(w).reduce((n, x) => n + x.st!.won[PLAYER], 0)} steading Wants won
               </li>
               {works.length > 0 && <li>Raised {works.map((t) => BUILDINGS[t].name).join(' and ')}</li>}
               {me.legends.slice(0, 4).map((l) => (

@@ -52,8 +52,12 @@ export interface PlaytestReport {
   /** The longest run of whole minutes with no decision from the player and nothing happening to them. */
   longestBoredMinutes: number;
   renownBy: Partial<Record<string, number>>[];
-  /** Challenges won by [player, rival]. */
-  challenges: number[];
+  /** Wants won, steadings that changed allegiance, and goods carried to steadings by [player, rival]. */
+  wantsWon: number[];
+  allegianceFlips: number;
+  caravans: number[];
+  /** The player's and rival's voices in the valley, per minute. */
+  voicesByMinute: [number, number][];
   acclaim: boolean;
   origins: string[];
   omens: string[];
@@ -120,7 +124,10 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const renownByMinute: [number, number][] = [];
   const stockAt: number[] = [];
   let holdingFlips = 0;
-  const challenges: number[] = [0, 0];
+  const wantsWon: number[] = [0, 0];
+  const caravans: number[] = [0, 0];
+  const voicesByMinute: [number, number][] = [];
+  let allegianceFlips = 0;
   let byTime = false;
   let acclaimed = false;
   const timeline: string[] = [];
@@ -138,9 +145,9 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const scoreByMinute: number[] = [];
   let logged = 0;
   const isDecision = (c: { type: string; building?: string }) =>
-    ['raid', 'scout', 'bridge', 'deed', 'chooseEvent', 'chooseHouse', 'rally'].includes(c.type) || (c.type === 'place' && ['stockade', 'musterhall', 'watchtower', 'lookout', 'outpost', 'henge', 'meadhall', 'granary'].includes(c.building ?? ''));
+    ['caravan', 'raid', 'scout', 'bridge', 'deed', 'chooseEvent', 'chooseHouse', 'rally'].includes(c.type) || (c.type === 'place' && ['stockade', 'musterhall', 'watchtower', 'lookout', 'outpost', 'henge', 'meadhall', 'granary'].includes(c.building ?? ''));
   const isAction = (e: SimEvent) =>
-    (e.type === 'clashBegan' && (e.owner === 0 || e.defender === 0)) || e.type === 'crownKeeper' || e.type === 'crownQuarter' || e.type === 'sagaBeat' || e.type === 'starfall' || e.type === 'challenge' || e.type === 'challengeWon' || e.type === 'razed' ||
+    (e.type === 'clashBegan' && (e.owner === 0 || e.defender === 0)) || e.type === 'crownKeeper' || e.type === 'crownQuarter' || e.type === 'sagaBeat' || e.type === 'starfall' || e.type === 'wantPosted' || e.type === 'wantWon' || e.type === 'steadingAlly' || e.type === 'razed' ||
     (e.type === 'raidLaunched' && (e.owner === 0 || e.defender === 0)) || (e.type === 'holdingChanged' && (e.owner === 0 || e.from === 0)) || (e.type === 'scoutSpotted' && (e.owner === 0 || e.seer === 0)) ||
     ((e.type === 'claimed' || e.type === 'rankUp' || e.type === 'valleyEvent' || e.type === 'scoutHome' || e.type === 'deed' || e.type === 'bridgeBuilt') && e.owner === 0);
   for (let i = 0; i < total; i++) {
@@ -168,6 +175,9 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
         bridges[e.owner]++;
         if (e.owner === 0) timeline.push(`${t} 🌉 bridge (${e.len} tiles)`);
       }
+      if (e.type === 'caravanSent') caravans[e.owner]++;
+      if (e.type === 'wantWon') wantsWon[e.owner]++;
+      if (e.type === 'steadingAlly') allegianceFlips++;
       if (e.type === 'raidLaunched' && e.owner >= 0) raids[e.owner]++;
       if (e.type === 'raidLaunched' && (e.owner === 0 || e.defender === 0)) battles++;
       if (e.type === 'raidLaunched' && e.owner < 0) reavers[e.defender]++;
@@ -193,18 +203,19 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       else if (e.type === 'starfall') timeline.push(`${t} ☄ a star falls at ${e.x},${e.y}`);
       else if (e.type === 'crownKeeper') timeline.push(`${t} 👑 Kingstone: ${e.keeper === 0 ? 'YOU keep it' : e.keeper === 1 ? 'the RIVAL keeps it' : e.keeper === -2 ? 'contested' : 'unkept'}`);
       else if (e.type === 'crownQuarter') timeline.push(`${t} 👑 ${e.owner === 0 ? 'your' : 'the rival’s'} Crown ${e.quarter * 25}%`);
-      else if (e.type === 'challenge') timeline.push(`${t} 🏁 challenge: ${e.def}`);
-      else if (e.type === 'challengeWon') {
-        (challenges[e.winner] ??= 0), challenges[e.winner]++;
-        timeline.push(`${t} 🏆 ${e.winner === 0 ? 'you win' : 'RIVAL wins'} ${e.def} (+${e.prize})`);
-      } else if (e.type === 'challengeExpired') timeline.push(`${t}    ${e.def} expired`);
+      else if (e.type === 'wantPosted') timeline.push(`${t} 📣 a steading wants ${e.kind === 'guard' ? 'a manned post' : `${e.n} ${e.good}`}`);
+      else if (e.type === 'wantWon') {
+        timeline.push(`${t} 🏆 ${e.owner === 0 ? 'you win' : 'RIVAL wins'} a Want (${e.kind === 'guard' ? 'a post' : `${e.n} ${e.good}`})`);
+      } else if (e.type === 'wantExpired') timeline.push(`${t}    a Want expired`);
+      else if (e.type === 'steadingAlly') {
+        timeline.push(`${t} 🏘 a steading ${e.owner === 0 ? 'swears to YOU' : e.owner === 1 ? 'swears to the RIVAL' : 'wavers'}`);
+      }
       else if (e.type === 'holdingChanged') {
         if (e.from >= 0) holdingFlips++;
         timeline.push(`${t} ${e.owner === 0 ? '⚑ took' : '⚐ LOST'} the ${e.kind}${e.from < 0 ? ' (unheld)' : ''}`);
       } else if (e.type === 'renown' && e.owner === 0 && e.amount >= 10) timeline.push(`${t}    +${e.amount} renown (${e.source})`);
       else if (e.type === 'deed' && e.owner === 0) timeline.push(`${t} ✦ deed ${e.deed}: ${e.text}`);
       else if (e.type === 'deed' && e.owner === 1) timeline.push(`${t} ✗ rival deed ${e.deed}`);
-      else if (e.type === 'sold' && e.owner === 0) timeline.push(`${t} ⚖ sold ${e.n} ${e.good} for ${e.renown}`);
       else if (e.type === 'workBegun') timeline.push(`${t} ${e.owner === 0 ? '🏛 began' : '✗ rival began'} ${e.buildingType}`);
       else if (e.type === 'workLost') timeline.push(`${t} ✗ lost the race for ${e.buildingType}`);
       else if (e.type === 'claimed' && e.owner === 1) timeline.push(`${t} ✗ rival claimed ${e.kind}`);
@@ -230,6 +241,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     if (world.tick % (60 * TICK_HZ) === 0) {
       populationByMinute.push(world.population(0));
       renownByMinute.push([world.players[0].renown, world.players[1]?.renown ?? 0]);
+      voicesByMinute.push([world.crown?.voices[0] ?? 0, world.crown?.voices[1] ?? 0]);
       scoreByMinute.push(world.crown ? Math.round(world.crown.progress[0] - (world.crown.progress[1] ?? 0)) : 0);
       if ([10, 20, 30].includes(world.tick / (60 * TICK_HZ))) stockAt.push(GOODS.reduce((n, g) => n + world.stored(0, g), 0));
       let land = 0;
@@ -299,7 +311,10 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     longestBoredMinutes: longestBored,
     renownBy: world.players.map((p) => ({ ...p.renownBy })),
     origins: world.players.map((p) => p.origin),
-    challenges,
+    wantsWon,
+    allegianceFlips,
+    caravans,
+    voicesByMinute,
     acclaim: acclaimed,
     omens: [...world.omens],
     stockAt,

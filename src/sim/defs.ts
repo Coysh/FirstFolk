@@ -380,7 +380,7 @@ export function outputGood(type: BuildingType): Good | undefined {
 }
 
 /** Points of interest hidden in the fog. Whoever's border covers one first claims it. */
-export type DiscoveryKind = 'cart' | 'ruins' | 'wanderers' | 'grove' | 'oakwood' | 'outcrop' | 'stones' | 'barrow' | 'hermit' | 'spring' | 'shrine' | 'hoard' | 'starstone' | 'kingstone';
+export type DiscoveryKind = 'cart' | 'ruins' | 'wanderers' | 'grove' | 'oakwood' | 'outcrop' | 'stones' | 'barrow' | 'hermit' | 'spring' | 'shrine' | 'hoard' | 'starstone' | 'kingstone' | 'steading';
 
 export interface DiscoveryDef {
   name: string;
@@ -408,6 +408,7 @@ export const DISCOVERIES: Record<DiscoveryKind, DiscoveryDef> = {
   spring: { name: 'Healing Spring', icon: '💧', blurb: 'Clear, warm water that draws pilgrims from far away. A landmark: renown while you hold it.', renown: 3 },
   shrine: { name: 'Forest Shrine', icon: '🕯️', blurb: 'A carved shrine deep in the woods. A landmark: renown while you hold it, and a family is blessed when you first claim it.', renown: 3 },
   starstone: { name: 'Star-Stone', icon: '☄️', blurb: 'A fallen star, still warm, between the two settlements. The richest landmark in the valley, and it pulls the land around it.', renown: 6, aura: [6, 60] },
+  steading: { name: 'Steading', icon: '🏘️', blurb: 'Folk who already live here. Win their favour with what your town makes, and they will stand with you: the Crown fills for whoever holds more of the valley.' },
   kingstone: { name: 'The Kingstone', icon: '👑', blurb: 'A fallen star lit the old crowning-hill. Keep a manned post beside it, alone, and the Crown fills: the first folk to fill it rule the valley.', renown: 8 },
   stones: { name: 'Standing Stones', icon: '🗿', blurb: 'A ring of old stones. The land around them follows whoever holds them. A great landmark.', renown: 5, aura: [7, 70] },
 };

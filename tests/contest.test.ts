@@ -4,7 +4,6 @@ import { DEEDS, deedCost, deedProblem } from '../src/sim/deeds';
 import { HOUSES, playerMod, seatHouse, type HouseId } from '../src/sim/houses';
 import { defenceOf, raidStrength } from '../src/sim/warfare';
 import { BUILDINGS, DISCOVERIES } from '../src/sim/defs';
-import { FAIR_LOT, FAIR_VALUE, fairPrice } from '../src/sim/market';
 import { recomputeTerritory } from '../src/sim/territory';
 import { evaluateScenario, LANDFALL } from '../src/sim/scenario';
 import { World } from '../src/sim/world';
@@ -185,44 +184,6 @@ describe('great works', () => {
     w.addBuilding('meadhall', 0, wagon(w).x + 5, wagon(w).y + 3, true);
     expect(canPlace(w, 0, 'meadhall', wagon(w).x - 8, wagon(w).y).reason).toBe('Already yours');
     expect(BUILDINGS.meadhall.great).toBeDefined();
-  });
-});
-
-describe('Market Day', () => {
-  it('sells a lot for renown, and each sale gluts the price', () => {
-    const w = newWorld();
-    w.players[0].rank = 1;
-    wagon(w).stock.logs = 100;
-    const price = fairPrice(w, 0, 'logs');
-    expect(price).toBe(FAIR_VALUE.logs);
-    w.enqueue({ type: 'sell', owner: 0, good: 'logs' });
-    w.step();
-    expect(w.stored(0, 'logs')).toBe(100 - FAIR_LOT);
-    expect(w.players[0].renownBy.trade).toBe(price);
-    expect(fairPrice(w, 0, 'logs')).toBeLessThanOrEqual(price);
-    expect(w.players[0].glut.logs).toBeGreaterThan(0);
-  });
-
-  it('a standing order sells whatever is above the reserve, a lot at a time', () => {
-    const w = newWorld();
-    w.players[0].rank = 1;
-    wagon(w).stock.stone = 120;
-    w.enqueue({ type: 'setTrade', owner: 0, good: 'stone', keep: 60 });
-    w.run(secs(90));
-    expect(w.stored(0, 'stone')).toBeLessThanOrEqual(80);
-    expect(w.stored(0, 'stone')).toBeGreaterThanOrEqual(60);
-    expect(w.players[0].renownBy.trade ?? 0).toBeGreaterThan(0);
-    w.enqueue({ type: 'setTrade', owner: 0, good: 'stone', keep: null });
-    w.step();
-    expect(w.players[0].routes.stone).toBeUndefined();
-  });
-
-  it('is closed to a mere camp', () => {
-    const w = newWorld();
-    wagon(w).stock.logs = 100;
-    w.enqueue({ type: 'sell', owner: 0, good: 'logs' });
-    w.step();
-    expect(w.stored(0, 'logs')).toBe(100);
   });
 });
 

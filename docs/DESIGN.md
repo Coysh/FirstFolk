@@ -743,6 +743,19 @@ New metrics (`playtest.ts`, printed by `npm run sim`): `decisionsByMinute` (the 
 
 So the Market is a chore that looks like a decision, which is why S1 removes it, and the Crown is usually decided by whoever gets there first.
 
+### S1: the steadings (v0.24.0)
+**The idea.** Four neutral steadings (two mirrored pairs: a "near" pair, one close to each hall, and a "flank" pair equally far from both) are the valley's people. They are won with *what your economy makes*, and they are the Crown's new currency.
+
+- **Steadings are sites** (`DiscoveryKind` `'steading'`, with `site.st`), so they reuse fog, pins, the site renderer and saves. Their smoke is seen from the first morning. Placement is `placeSteadings` in `mapgen.ts`: five peoples (`steadingDefs.ts`: Quarrymen, Beekeepers, Woodwrights, Fisherfolk, Charcoal-burners) each with a gift (a good sent every minute to whoever they stand with) and a list of goods they want.
+- **Wants** (`steadings.ts`). Each steading posts one at a time, visible to both sides: *N goods* (small early, full size by about 15:00) or *a manned post beside them for 80 s*. The first to deliver wins +35 favour; the other loses 8. Unmet wants expire after 170 s without penalty; a new one follows in 50–80 s. This replaces the Challenges.
+- **Favour and allegiance.** Favour is 0–100 per side and fades by 1 every 20 s. A steading stands with whoever has 50 and a lead of 20, and keeps them while they hold 40 and a lead of 5. A steading that stands with you pushes your border (radius 7), sends its gift every minute, and flies your banner.
+- **Caravans** (`caravans` in `steadings.ts`, modelled on scouts). The `caravan` Command pays the goods from your stores and sends an ox-cart down the road (about 1.3 tiles a second, two at once; the Merchants calling adds a third). It hands over on arrival and walks home. A gift that is not wanted is worth up to +6 favour. One click on a steading's 🛒 button sends what it asks for.
+- **The Crown now fills for whoever holds more voices** (`crown.ts`). A voice is a steading standing with you, and the Kingstone is worth two to whoever keeps it alone (the v0.23 rule, unchanged). From 9:00 the Crown fills a point a second for each voice of lead (at most two), plus one more while a manned Stockade tends the stone, and the other side's drains as fast. Level voices freeze it. `world.crown` now exists from 9:00 and gains its stone at the star-fall. The Crown is 1,300 to fill.
+- **Removed:** Challenges (`challenges.ts`) and Market Day (`market.ts`, `sell`, `setTrade`), the two features the S0 ablation showed to be traps (skipping Market Day *won* 28 points). Merchants is re-pointed at caravans: +25% favour a tier and a third cart.
+- **UI:** the race card is now the voices board, with a row per steading (favour bars for both sides, the Want with its clock, the rival's progress, and a 🛒 button), steading pins and an ox-cart view; steadings have a code-built model for now (a Blender one is due in S4). A pre-existing bug was fixed on the way: toasts with the `info` tone picked up the info-panel's `position: absolute`.
+- **Bots** send carts for Wants they can finish (and gifts to steadings that aren't theirs yet), reach for steadings with the border, and `--ablate caravan` is available.
+- **Save:** `SAVE_VERSION` 21 (steadings live in the sites; `caravans`). Challenge fields removed.
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -1660,3 +1673,9 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 
 ### v0.23.1 The measurement pass (2026-10-28, branch dev/living-valley)
 - **Harness only, no rule change:** decisions a minute, the Crown score and lead changes, settledness, a boredom stretch, `--ablate` on the bot and `tools/ablate.ts`. Baseline and ablation recorded in §0i.
+
+### v0.24.0 The Steadings (2026-10-28, branch dev/living-valley)
+- **Four steadings per valley** (two mirrored pairs; five peoples with gifts and Wants), won by caravans of what they ask for; the Crown now fills for whoever holds more *voices* (a steading standing with you is one; the Kingstone, kept alone, is two). Challenges and Market Day are removed (the ablation showed Market Day cost 28 points of win rate). Merchants now earn favour and run a third cart.
+- **New:** `steadings.ts`, `steadingDefs.ts`, the `caravan` Command, `render/caravans.ts`, the steading model, a voices board with a row per steading, steading pins, `tests/steadings.test.ts`. **Changed:** `crown.ts` (voices), `mapgen.ts` (`placeSteadings`), `territory.ts` (steadings push borders and are never "claimed"), the bots (carts, steadings as frontier targets).
+- **Save:** `SAVE_VERSION` 21.
+- **Measured** (24 duels, seed 100+): median 32.1 min (9 of 24 end on the clock), 2.2 renown lead changes, 10 comebacks, 7.6–9.4 allegiance flips a game, decisions a minute 2.0 / 3.0 / 3.7 / 4.0 (0–5 / 5–15 / 15–30 / last 10, was 2.2 / 2.1 / 2.6 / 2.7), no bored stretch over a minute. Style matrix (one block, seed 100, 12 games both sides): Raider 61, Balanced 58, Warden 53, Trader 52, Mason 44, Expander 42, Hearthfolk 39; median 30.8 min, 2.1 lead changes. One block is noisy; S2's bread chain is meant to lift Hearthfolk and Mason.

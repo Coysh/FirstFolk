@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CALLING_TIERS, callingScores, callingTier, leadingCalling, updateCallings, type CallingScores } from '../src/sim/callings';
 import { BALANCE } from '../src/sim/balance';
-import { fairPrice, FAIR_VALUE, updateMarket } from '../src/sim/market';
+import { addFavour, caravanMax, steadingsOf } from '../src/sim/steadings';
 import { updateRenown } from '../src/sim/renown';
 import { World } from '../src/sim/world';
 import { wagon } from './helpers';
@@ -47,19 +47,16 @@ describe('callings', () => {
     expect(callingTier(w, 0, 'masons')).toBe(0);
   });
 
-  it('Merchants sell for more, and the market clears faster', () => {
+  it('Merchants earn more favour at steadings, and run a third cart', () => {
     const w = world();
-    const base = fairPrice(w, 0, 'planks');
-    expect(base).toBe(FAIR_VALUE.planks);
+    const site = steadingsOf(w)[0];
+    addFavour(w, site, 0, 20);
+    expect(site.st!.favour[0]).toBe(20);
+    expect(caravanMax(w, 0)).toBe(2);
     w.players[0].calling = { id: 'trader', tier: 3 };
-    expect(fairPrice(w, 0, 'planks')).toBe(Math.floor(FAIR_VALUE.planks * 1.6));
-    w.players[0].glut.logs = 100;
-    updateMarket(w);
-    expect(w.players[0].glut.logs).toBe(100 - 1 - 3);
-    w.players[0].calling = { id: '', tier: 0 };
-    w.players[0].glut.logs = 100;
-    updateMarket(w);
-    expect(w.players[0].glut.logs).toBe(99);
+    addFavour(w, site, 0, 20);
+    expect(site.st!.favour[0]).toBe(20 + 35);
+    expect(caravanMax(w, 0)).toBe(3);
   });
 
   it('Masons raise the Great Works for less and are paid more for them', () => {

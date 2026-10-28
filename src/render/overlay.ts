@@ -1,3 +1,4 @@
+import { STEADING_CHAR } from '../sim/steadingDefs';
 import * as THREE from 'three';
 import { BUILDINGS, DISCOVERIES, type Good } from '../sim/defs';
 import { NO_OWNER } from '../sim/territory';
@@ -135,13 +136,31 @@ export class Overlay {
         if (!pin) {
           pin = document.createElement('div');
           pin.className = 'pin';
-          pin.innerHTML = `<span class="pin-icon">${d.icon}</span><span class="pin-name">${d.name}</span><span class="pin-rate"></span>`;
-          pin.title = `${d.name}: ${d.blurb} Extend your border over it to claim it.`;
+          const sname = site.st ? `${STEADING_CHAR[site.st.char].icon} ${site.st.name}` : d.name;
+          pin.innerHTML = `<span class="pin-icon">${site.st ? '' : d.icon}</span><span class="pin-name">${sname}</span><span class="pin-rate"></span>`;
+          pin.title = site.st ? `${site.st.name}: ${STEADING_CHAR[site.st.char].blurb} Send a cart with what they want; the first to deliver wins their favour.` : `${d.name}: ${d.blurb} Extend your border over it to claim it.`;
           this.root.appendChild(pin);
           this.pins.set(site.id, pin);
         }
         // Your landmarks pay only while a manned post watches them: say so when none does.
         const watch = site.heldBy === 0 && d.renown ? watched(world, 0, site.x, site.y) : '';
+        if (site.st) {
+          const ally = site.st.ally;
+          const sstate = ally === 0 ? 'mine' : ally > 0 ? 'theirs' : 'open';
+          const txt = ally === 0 ? 'stands with you' : ally > 0 ? 'stands with the rival' : site.st.want ? (site.st.want.kind === 'guard' ? 'wants a manned post' : `wants ${site.st.want.n} ${site.st.want.good}`) : 'looking for friends';
+          if (pin.dataset.state !== `${sstate}|${txt}`) {
+            pin.dataset.state = `${sstate}|${txt}`;
+            pin.className = `pin ${sstate} landmark`;
+            (pin.querySelector('.pin-rate') as HTMLElement).textContent = txt;
+          }
+          const sp = sites.position(world, site.id);
+          if (sp) {
+            const sc = project(sp, 2.6);
+            pin.style.display = sc.on ? '' : 'none';
+            pin.style.transform = `translate(${sc.x}px, ${sc.y}px) translate(-50%, -100%) scale(${Math.max(0.75, scale)})`;
+          }
+          continue;
+        }
         const state = site.heldBy === 0 ? (d.renown && !watch ? 'mine unwatched' : watch === 'stockade' ? 'mine tended' : 'mine') : site.heldBy > 0 ? 'theirs' : 'open';
         if (pin.dataset.state !== state) {
           pin.dataset.state = state;

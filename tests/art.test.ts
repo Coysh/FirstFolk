@@ -17,7 +17,8 @@ const SMALL = [
 /** The Great Works are 3x3. */
 const GREAT = ['henge', 'meadhall', 'granary'];
 const BUILDINGS = [...SMALL, ...GREAT];
-const LANDMARKS = Object.keys(DISCOVERIES).map((k) => `discovery_${k}`);
+// The steading has a code-built model until its Blender one arrives (S4).
+const LANDMARKS = Object.keys(DISCOVERIES).filter((k) => k !== 'steading').map((k) => `discovery_${k}`);
 const CALLING_PROPS = ['calling_trader', 'calling_masons', 'calling_stronghold', 'calling_hearth'];
 const SETTLER_PARTS = ['settler_body', 'settler_head', 'settler_hair', 'settler_hood', 'settler_arm', 'settler_leg'];
 

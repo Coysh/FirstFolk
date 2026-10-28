@@ -6,7 +6,7 @@ import { rebuildDeck } from './bridges';
 import { World, type Building, type Discovery, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
 
 /** Bump when the shape of saved state changes; older saves are refused rather than misread. */
-export const SAVE_VERSION = 20;
+export const SAVE_VERSION = 21;
 
 const KINDS: NodeKind[] = ['tree', 'rock', 'bush', 'fish'];
 
@@ -34,9 +34,7 @@ export interface SaveData {
   sites: Discovery[];
   omens: OmenId[];
   label: string;
-  challenge: World['challenge'];
-  nextChallengeAt: number;
-  lastChallenge: string;
+  caravans: World['caravans'];
   warbands: World['warbands'];
   nextReaversAt: number;
   bridges: World['bridges'];
@@ -86,15 +84,13 @@ export function serializeWorld(w: World): SaveData {
     sites: clone(w.sites),
     omens: [...w.omens],
     label: w.label,
-    challenge: clone(w.challenge),
-    nextChallengeAt: w.nextChallengeAt,
+    caravans: clone(w.caravans),
     warbands: clone(w.warbands),
     nextReaversAt: w.nextReaversAt,
     bridges: clone(w.bridges),
     crown: clone(w.crown),
     scouts: clone(w.scouts),
     saga: w.saga,
-    lastChallenge: w.lastChallenge,
   };
 }
 
@@ -123,11 +119,9 @@ export function deserializeWorld(d: SaveData): World {
   unrle(d.territory, w.territory);
   unrle(d.explored, w.explored);
   w.sites = d.sites;
-  w.challenge = d.challenge;
-  w.nextChallengeAt = d.nextChallengeAt;
+  w.caravans = d.caravans ?? [];
   w.warbands = d.warbands;
   w.nextReaversAt = d.nextReaversAt;
-  w.lastChallenge = d.lastChallenge;
   w.bridges = d.bridges ?? [];
   w.crown = d.crown ?? null;
   w.scouts = d.scouts ?? [];

@@ -82,6 +82,8 @@ export function influenceSources(world: World, skipId = 0): InfluenceSource[] {
   for (const site of world.sites) {
     const aura = DISCOVERIES[site.kind].aura;
     if (aura && site.heldBy !== NO_OWNER) out.push({ owner: site.heldBy, x: site.x, y: site.y, r: aura[0], p: aura[1] });
+    // A steading that stands with you pushes your border out around it, like a small hall.
+    if (site.st && site.st.ally !== NO_OWNER) out.push({ owner: site.st.ally, x: site.x, y: site.y, r: BALANCE.steadingReach[0], p: BALANCE.steadingReach[1] });
   }
   for (const pl of world.players) for (const b of pl.boosts) if (b.until > world.tick) out.push({ owner: pl.id, x: b.x, y: b.y, r: b.r, p: b.p });
   return out;
@@ -180,7 +182,7 @@ export function previewInfluence(world: World, extra: InfluenceSource): { gained
     }
   const sites = world.sites.filter((s) => {
     const i = world.idx(s.x, s.y);
-    return next[i] === extra.owner && world.territory[i] !== extra.owner && (s.claimedBy === NO_OWNER || DISCOVERIES[s.kind].renown);
+    return !s.st && next[i] === extra.owner && world.territory[i] !== extra.owner && (s.claimedBy === NO_OWNER || DISCOVERIES[s.kind].renown);
   });
   return { gained, fromRival, sites };
 }
@@ -353,6 +355,7 @@ function compass(dx: number, dy: number): string {
  */
 export function updateHoldings(world: World): void {
   for (const site of world.sites) {
+    if (site.st) continue; // steadings are won with favour, not with a border
     const owner = world.territory[world.idx(site.x, site.y)];
     if (owner === NO_OWNER || !world.players[owner]) continue;
     if (site.claimedBy === NO_OWNER) {
@@ -438,7 +441,7 @@ function weakestCraft(world: World, owner: number): (typeof SKILLS)[number] {
   return SKILLS.reduce((a, k) => (crafts[k] < crafts[a] ? k : a), SKILLS[0]);
 }
 
-function nearestStore(world: World, owner: number, x: number, y: number): Building | undefined {
+export function nearestStore(world: World, owner: number, x: number, y: number): Building | undefined {
   let best: Building | undefined;
   let bestD = Infinity;
   for (const b of world.storages(owner)) {

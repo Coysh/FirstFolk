@@ -1,3 +1,4 @@
+import { STEADING_CHARS } from './steadingDefs';
 import { BALANCE } from './balance';
 import type { DiscoveryKind, NodeKind } from './defs';
 import { fbm, smoothstep } from './noise';
@@ -56,7 +57,7 @@ export interface MapData {
   starts: { x: number; y: number }[];
   /** `max` overrides the default yield (prize sites). */
   nodes: { kind: NodeKind; x: number; y: number; max?: number }[];
-  sites: { kind: DiscoveryKind; x: number; y: number }[];
+  sites: { kind: DiscoveryKind; x: number; y: number; /** Which people live at a steading. */ char?: string }[];
 }
 
 /**
@@ -604,7 +605,44 @@ function placeSites(N: number, starts: { x: number; y: number }[], terrain: Uint
     const p = nearestOk(mid.x + dx, mid.y + dy, (x, y) => ok(x, y) || (x === mid.x + dx && y === mid.y + dy && terrain[y * N + x] !== Terrain.Water));
     if (p) sites.push({ kind, ...p });
   }
+  placeSteadings(N, starts, terrain, rng, ok, sites);
   return sites;
+}
+
+/**
+ * Four steadings, as two point-mirrored pairs: a "near" pair, one closer to each start (the home
+ * steading you can win early), and a "flank" pair either side of the middle, equally far from both
+ * (the contested ones). Each pair is one kind of people, drawn from the seed, so both sides get the
+ * same neighbours. Only dry land the start can walk to will do: a caravan has to be able to get there.
+ */
+function placeSteadings(N: number, starts: { x: number; y: number }[], terrain: Uint8Array, rng: Rng, ok: (x: number, y: number) => boolean, sites: MapData['sites']): void {
+  const [a, b] = starts;
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const land = reach(terrain, N, [a.x, a.y]);
+  const chars = STEADING_CHARS.map((c) => c.id);
+  const first = rng.int(chars.length);
+  const second = (first + 1 + rng.int(chars.length - 1)) % chars.length;
+  const side = rng.int(2) ? 1 : -1;
+  // Where each pair would like to sit: [percent along the start-to-start line, percent sideways].
+  const ideal: [number, number][] = [[30, 16 * side], [50, -34 * side]];
+  // Every other spot worth a look, nearest the ideal first: the valley's water decides what is possible.
+  const spots: [number, number][] = [];
+  for (let along = 16; along <= 50; along += 3) for (let across = -48; across <= 48; across += 4) spots.push([along, across]);
+  [first, second].forEach((c, pair) => {
+    const [ia, ic] = ideal[pair];
+    const ranked = spots.slice().sort((p, q) => (p[0] - ia) ** 2 + (p[1] - ic) ** 2 - ((q[0] - ia) ** 2 + (q[1] - ic) ** 2));
+    for (const [along, across] of ranked) {
+      const x = Math.round(a.x + (vx * along) / 100 - (vy * across) / 100);
+      const y = Math.round(a.y + (vy * along) / 100 + (vx * across) / 100);
+      const p = nearestOk(x, y, (px, py) => ok(px, py) && !!land[py * N + px]);
+      if (!p) continue;
+      const m = nearestOk(N - p.x, N - p.y, (px, py) => ok(px, py) && !(px === p.x && py === p.y) && !!land[py * N + px]);
+      if (!m) continue;
+      sites.push({ kind: 'steading', char: chars[c], ...p }, { kind: 'steading', char: chars[c], ...m });
+      return;
+    }
+  });
 }
 
 function nearestOk(x: number, y: number, ok: (x: number, y: number) => boolean): { x: number; y: number } | null {

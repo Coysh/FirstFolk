@@ -1,5 +1,5 @@
 import { BUILDINGS, GOODS, RANK_NAMES, type BuildingType, type Good } from './defs';
-import { sell, setTrade } from './market';
+import { sendCaravan } from './steadings';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
 import { owns, territoryBox } from './territory';
 import { chooseHouse } from './houses';
@@ -19,8 +19,7 @@ export type Command =
   | { type: 'chooseHouse'; owner: number; offerId: number; choice: number }
   | { type: 'chooseEvent'; owner: number; eventId: number; option: number }
   | { type: 'deed'; owner: number; seat: number; x: number; y: number }
-  | { type: 'sell'; owner: number; good: Good }
-  | { type: 'setTrade'; owner: number; good: Good; keep: number | null }
+  | { type: 'caravan'; owner: number; siteId: number; good: Good; n: number }
   | { type: 'setAutoHomes'; owner: number; on: boolean }
   | { type: 'raid'; owner: number; targetId: number }
   | { type: 'rally'; owner: number }
@@ -198,8 +197,8 @@ export function applyCommand(world: World, cmd: Command): void {
     case 'bridge':
       placeBridge(world, cmd.owner, { x: cmd.x, y: cmd.y, dir: cmd.dir, len: cmd.len });
       return;
-    case 'sell':
-      sell(world, cmd.owner, cmd.good);
+    case 'caravan':
+      sendCaravan(world, cmd.owner, cmd.siteId, cmd.good, cmd.n);
       return;
     case 'setAutoHomes':
       if (world.players[cmd.owner]) world.players[cmd.owner].autoHomes = cmd.on;
@@ -212,9 +211,6 @@ export function applyCommand(world: World, cmd: Command): void {
       return;
     case 'scout':
       sendScout(world, cmd.owner, cmd.x, cmd.y);
-      return;
-    case 'setTrade':
-      setTrade(world, cmd.owner, cmd.good, cmd.keep);
       return;
     case 'deed':
       performDeed(world, cmd.owner, cmd.seat, cmd.x, cmd.y);

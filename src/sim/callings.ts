@@ -34,8 +34,8 @@ export const CALLINGS: Record<CallingId, CallingDef> = {
     icon: '⚖️',
     titles: ['Market Town', 'Trading Town', 'Free Port'],
     color: 0x2e86c1,
-    earned: 'Storehouses, the Great Granary and goods sold',
-    perks: ['Goods sell for 20% more', 'Sells for 40% more, and the market recovers twice as fast', 'Sells for 60% more, and the market recovers three times as fast'],
+    earned: 'Storehouses, the Great Granary and goods carried to steadings',
+    perks: ['Steadings give you 25% more favour', 'Favour +50%, and a third cart on the road', 'Favour +75%, and a third cart on the road'],
   },
   masons: {
     id: 'masons',
@@ -88,7 +88,7 @@ export function callingScores(world: World, owner: number): CallingScores {
   if (!p) return { trader: 0, masons: 0, stronghold: 0, hearth: 0 };
   const works = c('henge') + c('meadhall') + c('granary');
   return {
-    trader: 3 * c('storehouse') + 6 * c('granary') + Math.floor(p.sold / 40),
+    trader: 3 * c('storehouse') + 6 * c('granary') + Math.floor(p.caravanned / 40),
     masons: 3 * c('quarry') + 2 * c('sawpit') + 7 * works + 3 * tierOf(p.crafts.stonework) + 2 * tierOf(p.crafts.woodcraft),
     stronghold: 3 * (c('watchtower') + c('stockade')) + c('lookout') + c('outpost') + 6 * c('musterhall') + 3 * p.raidsWon + 2 * p.repelled,
     hearth: 2 * (c('forager') + c('fisher')) + c('hut') + 2 * c('longhouse') + 3 * tierOf(p.crafts.husbandry) + (p.hungry ? 0 : Math.floor(world.population(owner) / 10)),

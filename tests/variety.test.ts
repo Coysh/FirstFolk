@@ -135,24 +135,7 @@ describe('dynasties (meta-progression)', () => {
   });
 });
 
-describe('challenges, acclaim and auto-homes', () => {
-  it('the valley calls a challenge, and the first to the target wins the prize', async () => {
-    const { CHALLENGES, challengeProgress } = await import('../src/sim/challenges');
-    const w = new World({ seed: 5 });
-    w.tick = BALANCE.firstChallenge - 5;
-    w.run(20);
-    expect(w.challenge).not.toBeNull();
-    const def = CHALLENGES.find((d) => d.id === w.challenge!.def)!;
-    expect(challengeProgress(w, 0)).toEqual([0, def.target]);
-    // Fake the player's progress past the line.
-    w.challenge!.start[0] -= def.target;
-    const before = w.players[0].renown;
-    w.run(20);
-    expect(w.challenge).toBeNull();
-    expect(w.players[0].challengesWon).toBe(1);
-    expect(w.players[0].renown).toBe(before + def.prize);
-  });
-
+describe('auto-homes', () => {
   it('with auto-homes on, families put up a hut when every home is full', () => {
     const w = new World({ seed: 4, scenario: 'peaceful' });
     const wagon = [...w.buildings.values()].find((b) => b.type === 'wagon')!;

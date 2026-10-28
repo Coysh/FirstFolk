@@ -154,8 +154,8 @@ export class Input {
     else if (k === '+' || k === '=') rig.zoom(0.8);
     else if (k === '-' || k === '_') rig.zoom(1.25);
     else if (k === 'escape') {
-      if (this.game.mode.value.kind !== 'select' || this.game.selection.value || this.game.marketOpen.value) {
-        this.game.marketOpen.value = false;
+      if (this.game.mode.value.kind !== 'select' || this.game.selection.value || this.game.steadingOpen.value !== null) {
+        this.game.steadingOpen.value = null;
         this.game.cancel();
       }
       else this.game.menuOpen.value = true;

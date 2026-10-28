@@ -512,6 +512,26 @@ export function discoveryGeometry(kind: DiscoveryKind): THREE.BufferGeometry {
       b.add(cyl(0.2, 0.22, 0.07, 10), 0xf2c14e, { pos: [0, 1.96, 0] });
       b.add(ico(0.1, 0), 0xfff2b0, { pos: [0, 2.15, 0], sway: 2.4 });
       break;
+    case 'steading': {
+      // A village: four round huts under thatch round a fire, inside a ring of palisade posts, with a tall pole and a sign.
+      b.add(cyl(1.55, 1.7, 0.06, 18), C.moss, { pos: [0, 0.02, 0] });
+      const huts: [number, number, number][] = [[-0.75, -0.45, 0.46], [0.7, -0.5, 0.4], [-0.6, 0.62, 0.4], [0.75, 0.55, 0.44]];
+      for (const [x, z, r] of huts) {
+        b.add(cyl(r, r * 1.05, 0.4, 9), C.wattle, { pos: [x, 0.22, z] });
+        b.add(cone(r * 1.35, 0.55, 9), C.thatch, { pos: [x, 0.66, z] });
+        b.add(box(0.14, 0.24, 0.04), C.door, { pos: [x, 0.16, z + r * 1.02] });
+      }
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        if (i % 8 === 4) continue; // a gate gap front and back
+        b.add(cyl(0.05, 0.06, 0.55, 5), C.timber, { pos: [Math.cos(a) * 1.5, 0.28, Math.sin(a) * 1.5] });
+      }
+      b.add(cyl(0.12, 0.14, 0.05, 8), C.stoneDark, { pos: [0, 0.07, 0] });
+      b.add(cone(0.07, 0.16, 5), C.ember, { pos: [0, 0.18, 0], sway: 2.4 });
+      b.add(cyl(0.04, 0.05, 1.5, 6), C.darkTimber, { pos: [1.15, 0.75, 0.0] });
+      b.add(box(0.5, 0.26, 0.04), C.lightWood, { pos: [1.4, 1.25, 0.0] });
+      break;
+    }
     case 'barrow':
       // A long grassy mound with a dark stone doorway and a capstone.
       b.add(sphere(0.9, 9, 6), C.moss, { pos: [0, -0.15, -0.1], scale: [1.2, 0.55, 0.9] });

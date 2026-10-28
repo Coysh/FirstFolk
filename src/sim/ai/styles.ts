@@ -18,8 +18,6 @@ export interface StyleDef {
   towersFirst: boolean;
   /** Pushes the border only towards something (a discovery, a landmark, a missing resource). */
   towersOnlyWithAim: boolean;
-  /** Goods kept back before selling a lot on Market Day. */
-  sellKeep: number;
   /** Raises a stockade by each contested landmark it holds. */
   stockades: boolean;
   /** Builds a Mustering Hall (from Village), and how keenly it raids: 0 never, 1 for a landmark or much land, 2 any post it can beat. */
@@ -32,13 +30,13 @@ export interface StyleDef {
 }
 
 export const STYLES: Record<BotStyle, StyleDef> = {
-  balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: true, muster: true, raids: 1, houses: ['plough', 'spear', 'shield', 'hammer', 'horn', 'hearth', 'axe'] },
-  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120, stockades: true, muster: false, raids: 0, houses: ['horn', 'shield', 'hearth', 'axe', 'plough', 'hammer', 'spear'] },
-  trader: { name: 'Trader', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, sellKeep: 25, stockades: true, muster: false, raids: 0, focus: 'trader', houses: ['plough', 'hammer', 'hearth', 'shield', 'axe', 'horn', 'spear'] },
-  mason: { name: 'Mason', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60, stockades: true, muster: false, raids: 0, focus: 'masons', houses: ['hammer', 'axe', 'shield', 'plough', 'hearth', 'horn', 'spear'] },
-  hearth: { name: 'Hearthfolk', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, sellKeep: 80, stockades: true, muster: false, raids: 0, focus: 'hearth', houses: ['plough', 'hearth', 'shield', 'hammer', 'axe', 'horn', 'spear'] },
-  raider: { name: 'Raider', focus: 'stronghold', towerPer: 9, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: false, muster: true, raids: 2, houses: ['spear', 'shield', 'hammer', 'plough', 'axe', 'horn', 'hearth'] },
-  warden: { name: 'Warden', focus: 'stronghold', towerPer: 12, towersFirst: false, towersOnlyWithAim: true, sellKeep: 80, stockades: true, muster: true, raids: 0, houses: ['shield', 'hearth', 'plough', 'hammer', 'axe', 'horn', 'spear'] },
+  balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, stockades: true, muster: true, raids: 1, houses: ['plough', 'spear', 'shield', 'hammer', 'horn', 'hearth', 'axe'] },
+  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, stockades: true, muster: false, raids: 0, houses: ['horn', 'shield', 'hearth', 'axe', 'plough', 'hammer', 'spear'] },
+  trader: { name: 'Trader', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: false, raids: 0, focus: 'trader', houses: ['plough', 'hammer', 'hearth', 'shield', 'axe', 'horn', 'spear'] },
+  mason: { name: 'Mason', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: false, raids: 0, focus: 'masons', houses: ['hammer', 'axe', 'shield', 'plough', 'hearth', 'horn', 'spear'] },
+  hearth: { name: 'Hearthfolk', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: false, raids: 0, focus: 'hearth', houses: ['plough', 'hearth', 'shield', 'hammer', 'axe', 'horn', 'spear'] },
+  raider: { name: 'Raider', focus: 'stronghold', towerPer: 9, towersFirst: false, towersOnlyWithAim: false, stockades: false, muster: true, raids: 2, houses: ['spear', 'shield', 'hammer', 'plough', 'axe', 'horn', 'hearth'] },
+  warden: { name: 'Warden', focus: 'stronghold', towerPer: 12, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: true, raids: 0, houses: ['shield', 'hearth', 'plough', 'hammer', 'axe', 'horn', 'spear'] },
 };
 
 /** The rival's character follows where it comes from (a classic start plays balanced). */
