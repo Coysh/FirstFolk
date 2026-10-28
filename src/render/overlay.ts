@@ -160,7 +160,8 @@ export class Overlay {
       const f = band.progress / 1000;
       const bx = band.x + (next === undefined ? 0 : ((next % world.size) - band.x) * f);
       const by = band.y + (next === undefined ? 0 : (Math.floor(next / world.size) - band.y) * f);
-      if (!this.visible || !(world.explored[world.idx(Math.round(bx), Math.round(by))] & 1)) continue;
+      const onUs = band.phase === 'march' && world.buildings.get(band.targetId)?.owner === 0;
+      if (!this.visible || (!onUs && !(world.explored[world.idx(Math.round(bx), Math.round(by))] & 1))) continue;
       bandsSeen.add(band.id);
       let pin = this.warPins.get(band.id);
       if (!pin) {

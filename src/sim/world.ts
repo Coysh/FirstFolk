@@ -25,7 +25,7 @@ import { isWinter, updateSeasons, type Season } from './seasons';
 import { updateValleyEvents } from './events';
 import { OpeningBot } from './ai/openingBot';
 import { styleOf, type BotStyle } from './ai/styles';
-import { updateWarbands, type Warband } from './warfare';
+import { updateReavers, updateWarbands, type Warband } from './warfare';
 
 export type Stock = Record<Good, number>;
 export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 });
@@ -366,8 +366,9 @@ export class World {
   challenge: { def: string; endsAt: number; start: number[] } | null = null;
   nextChallengeAt = BALANCE.firstChallenge;
   lastChallenge = '';
-  /** Raiding parties on the march (see warfare.ts). */
+  /** Raiding parties on the march (see warfare.ts), and when reavers next come ashore. */
   warbands: Warband[] = [];
+  nextReaversAt = BALANCE.reaversFrom;
   /** Set while a raid burns a post, so landmarks it frees don't also pay the seizing prize. */
   quietSeize = false;
   /** AI players (the rival), driven through Commands exactly like a human. */
@@ -733,6 +734,7 @@ export class World {
       updateExploration(this);
       updateHappenings(this);
       updateChallenges(this);
+      updateReavers(this);
       updateOffers(this);
       updateValleyEvents(this);
     }

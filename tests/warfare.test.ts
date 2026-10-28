@@ -3,7 +3,7 @@ import { BALANCE, secs } from '../src/sim/balance';
 import { BUILDINGS, DISCOVERIES } from '../src/sim/defs';
 import { canPlace } from '../src/sim/commands';
 import { previewInfluence, recomputeTerritory, updateHoldings } from '../src/sim/territory';
-import { defenceOf, raidProblem, raidStrength } from '../src/sim/warfare';
+import { defenceOf, raidProblem, raidStrength, reaversCome, updateReavers } from '../src/sim/warfare';
 import { World } from '../src/sim/world';
 import { hashWorld } from '../src/sim/hash';
 import { deserializeWorld, serializeWorld } from '../src/sim/save';
@@ -156,5 +156,51 @@ describe('raids', () => {
     back.run(secs(40));
     expect(hashWorld(back)).toBe(hashWorld(w));
     expect(back.buildings.has(target.id)).toBe(w.buildings.has(target.id));
+  });
+});
+
+describe('reavers', () => {
+  function spread(posts: number) {
+    const w = new World({ seed: 2 });
+    w.ais = [];
+    const home = wagon(w);
+    const built = [];
+    for (let i = 0; i < posts; i++) built.push(w.addBuilding('lookout', 0, home.x - 6 + (i % 3) * 3, home.y + 6 + Math.floor(i / 3) * 3, true));
+    w.tick = BALANCE.reaversFrom;
+    w.nextReaversAt = w.tick;
+    return { w, home, built };
+  }
+
+  it('leave a settlement with only a few posts alone', () => {
+    const { w } = spread(BALANCE.reaverMinPosts - 2);
+    updateReavers(w);
+    expect(w.warbands.length).toBe(0);
+  });
+
+  it('never come to a peaceful valley unless the omen says so', () => {
+    const w = newWorld(2);
+    expect(reaversCome(w)).toBe(false);
+  });
+
+  it('come ashore for the settlement spread widest and march on its furthest post', () => {
+    const { w, home, built } = spread(BALANCE.reaverMinPosts + 1);
+    updateReavers(w);
+    expect(w.warbands.length).toBe(1);
+    const band = w.warbands[0];
+    expect(band.owner).toBe(-1);
+    const far = Math.max(...built.map((b) => Math.max(Math.abs(b.x - home.x), Math.abs(b.y - home.y))));
+    const t = w.buildings.get(band.targetId)!;
+    expect(Math.max(Math.abs(t.x - home.x), Math.abs(t.y - home.y))).toBe(far);
+  });
+
+  it('a well-guarded far post holds them off, for renown', () => {
+    const { w } = spread(BALANCE.reaverMinPosts + 1);
+    updateReavers(w);
+    const t = w.buildings.get(w.warbands[0].targetId)!;
+    w.addBuilding('stockade', 0, t.x + 3, t.y, true).guarded = 3;
+    t.guarded = 1;
+    for (let i = 0; i < secs(90) && w.warbands.some((b) => b.phase === 'march'); i++) w.step();
+    expect(w.buildings.has(t.id)).toBe(true);
+    expect(w.players[0].renownBy.defence).toBe(BALANCE.reaverRepel);
   });
 });

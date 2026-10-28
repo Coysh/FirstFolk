@@ -1,5 +1,7 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, costTotal } from './defs';
+import { BUILDINGS, GOODS, costTotal } from './defs';
+import { isWalkableTerrain } from './mapgen';
+import { hasOmen } from './omens';
 import { addRenown } from './renown';
 import { cheb, setIdle } from './settlers';
 import { NO_OWNER, recomputeTerritory } from './territory';
@@ -140,8 +142,9 @@ function skirmish(world: World, band: Warband): void {
       addRenown(world, band.owner, renown, 'raids', target.x, target.y);
       world.players[band.owner].raidsWon++;
     }
+    if (band.owner === NO_OWNER) plunder(world, defender, target.x, target.y);
   } else if (target && defender !== NO_OWNER) {
-    renown = BALANCE.repelRenown;
+    renown = band.owner === NO_OWNER ? BALANCE.reaverRepel : BALANCE.repelRenown;
     addRenown(world, defender, renown, 'defence', target.x, target.y);
     world.players[defender].repelled++;
   }
@@ -166,6 +169,83 @@ function disband(world: World, band: Warband): void {
     if (world.buildings.has(s.job.buildingId)) s.job.phase = 'toPost';
     else setIdle(s);
   }
+}
+
+/** Reavers carry off a little from the nearest store. */
+function plunder(world: World, owner: number, x: number, y: number): void {
+  const stores = world.storages(owner);
+  let best: Building | undefined;
+  for (const s of stores) if (!best || cheb(s.x, s.y, x, y) < cheb(best.x, best.y, x, y)) best = s;
+  if (!best) return;
+  const good = GOODS.reduce((a, g) => (best!.stock[g] - best!.reserved[g] > best!.stock[a] - best!.reserved[a] ? g : a), GOODS[0]);
+  best.stock[good] -= Math.min(BALANCE.reaverLoot, Math.max(0, best.stock[good] - best.reserved[good]));
+}
+
+/** Do reavers come to this valley? Always in a race; in a peaceful valley only with the Reaver Coast omen. */
+export const reaversCome = (world: World) => world.players.length > 1 || hasOmen(world, 'reaverCoast');
+
+/** How strong the next band of reavers is. */
+export function reaverStrength(world: World): number {
+  const [base, step] = BALANCE.reaverStrength;
+  const n = base + step * Math.floor(Math.max(0, world.tick - BALANCE.reaversFrom) / (BALANCE.reaverGap[0] * 1.25));
+  return Math.round((n * (world.difficulty === 'relaxed' ? 70 : world.difficulty === 'hard' ? 120 : 100)) / 100 / 5) * 5;
+}
+
+/**
+ * Reavers land on the shore facing the settlement that has spread itself thinnest (the most
+ * posts, at least `reaverMinPosts`) and march on its furthest post from home.
+ */
+export function updateReavers(world: World): void {
+  if (!reaversCome(world) || world.tick < world.nextReaversAt) return;
+  const limit = world.scenario.timeLimit;
+  if (limit && world.tick > limit - BALANCE.reaverGap[0] / 2) return;
+  const gap = BALANCE.reaverGap[0] + world.rng.int(BALANCE.reaverGap[1] - BALANCE.reaverGap[0]);
+  world.nextReaversAt = world.tick + (hasOmen(world, 'reaverCoast') ? Math.floor(gap / 2) : gap);
+  // The settlement spread widest (ties: the one with more renown).
+  const ranked = [...world.players].sort((a, b) => world.frontierCount(b.id) - world.frontierCount(a.id) || b.renown - a.renown || a.id - b.id);
+  const victim = ranked[0];
+  if (!victim || world.frontierCount(victim.id) < BALANCE.reaverMinPosts) return;
+  const hall = [...world.buildings.values()].find((b) => b.owner === victim.id && b.type === 'wagon');
+  if (!hall) return;
+  // They strike the post furthest from home: guard your outermost tower and you hold the line.
+  let target: Building | undefined;
+  let far = -1;
+  for (const b of world.buildings.values()) {
+    if (b.owner !== victim.id || !raidable(b)) continue;
+    const d = cheb(b.x, b.y, hall.x, hall.y);
+    if (d > far) {
+      far = d;
+      target = b;
+    }
+  }
+  if (!target) return;
+  const shore = landing(world, victim.id, hall, target);
+  if (!shore) return;
+  const path = world.pathfinder.find(shore, world.entranceIdx(target));
+  if (!path) return;
+  const x = shore % world.size;
+  const y = (shore - x) / world.size;
+  const band: Warband = { id: world.newId(), owner: NO_OWNER, members: [], strength: reaverStrength(world), path, step: 0, progress: 0, targetId: target.id, homeId: 0, phase: 'march', x, y };
+  world.warbands.push(band);
+  world.emit({ type: 'raidLaunched', owner: NO_OWNER, defender: victim.id, targetId: target.id, buildingType: target.type, x: target.x, y: target.y, strength: band.strength, eta: Math.ceil((path.length * 1000) / BALANCE.adultSpeed / 10) });
+}
+
+/** Open ground beyond a post, away from its hall, outside its owner's land: where reavers come ashore. */
+function landing(world: World, owner: number, hall: Building, target: Building): number | null {
+  const dx = target.x - hall.x;
+  const dy = target.y - hall.y;
+  const len = Math.max(1, Math.abs(dx), Math.abs(dy));
+  let best: number | null = null;
+  for (let k = 10; k <= 26; k++) {
+    const x = target.x + Math.round((dx * k) / len);
+    const y = target.y + Math.round((dy * k) / len);
+    if (!world.inBounds(x, y)) break;
+    const i = world.idx(x, y);
+    if (!isWalkableTerrain(world.map.terrain[i]) || world.buildingAt[i] || world.territory[i] === owner) continue;
+    best = i;
+    if (k >= 14) break;
+  }
+  return best;
 }
 
 /** A post burns: it is gone, its guards flee home, and its land is open to whoever pushes. */

@@ -6,7 +6,7 @@ import type { World } from './world';
  * is a small, readable twist on the rules, shown before the game starts and on the HUD. The
  * effects are looked up with `hasOmen` at the one place each rule lives.
  */
-export type OmenId = 'longWinters' | 'richSeams' | 'bountiful' | 'restless' | 'oldKingdom' | 'wanderersRoad' | 'goldenAge' | 'fertile';
+export type OmenId = 'longWinters' | 'richSeams' | 'bountiful' | 'restless' | 'oldKingdom' | 'wanderersRoad' | 'goldenAge' | 'fertile' | 'reaverCoast';
 
 export const OMENS: Record<OmenId, { name: string; icon: string; blurb: string }> = {
   longWinters: { name: 'Hard Winters', icon: '❄️', blurb: 'Winter bites twice as hard: folk eat half again as much and building crawls.' },
@@ -17,6 +17,7 @@ export const OMENS: Record<OmenId, { name: string; icon: string; blurb: string }
   wanderersRoad: { name: 'Wanderers’ Road', icon: '🛤️', blurb: 'Newcomers arrive twice as often.' },
   goldenAge: { name: 'Golden Age', icon: '✨', blurb: 'Great Works are worth 50 more renown.' },
   fertile: { name: 'Fertile Folk', icon: '👶', blurb: 'Children are born a third more often.' },
+  reaverCoast: { name: 'Reaver Coast', icon: '🛶', blurb: 'Reavers raid twice as often, and come even to a peaceful valley.' },
 };
 
 export const OMEN_IDS = Object.keys(OMENS) as OmenId[];

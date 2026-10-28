@@ -2369,7 +2369,7 @@ button.danger.armed {
 /* Raids under way against you: a strip under the race bar. */
 .threats {
   position: absolute;
-  bottom: 250px;
+  bottom: 268px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;

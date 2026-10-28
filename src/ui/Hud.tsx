@@ -355,12 +355,12 @@ function Threats({ game }: { game: Game }) {
         const secsLeft = Math.ceil(((band.path.length - band.step) * 1000) / BALANCE.adultSpeed / TICK_HZ);
         const def = defenceOf(w, t);
         return (
-          <button key={band.id} class={`threat ${band.strength > def ? 'losing' : 'holding'}`} onClick={() => game.lookAt(t.x, t.y)} title="Look">
+          <button key={band.id} class={`threat ${band.strength >= def ? 'losing' : 'holding'}`} onClick={() => game.lookAt(t.x, t.y)} title="Look">
             <span class="threat-icon">⚔</span>
             <span>
               <strong>{band.owner === NO_OWNER ? 'Reavers' : 'Rival raiders'}</strong> → your {BUILDINGS[t.type].name} in {secsLeft}s
               <span class="threat-odds">
-                {band.strength} against your {def}: {band.strength > def ? 'it will burn unless help comes' : 'it should hold'}
+                {band.strength} against your {def}: {band.strength > def ? 'it will burn unless help comes' : band.strength === def ? 'a coin toss' : 'it should hold'}
               </span>
             </span>
           </button>

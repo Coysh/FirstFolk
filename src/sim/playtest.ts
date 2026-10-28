@@ -55,6 +55,9 @@ export interface PlaytestReport {
   raids: number[];
   raidsWon: number[];
   repelled: number[];
+  /** Reaver bands that came for [player, rival], and how many of them burned a post. */
+  reavers: number[];
+  reaverBurns: number[];
   timeline: string[];
 }
 
@@ -82,6 +85,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   world.players[0].style = bot.style;
   const towers = [0, 0];
   const raids = [0, 0];
+  const reavers = [0, 0];
+  const reaverBurns = [0, 0];
   const renownByMinute: [number, number][] = [];
   const stockAt: number[] = [];
   let holdingFlips = 0;
@@ -104,6 +109,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       const t = fmt(world.tick);
       if (e.type === 'buildingComplete' && BUILDINGS[e.buildingType].capped) towers[e.owner]++;
       if (e.type === 'raidLaunched' && e.owner >= 0) raids[e.owner]++;
+      if (e.type === 'raidLaunched' && e.owner < 0) reavers[e.defender]++;
+      if (e.type === 'raidResolved' && e.owner < 0 && e.won) reaverBurns[e.defender]++;
       if (e.type === 'raidLaunched') timeline.push(`${t} ⚔ ${e.owner === 0 ? 'you raid' : e.owner === 1 ? 'RIVAL raids' : 'REAVERS march on'} ${e.defender === 0 ? 'your' : 'their'} ${e.buildingType} (${e.strength})`);
       if (e.type === 'raidResolved') timeline.push(`${t}    ${e.won ? '🔥 burned' : '🛡 held'}: ${e.attack} vs ${e.defence}`);
       if ('owner' in e && e.owner !== 0 && !['claimed', 'rankUp', 'deed', 'workBegun'].includes(e.type) && !(e.type === 'holdingChanged' && e.from === 0)) continue;
@@ -213,6 +220,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     raids,
     raidsWon: world.players.map((p) => p.raidsWon),
     repelled: world.players.map((p) => p.repelled),
+    reavers,
+    reaverBurns,
     timeline,
   };
 }

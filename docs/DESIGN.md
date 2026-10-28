@@ -314,6 +314,20 @@ The measurements behind each:
     | Expander vs Warden | 63–75% |
 
     Every style falls between 38% and 59% overall, with about 2 lead changes a game and 23–26% comebacks.
+- **v0.15.0 reavers:** neutral pressure on over-extension.
+  - **When they come:** from 12:00, every 4–5 minutes, but never in the final 2 minutes.
+  - **Who they hit:** a band comes ashore facing the settlement with the most frontier buildings. Nobody with fewer than 6 is ever visited.
+  - **What they hit:** they march on its **post furthest from home**, a rule you can plan for: guard or stockade your outermost tower.
+  - **Strength:** 20 at 12:00, +10 every 5 minutes; 70% on Relaxed and 120% on Hardy.
+  - **Repelled:** +15 renown.
+  - **Burned:** the post burns, and 12 of the fullest good goes from the nearest store.
+  - **In a peaceful valley** reavers come only with the new **Reaver Coast** omen, which also makes them come twice as often.
+  - **Shown through the fog.** You're warned, so the dark-cloaked figures and their pin show even in fog.
+  - **The first rule ("the weakest post") was a mistake:** there was always a soft target, so they won every time and guarding never mattered.
+  - **Measured:**
+    - All five styles fall between 47% and 52%.
+    - Expanders are visited most (2.2 a game, against 0.8 for Builders).
+    - Settlements sometimes hold the line.
 - **Raids were rare at first, and the measurements showed why:**
   - **Huscarls waited behind every tower's guards,** so the first raid came at 20:00 or later. They now staff first.
   - **Posts never took workers.** The watch can now borrow an extra crew hand from a busy workplace.
@@ -1091,4 +1105,16 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - raid metrics in the harness.
 - **Rules:** manned posts keep watch, and the Watchtower has a stone footing worth +10 defence.
 - **Tests:** burn and spoils, holding the line, the home warband turning out, freed landmarks not paying the seizing prize twice, and save/load mid-march.
+
+### v0.15.0 Reavers (2026-10-28)
+- **Built:**
+  - reavers (`updateReavers`, landing spots on the shore, strength by time and difficulty, plunder);
+  - the Reaver Coast omen;
+  - dark-cloaked reaver figures made up from each band;
+  - sighted warbands drawn through the fog;
+  - a "coin toss" call in the warning strip for even odds;
+  - reaver counts in the harness.
+- **Saves:** version 16.
+- **Tests:** reavers ignore small settlements and peaceful valleys, march on the furthest post, and are held off by a guarded post with a stockade.
+- **Versioning:** v0.14.1 (raids) should have been a minor version under AGENTS.md. It's fixed from here on.
 

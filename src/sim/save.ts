@@ -5,7 +5,7 @@ import type { ScenarioState } from './scenario';
 import { World, type Building, type Discovery, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
 
 /** Bump when the shape of saved state changes; older saves are refused rather than misread. */
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 
 const KINDS: NodeKind[] = ['tree', 'rock', 'bush', 'fish'];
 
@@ -37,6 +37,7 @@ export interface SaveData {
   nextChallengeAt: number;
   lastChallenge: string;
   warbands: World['warbands'];
+  nextReaversAt: number;
 }
 
 function rle(a: ArrayLike<number>): number[] {
@@ -83,6 +84,7 @@ export function serializeWorld(w: World): SaveData {
     challenge: clone(w.challenge),
     nextChallengeAt: w.nextChallengeAt,
     warbands: clone(w.warbands),
+    nextReaversAt: w.nextReaversAt,
     lastChallenge: w.lastChallenge,
   };
 }
@@ -115,6 +117,7 @@ export function deserializeWorld(d: SaveData): World {
   w.challenge = d.challenge;
   w.nextChallengeAt = d.nextChallengeAt;
   w.warbands = d.warbands;
+  w.nextReaversAt = d.nextReaversAt;
   w.lastChallenge = d.lastChallenge;
   if (w.scenario.rival && w.players[1]) w.addRival();
   return w;

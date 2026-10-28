@@ -71,6 +71,17 @@ export const BALANCE = {
   repelRenown: 12,
   raidCooldown: secs(90),
   interceptRange: 12,
+  /**
+   * Reavers: from 12:00 a band lands every 4–5 minutes and marches on the weakest post of the
+   * settlement with the most (at least `reaverMinPosts`). Strength grows over the game.
+   */
+  reaversFrom: secs(12 * 60),
+  reaverGap: [secs(240), secs(300)] as [number, number],
+  reaverMinPosts: 6,
+  /** Strength at 12:00, and how much more every 5 minutes after. */
+  reaverStrength: [20, 10] as [number, number],
+  reaverRepel: 15,
+  reaverLoot: 12,
   /** Extra home influence per Master in the household (up to four). */
   masterPull: 15,
   /** Losing at least this many tiles at once is news. */

@@ -138,12 +138,40 @@ export class SettlersView {
   }
 
   /** Sim-space position of a settler (tile units, centre of tile = +0.5). */
+  private marchingOnUs(world: World, s: Settler): boolean {
+    const bandId = this.reaverBand.get(s.id);
+    const band = bandId === undefined ? world.warbands.find((w) => w.members.includes(s.id)) : world.warbands.find((w) => w.id === bandId);
+    return !!band && band.phase === 'march' && world.buildings.get(band.targetId)?.owner === 0;
+  }
+
+  /** Reavers have no settlers of their own: a figure per 10 strength, made up for each band. */
+  private reavers = new Map<number, Settler>();
+  private reaverBand = new Map<number, number>();
+  private *figures(world: World): Iterable<Settler> {
+    yield* world.settlers.values();
+    for (const band of world.warbands) {
+      if (band.owner >= 0) continue;
+      const n = Math.max(2, Math.min(8, Math.round(band.strength / 10)));
+      for (let k = 0; k < n; k++) {
+        const id = -(band.id * 16 + k);
+        let s = this.reavers.get(id);
+        if (!s) {
+          s = { id, owner: -1, familyId: 0, name: '', child: false, age: 0, x: band.x, y: band.y, next: -1, progress: 0, stepLen: 1000, path: [], job: { kind: 'guard', buildingId: 0, phase: 'away' }, busy: 0, carry: null, tool: 'spear', anim: 'walk', faceTile: -1, skills: { woodcraft: 0, stonework: 0, husbandry: 0 }, spouseId: 0, elder: false };
+          this.reavers.set(id, s);
+          this.reaverBand.set(id, band.id);
+        }
+        yield s;
+      }
+    }
+  }
+
   private simPos(world: World, s: Settler): { x: number; z: number } {
     if (s.job.kind === 'guard' && s.job.phase === 'away') {
       // Out with a warband: march in a little column around the band's position.
-      const band = world.warbands.find((w) => w.members.includes(s.id));
+      const bandId = this.reaverBand.get(s.id);
+      const band = bandId === undefined ? world.warbands.find((w) => w.members.includes(s.id)) : world.warbands.find((w) => w.id === bandId);
       if (band) {
-        const k = band.members.indexOf(s.id);
+        const k = bandId === undefined ? band.members.indexOf(s.id) : -s.id - band.id * 16;
         const next = band.path[band.step];
         let bx = band.x;
         let by = band.y;
@@ -181,7 +209,14 @@ export class SettlersView {
 
   /** Call before each simulation tick to remember where everyone was. */
   snapshot(world: World): void {
-    for (const s of world.settlers.values()) this.prev.set(s.id, this.simPos(world, s));
+    // Forget reavers whose band has gone home.
+    for (const [id, band] of this.reaverBand)
+      if (!world.warbands.some((w) => w.id === band)) {
+        this.reaverBand.delete(id);
+        this.reavers.delete(id);
+        this.prev.delete(id);
+      }
+    for (const s of this.figures(world)) this.prev.set(s.id, this.simPos(world, s));
   }
 
   update(world: World, alpha: number, time: number, dt: number): void {
@@ -190,10 +225,12 @@ export class SettlersView {
     let nApron = 0;
     let nBadge = 0;
     let nShield = 0;
-    for (const s of world.settlers.values()) {
+    for (const s of this.figures(world)) {
       if (i >= MAX) break;
       const cur = this.simPos(world, s);
-      if (s.owner !== 0 && !(world.explored[world.idx(Math.min(world.size - 1, Math.max(0, Math.floor(cur.x))), Math.min(world.size - 1, Math.max(0, Math.floor(cur.z))))] & 1)) continue;
+      // Warbands marching on us were sighted (we were warned), so they are shown through the fog.
+      const sighted = s.job.kind === 'guard' && s.job.phase === 'away' && this.marchingOnUs(world, s);
+      if (s.owner !== 0 && !sighted && !(world.explored[world.idx(Math.min(world.size - 1, Math.max(0, Math.floor(cur.x))), Math.min(world.size - 1, Math.max(0, Math.floor(cur.z))))] & 1)) continue;
       const prev = this.prev.get(s.id) ?? cur;
       const x = prev.x + (cur.x - prev.x) * alpha;
       const z = prev.z + (cur.z - prev.z) * alpha;
@@ -342,11 +379,11 @@ export class SettlersView {
       // --- colours ------------------------------------------------------
       const fam = world.families.get(s.familyId);
       const tunic = TUNICS[Math.floor(hash2(s.id, 2, 3) * TUNICS.length)];
-      this.parts.body.setColorAt(i, this.col.setHex(tunic));
+      this.parts.body.setColorAt(i, this.col.setHex(s.owner < 0 ? 0x3b3a44 : tunic));
       this.parts.armL.setColorAt(i, this.col);
       this.parts.armR.setColorAt(i, this.col);
       this.parts.head.setColorAt(i, this.col.setHex(SKINS[Math.floor(hash2(s.id, 3, 3) * SKINS.length)]));
-      this.parts.hat.setColorAt(i, this.col.setHex(fam ? CREST_COLORS[fam.color] : 0x888888));
+      this.parts.hat.setColorAt(i, this.col.setHex(fam ? CREST_COLORS[fam.color] : s.owner < 0 ? 0x1e1d24 : 0x888888));
       this.parts.legL.setColorAt(i, this.col.setHex(C.trousers));
       this.parts.legR.setColorAt(i, this.col);
 
