@@ -85,10 +85,10 @@ export function council(world: World, owner: number): Family[] {
   return out;
 }
 
-/** What a deed costs right now: each Outpost you hold makes the next Expedition dearer. */
+/** What a deed costs right now: every frontier building you have makes the next Expedition dearer. */
 export function deedCost(world: World, owner: number, id: DeedId): Partial<Record<Good | 'food', number>> {
   const cost = { ...DEEDS[id].cost };
-  if (id === 'expedition') cost.logs = (cost.logs ?? 0) + 4 * world.countBuildings(owner, 'outpost');
+  if (id === 'expedition') cost.logs = (cost.logs ?? 0) + 2 * world.frontierCount(owner);
   return cost;
 }
 
@@ -163,7 +163,7 @@ export const DEEDS: Record<DeedId, DeedDef> = {
     cooldown: secs(170),
     cost: { logs: 8, food: 6 },
     apply(world, fam, power, x, y) {
-      if (world.territory[world.idx(x, y)] === fam.owner) return null;
+      if (world.territory[world.idx(x, y)] === fam.owner || world.frontierCount(fam.owner) >= world.frontierCap(fam.owner)) return null;
       const spot = outpostSpot(world, fam.owner, x, y);
       if (!spot) return null;
       const b = world.addBuilding('outpost', fam.owner, spot.x, spot.y, true);
@@ -266,6 +266,7 @@ function completeSite(world: World, site: Building, famId: number): void {
 export function deedTargetProblem(world: World, owner: number, id: DeedId, x: number, y: number): string {
   if (!world.inBounds(x, y)) return 'Off the map';
   if (id === 'expedition') {
+    if (world.frontierCount(owner) >= world.frontierCap(owner)) return `Your folk can hold ${world.frontierCap(owner)} towers and outposts at this rank`;
     if (world.territory[world.idx(x, y)] === owner) return 'That’s already your land: pick a spot beyond the border';
     if (!outpostSpot(world, owner, x, y)) return `No open ground there within ${BALANCE.expeditionReach} tiles of your border`;
   }

@@ -571,6 +571,16 @@ button.big {
   color: var(--ink-soft);
   white-space: nowrap;
 }
+.card-count {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font: 800 10px var(--body);
+  color: var(--ink-soft);
+}
+.card-count.full {
+  color: var(--warn);
+}
 .hotkey {
   position: absolute;
   top: 3px;

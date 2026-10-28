@@ -685,15 +685,18 @@ function BuildBar({ game }: { game: Game }) {
         const affordable = w.canAffordBuilding(PLAYER, t);
         const lock = unlocked ? '' : lockLabel(w, PLAYER, t);
         const reqText = `Needs a ${lock}`;
+        // Towers: how many the settlement holds against what its rank allows.
+        const capped = def.frontier && w.frontierCount(PLAYER) >= w.frontierCap(PLAYER);
         return (
           <button
             key={t}
             class={`card ${affordable || def.great ? '' : 'short'} ${unlocked && holder < 0 && !begun ? '' : 'locked'} ${def.great ? 'great' : ''}`}
             onClick={() => unlocked && holder < 0 && !begun && game.startPlacing(t)}
             aria-disabled={!unlocked || holder >= 0 || begun}
-            title={def.great ? `${def.name}: ${def.blurb} Perk: ${def.great.perk} +${def.great.renown} renown.` : unlocked ? `${def.name} (${HOTKEYS[i]}): ${def.blurb}` : `${def.name}: ${reqText}`}
+            title={def.great ? `${def.name}: ${def.blurb} Perk: ${def.great.perk} +${def.great.renown} renown.` : unlocked ? `${def.name} (${HOTKEYS[i]}): ${def.blurb}${def.frontier ? ` Towers held: ${w.frontierCount(PLAYER)} of ${w.frontierCap(PLAYER)} (rank up for more).` : ''}` : `${def.name}: ${reqText}`}
           >
             {HOTKEYS[i] && <span class="hotkey">{HOTKEYS[i]}</span>}
+            {def.frontier && unlocked && <span class={`card-count ${capped ? 'full' : ''}`} title="Towers and outposts you hold, of what your rank allows">{w.frontierCount(PLAYER)}/{w.frontierCap(PLAYER)}</span>}
             <img class="card-icon" src={icon(t)} alt="" />
             <span class="card-name">{def.name.replace(/^The /, '')}</span>
             <span class="card-cost">

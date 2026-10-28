@@ -624,16 +624,29 @@ export class World {
   }
 
   /**
-   * What a new building of this type costs a player. Each frontier tower you already have
-   * adds a quarter to the price: borders are pushed with care, not spam.
+   * What a new building of this type costs a player. Every frontier building you already have
+   * (Lookouts, Watchtowers and Outposts together) adds a quarter to a tower's price: borders
+   * are pushed with care, not spam.
    */
   buildCost(owner: number, type: BuildingType): Partial<Record<Good, number>> {
     const def = BUILDINGS[type];
     if (!def.frontier) return { ...def.cost };
-    const pct = 100 + BALANCE.towerCostPct * this.countBuildings(owner, type, true);
+    const pct = 100 + BALANCE.towerCostPct * this.frontierCount(owner);
     const out: Partial<Record<Good, number>> = {};
     for (const g of GOODS) if (def.cost[g]) out[g] = Math.ceil((def.cost[g]! * pct) / 100);
     return out;
+  }
+
+  /** How many frontier buildings this settlement's rank lets it hold. */
+  frontierCap(owner: number): number {
+    return BALANCE.frontierCap[Math.min(BALANCE.frontierCap.length - 1, this.players[owner]?.rank ?? 0)];
+  }
+
+  /** Frontier buildings a player has, standing or under way: towers and outposts. */
+  frontierCount(owner: number): number {
+    let n = 0;
+    for (const b of this.buildings.values()) if (b.owner === owner && (BUILDINGS[b.type].frontier || b.type === 'outpost')) n++;
+    return n;
   }
 
   canAffordBuilding(owner: number, type: BuildingType): boolean {

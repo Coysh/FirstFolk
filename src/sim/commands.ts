@@ -44,6 +44,8 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
     if (holder >= 0) return { ok: false, reason: holder === owner ? 'Already yours' : 'Your rival raised it first' };
     if (world.countBuildings(owner, type, true)) return { ok: false, reason: 'Already begun' };
   }
+  if (def.frontier && world.frontierCount(owner) >= world.frontierCap(owner))
+    return { ok: false, reason: `Your folk can hold ${world.frontierCap(owner)} towers at this rank: rank up for more` };
   const size = def.size;
   const ex = x;
   const ey = y + size;

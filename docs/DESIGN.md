@@ -276,6 +276,10 @@ The measurements behind each:
 
 - **Overall:** Expander 63% (16.8 towers a game), Balanced 50% (10.4), Builder 38% (9.5).
 - **Where Expander wins:** landmarks (876 renown on average) and land.
+- **v0.13.1 cheap fixes, measured before building anything new:**
+  - **Shared escalation.** Every frontier building, whether Lookout, Watchtower or Outpost, makes the next one 25% dearer. Expeditions cost +2 logs per frontier building. On its own this changed nothing (Expander 63%), because goods pile up anyway.
+  - **A frontier cap by rank:** 4 at Camp, 7 at Hamlet, 10 at Village, 13 at Town. The build card shows it as "6/7". With the cap, the styles even out at 53/53/44, and towers per game fall from 15 to 12.
+  - **What it doesn't fix:** every style still wins the same way, by holding landmarks (690–830 renown a game). Builder has no counter to play. The cap is a backstop; the real fix has to be counters.
 - **With omens on (`--real`)** the rival side wins 37 of 48 games; Restless Neighbours tilts it on purpose. Fairness checks therefore use `--origins` without omens.
 
 ---
@@ -1013,4 +1017,10 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - frontier towers per game in every report.
 - **Measured:** Expander wins 63% and beats every other style (see §0c). That confirms the feedback.
 - **Fixed on the way:** a restored rival skipped the opening move due on the exact tick of the save.
+
+### v0.13.1 Towers need room to breathe: shared escalation and a frontier cap (2026-10-28)
+- **Shared escalation:** Lookouts, Watchtowers and Outposts now count together towards the next tower's price, so mixing types no longer keeps them cheap.
+- **A frontier cap by rank** (4/7/10/13), shown on the tower build cards. It applies to Expeditions too.
+- **Matrix:** Expander's overall win rate falls from 63% to 53%. Every style still leans on landmarks (see §0c), and that's the job of v0.14.
+- **Pacing check:** a cap of 3 at Camp stalled seed 13's renown between 10:00 and 16:00, so it's 4.
 

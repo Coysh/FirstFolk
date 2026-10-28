@@ -57,6 +57,10 @@ describe('living borders', () => {
     const first = w.buildCost(0, 'lookout').logs!;
     w.addBuilding('lookout', 0, wagon(w).x + 4, wagon(w).y + 4, true);
     expect(w.buildCost(0, 'lookout').logs!).toBeGreaterThan(first);
+    // Escalation is shared: a Watchtower counts against the next Lookout too.
+    const second = w.buildCost(0, 'lookout').logs!;
+    w.addBuilding('watchtower', 0, wagon(w).x - 6, wagon(w).y + 4, true);
+    expect(w.buildCost(0, 'lookout').logs!).toBeGreaterThan(second);
   });
 });
 

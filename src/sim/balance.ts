@@ -51,6 +51,8 @@ export const BALANCE = {
   influenceMargin: 10,
   /** Each frontier tower a player already has makes the next this much (percent) dearer. */
   towerCostPct: 25,
+  /** Frontier buildings (towers and outposts) a settlement can hold at each rank: Camp, Hamlet, Village, Town. */
+  frontierCap: [4, 7, 10, 13] as number[],
   /** Extra home influence per Master in the household (up to four). */
   masterPull: 15,
   /** Losing at least this many tiles at once is news. */
