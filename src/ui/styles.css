@@ -764,7 +764,7 @@ button.danger.armed {
 .frontier {
   position: absolute;
   right: 10px;
-  bottom: calc(132px + var(--safe-b));
+  bottom: calc(150px + var(--safe-b));
   width: 236px;
   padding: 8px 8px 6px;
 }
@@ -799,6 +799,123 @@ button.danger.armed {
 .fr-dist {
   font-size: 11px;
   color: var(--ink-soft);
+}
+.boon-tray {
+  position: absolute;
+  left: 50%;
+  bottom: calc(150px + var(--safe-b));
+  transform: translateX(-50%);
+  width: min(620px, calc(100vw - 20px));
+  z-index: 2;
+  padding: 10px 12px 8px;
+  background: var(--parchment-tex) center / 320px, var(--paper);
+  border: 2px solid var(--gold);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), 0 0 0 4px rgba(242, 193, 78, 0.25);
+  animation: tray-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes tray-in {
+  from {
+    transform: translate(-50%, 30px);
+    opacity: 0;
+  }
+}
+.boon-tray header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.boon-tray header div {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.boon-tray header small {
+  color: var(--ink-soft);
+  font: 700 12px var(--body);
+}
+.boon-tray header strong {
+  font: 700 16px var(--heading);
+}
+.boon-tray .more {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: 800 12px var(--body);
+}
+.boon-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.boon-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 2px solid var(--wood-light);
+  border-radius: 10px;
+  background: #fffaf0;
+  color: var(--ink);
+  font: 13px var(--body);
+  cursor: pointer;
+  animation: card-flip 0.45s both;
+  transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.boon-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--gold);
+  box-shadow: 0 6px 16px rgba(242, 193, 78, 0.45);
+}
+@keyframes card-flip {
+  from {
+    transform: rotateY(90deg);
+    opacity: 0;
+  }
+}
+.bc-icon {
+  font-size: 26px;
+}
+.boon-card strong {
+  font: 700 14px var(--heading);
+}
+.bc-blurb {
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.boon-timer {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: rgba(107, 69, 39, 0.2);
+  overflow: hidden;
+}
+.boon-timer div {
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.25s linear;
+}
+.family-line .fam-title {
+  margin: 4px 0 2px;
+  font-size: 13px;
+}
+.boon-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+.boon-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(242, 193, 78, 0.3);
+  border: 1px solid rgba(107, 69, 39, 0.3);
+  font: 700 11px var(--body);
 }
 .toasts {
   position: absolute;
@@ -1247,6 +1364,19 @@ button.danger.armed {
 
 /* ---------- mobile ---------- */
 @media (max-width: 720px) {
+  .hud:has(.boon-tray) .frontier {
+    display: none;
+  }
+  .boon-tray {
+    bottom: calc(150px + var(--safe-b));
+    padding: 8px;
+  }
+  .bc-blurb {
+    font-size: 11px;
+  }
+  .boon-card {
+    padding: 6px 4px;
+  }
   .frontier {
     width: 180px;
     bottom: calc(150px + var(--safe-b));

@@ -1,6 +1,7 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, GOOD_INFO, type GatherJob, type Good, type NodeKind, type Skill } from './defs';
-import { TRADES, tierOf, unlocksFor } from './trades';
+import { TRADES, tierOf, tradeTitle, unlocksFor } from './trades';
+import { offerBoon } from './boons';
 import { Terrain } from './mapgen';
 import { onBuildingComplete } from './territory';
 import type { Building, ResourceNode, Settler, World } from './world';
@@ -111,10 +112,13 @@ export function gainXp(world: World, s: Settler, skill: Skill, b: Building): voi
 /** Add XP to a settler (and their family's knowledge); announces tier-ups and unlocks. Returns the new tier. */
 export function grantXp(world: World, s: Settler, skill: Skill, amount: number, buildingId = 0): number {
   const before = tierOf(s.skills[skill]);
-  s.skills[skill] += amount;
   const fam = world.families.get(s.familyId);
+  s.skills[skill] += Math.floor((amount * (100 + (fam?.mods.xp ?? 0))) / 100);
+  const famBefore = fam ? tierOf(fam.skills[skill]) : 0;
   if (fam) fam.skills[skill] = Math.max(fam.skills[skill], s.skills[skill]);
   const after = tierOf(s.skills[skill]);
+  // A family's first Journeyman or Master in a craft is a moment to choose how it grows.
+  if (fam && tierOf(fam.skills[skill]) > famBefore) offerBoon(world, fam, `${s.name} became a ${tradeTitle(skill, after)}`);
   if (after > before) {
     world.emit({ type: 'tierUp', settlerId: s.id, buildingId, skill, tier: after });
     const player = world.players[s.owner];
@@ -128,13 +132,15 @@ export function grantXp(world: World, s: Settler, skill: Skill, amount: number, 
 }
 
 function workTicks(world: World, s: Settler, base: number, skill: Skill): number {
-  let t = base * TRADES[skill].speed[tierOf(s.skills[skill])];
-  if (world.players[s.owner].hungry) t *= 1.4;
+  const fam = world.families.get(s.familyId);
+  let t = (base * TRADES[skill].speed[tierOf(s.skills[skill])] * 100) / (100 + (fam?.mods[`speed.${skill}`] ?? 0));
+  if (world.players[s.owner].hungry && !fam?.mods.hardy) t *= 1.4;
   return Math.max(1, Math.round(t));
 }
 
 function rollBonus(world: World, s: Settler, skill: Skill): number {
-  return world.rng.int(100) < TRADES[skill].bonus[tierOf(s.skills[skill])] ? 1 : 0;
+  const extra = world.families.get(s.familyId)?.mods[`bonus.${skill}`] ?? 0;
+  return world.rng.int(100) < TRADES[skill].bonus[tierOf(s.skills[skill])] + extra ? 1 : 0;
 }
 
 function anyBuilder(world: World, owner: number): boolean {
@@ -170,8 +176,10 @@ function stepMove(world: World, s: Settler): void {
     if (!s.path.length) return;
     beginStep(world, s, s.path.shift()!);
   }
+  const fam = world.families.get(s.familyId);
   let speed = s.child ? BALANCE.childSpeed : BALANCE.adultSpeed;
-  if (world.players[s.owner].hungry) speed = Math.floor((speed * BALANCE.hungrySpeedPct) / 100);
+  if (fam?.mods.walk) speed = Math.floor((speed * (100 + fam.mods.walk)) / 100);
+  if (world.players[s.owner].hungry && !fam?.mods.hardy) speed = Math.floor((speed * BALANCE.hungrySpeedPct) / 100);
   s.progress += speed;
   while (s.progress >= s.stepLen) {
     s.progress -= s.stepLen;
@@ -263,10 +271,13 @@ function thinkBuild(world: World, s: Settler, job: Extract<Settler['job'], { kin
   s.anim = 'work';
   site.status = 'Under construction';
   site.alert = '';
-  const rate = world.players[s.owner].hungry ? Math.floor(BALANCE.buildRate * 0.6) : BALANCE.buildRate;
+  const fam = world.families.get(s.familyId);
+  let rate = world.players[s.owner].hungry && !fam?.mods.hardy ? Math.floor(BALANCE.buildRate * 0.6) : BALANCE.buildRate;
+  rate = Math.floor((rate * (100 + (fam?.mods.build ?? 0))) / 100);
   site.work = Math.min(site.workNeeded, site.work + rate);
   if (site.work >= site.workNeeded) {
     site.done = true;
+    site.builtBy = s.familyId;
     site.builderId = 0;
     site.status = '';
     site.alert = '';
@@ -387,7 +398,9 @@ function thinkWork(world: World, s: Settler, job: Extract<Settler['job'], { kind
         const node = findNode(world, b, def.node, def.radius);
         if (!node) return wait(b, s, `No ${nodeLabel(def)} in range`, 'noResource', 30);
         node.reservedBy = s.id;
-        if (!walkTo(world, s, world.idx(node.x, node.y), true)) {
+        // Shoals sit in the water: fish from a bank tile beside them.
+        const stand = world.walkable(world.idx(node.x, node.y)) ? -1 : bankTile(world, node.x, node.y);
+        if (stand >= 0 ? !walkTo(world, s, stand) : !walkTo(world, s, world.idx(node.x, node.y), true)) {
           node.reservedBy = 0;
           s.busy = 10;
           return;
@@ -522,7 +535,16 @@ function wait(b: Building, s: Settler, status: string, alert: Building['alert'],
 }
 
 function nodeLabel(def: GatherJob): string {
-  return def.node === 'tree' ? 'trees' : def.node === 'rock' ? 'rocks' : `${GOOD_INFO[def.good].name.toLowerCase()}`;
+  return def.node === 'tree' ? 'trees' : def.node === 'rock' ? 'rocks' : def.node === 'fish' ? 'fish' : `${GOOD_INFO[def.good].name.toLowerCase()}`;
+}
+
+function bankTile(world: World, x: number, y: number): number {
+  for (const [dx, dy] of [[0, 1], [1, 0], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (world.inBounds(nx, ny) && world.walkable(world.idx(nx, ny))) return world.idx(nx, ny);
+  }
+  return -1;
 }
 
 function harvest(world: World, node: ResourceNode): void {
@@ -538,6 +560,6 @@ function harvest(world: World, node: ResourceNode): void {
     world.emit({ type: 'rockMined', x: node.x, y: node.y, depleted });
     if (depleted) world.removeNode(node);
   } else if (node.regrow <= 0) {
-    node.regrow = BALANCE.berryRegrowTicks;
+    node.regrow = node.kind === 'fish' ? BALANCE.fishRegrowTicks : BALANCE.berryRegrowTicks;
   }
 }

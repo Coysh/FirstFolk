@@ -1,4 +1,4 @@
-import { BUILDINGS, type BuildingType } from '../defs';
+import { BUILDINGS, type BuildingType, type Good, type NodeKind } from '../defs';
 import type { World } from '../world';
 import { NO_OWNER } from '../territory';
 import { bestSite } from './placement';
@@ -21,6 +21,9 @@ export class OpeningBot {
 
   update(world: World): void {
     if (world.tick % 10 !== 0) return;
+    // Boons: take the first card a few seconds after it's offered, like a quick human.
+    for (const o of world.players[this.owner].offers)
+      if (o.expires - world.tick < 550) world.enqueue({ type: 'chooseBoon', owner: this.owner, offerId: o.id, choice: 0 });
     while (this.opening.length && this.opening[0].at <= world.tick) {
       this.place(world, this.opening.shift()!.type);
     }
@@ -32,14 +35,27 @@ export class OpeningBot {
     const emptyHuts = [...world.buildings.values()].filter((b) => b.owner === this.owner && b.type === 'hut' && b.familyId === 0).length;
     const count = (t: BuildingType) => world.countBuildings(this.owner, t, true);
 
+    const LOW: Partial<Record<BuildingType, [Good, number]>> = { quarry: ['stone', 12], woodcutter: ['logs', 20] };
+    const starving = (t: BuildingType) =>
+      world.stored(this.owner, LOW[t]![0]) < LOW[t]![1] && [...world.buildings.values()].some((b) => b.owner === this.owner && b.type === t && b.alert === 'noResource');
+    // Like a tidy human: clear away gatherers whose resources are gone.
+    for (const b of world.buildings.values())
+      if (b.owner === this.owner && b.done && b.alert === 'noResource' && BUILDINGS[b.type].job?.kind === 'gather' && world.countBuildings(this.owner, b.type) > 1) {
+        world.enqueue({ type: 'demolish', owner: this.owner, id: b.id });
+        return;
+      }
     const lookoutSites = [...world.buildings.values()].filter((b) => b.owner === this.owner && b.type === 'lookout' && !b.done).length;
     const target = this.frontierTarget(world);
 
-    if (world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0) this.place(world, 'sawpit');
+    if (emptyHuts === 0 && pop >= world.housing(this.owner) - 2 && this.affordable(world, 'hut')) this.place(world, 'hut');
+    else if (world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0) this.place(world, 'sawpit');
     else if (world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0 && this.affordable(world, 'storehouse')) this.place(world, 'storehouse');
-    else if (world.stored(this.owner, 'berries') < 12 && count('forager') < Math.ceil(pop / 6)) this.place(world, 'forager');
+    else if (world.food(this.owner) < 12 && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 10) && bestSite(world, this.owner, 'fisher')) this.place(world, 'fisher');
+    else if (world.food(this.owner) < 12 && count('forager') < Math.ceil(pop / 6)) this.place(world, 'forager');
     // Push the border: towards a seen discovery, or for room once the land fills up.
-    else if (lookoutSites === 0 && this.affordable(world, 'lookout') && (target || count('lookout') < pop / 8)) this.place(world, 'lookout', target ?? undefined);
+    else if (lookoutSites === 0 && this.affordable(world, 'lookout') && (target || count('lookout') < pop / 8 || starving('quarry') || starving('woodcutter')))
+      this.place(world, 'lookout', target ?? undefined, starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined);
+    else if (starving('woodcutter') && count('forester') < count('woodcutter') / 2) this.place(world, 'forester');
     else if (count('woodcutter') < Math.ceil(pop / 7)) this.place(world, 'woodcutter');
     else if (emptyHuts === 0 && this.affordable(world, 'hut')) this.place(world, 'hut');
     else if (count('quarry') < Math.ceil(pop / 12)) this.place(world, 'quarry');
@@ -67,8 +83,8 @@ export class OpeningBot {
     return best;
   }
 
-  private place(world: World, type: BuildingType, target?: { x: number; y: number }): void {
-    const site = bestSite(world, this.owner, type, target);
+  private place(world: World, type: BuildingType, target?: { x: number; y: number }, want?: NodeKind): void {
+    const site = bestSite(world, this.owner, type, target, { want });
     if (site) world.enqueue({ type: 'place', owner: this.owner, building: type, ...site });
   }
 }

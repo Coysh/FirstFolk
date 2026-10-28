@@ -14,7 +14,7 @@ export function hashWorld(world: World): string {
   }
   for (const n of world.nodes.values()) parts.push(n.id, n.amount, n.growth, n.stump, n.reservedBy);
   for (const p of world.players) parts.push(p.hungry ? 1 : 0, p.mealAccum, p.newcomerCooldown, p.claimed);
-  for (const f of world.families.values()) parts.push(f.id, f.homeId, f.birthCooldown);
+  for (const f of world.families.values()) parts.push(f.id, f.homeId, f.birthCooldown, f.boons.join());
   for (const site of world.sites) parts.push(site.id, site.revealed, site.claimedBy);
   let t = 0;
   for (let i = 0; i < world.territory.length; i++) t = (t * 31 + world.territory[i] + 2 * world.explored[i]) | 0;

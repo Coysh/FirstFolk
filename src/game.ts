@@ -5,6 +5,7 @@ import { TICK_MS } from './sim/balance';
 import { canPlace } from './sim/commands';
 import { BUILDINGS, DISCOVERIES, type BuildingType, type Tool } from './sim/defs';
 import { serializeWorld } from './sim/save';
+import { BOONS } from './sim/boons';
 import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
 import { TRADES, tradeTitle } from './sim/trades';
 import type { SimEvent, World } from './sim/world';
@@ -216,6 +217,22 @@ export class Game {
           audio.play('objective');
           this.toast('/assets/icons/people.png', `A traveller tells of the ${DISCOVERIES[e.kind].name} to the ${e.dir}. Push your border that way!`, 'info');
           break;
+        case 'boonOffered':
+          if (e.owner === PLAYER) audio.play('objective');
+          break;
+        case 'boonChosen':
+          if (e.owner !== PLAYER) break;
+          audio.play('tierUp');
+          this.toast('/assets/icons/people.png', `The ${e.surname}s are now ${BOONS[e.boon].name}: ${BOONS[e.boon].blurb}`, 'good');
+          break;
+        case 'married': {
+          if (e.owner !== PLAYER) break;
+          const a = this.world.settlers.get(e.a);
+          const b = this.world.settlers.get(e.b);
+          audio.play('arrive');
+          this.toast('/assets/icons/hut.png', `${a?.name} and ${b?.name} marry and found a new ${e.surname} household, with the gifts of both families`, 'good');
+          break;
+        }
         case 'familySettled':
           this.toast('/assets/icons/hut.png', `The ${e.surname} family have a home at last`, 'good');
           break;
@@ -306,6 +323,11 @@ export class Game {
       this.ghost.value = null;
       this.view.setGhost(null);
     }
+  }
+
+  chooseBoon(offerId: number, choice: number): void {
+    audio.play('click');
+    this.world.enqueue({ type: 'chooseBoon', owner: PLAYER, offerId, choice });
   }
 
   demolish(id: number): void {

@@ -3,6 +3,9 @@ import { icon, PLAYER, type Game } from '../game';
 import { ICON } from '../render/overlay';
 import { BUILDINGS, BUILD_MENU, DISCOVERIES, GOODS, GOOD_INFO, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
+import { BOONS, BOON_TIMEOUT, familyTitle } from '../sim/boons';
+import { BALANCE } from '../sim/balance';
+import type { Family, World } from '../sim/world';
 import { CREST_COLORS } from '../sim/population';
 import { TIER_NAMES, TRADES, tierOf, tierProgress, tradeTitle } from '../sim/trades';
 import { settings } from '../settings';
@@ -21,6 +24,7 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       <TopBar game={game} />
       <Goals game={game} />
       <Frontier game={game} />
+      <BoonTray game={game} />
       <Toasts game={game} />
       <InfoPanel game={game} />
       {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : <BuildBar game={game} />}
@@ -58,11 +62,12 @@ function TopBar({ game }: { game: Game }) {
   const hungry = w.players[PLAYER].hungry;
   const children = [...w.settlers.values()].filter((s) => s.owner === PLAYER && s.child).length;
   const showPlanks = w.players[PLAYER].produced.planks > 0 || w.isUnlocked(PLAYER, 'sawpit');
+  const showFish = w.players[PLAYER].produced.fish > 0 || w.isUnlocked(PLAYER, 'fisher');
   return (
     <header class="topbar">
       <div class="res">
-        {GOODS.filter((g) => g !== 'planks' || showPlanks).map((g) => (
-          <Res key={g} good={g} value={w.stored(PLAYER, g)} warn={g === 'berries' && hungry} />
+        {GOODS.filter((g) => (g !== 'planks' || showPlanks) && (g !== 'fish' || showFish)).map((g) => (
+          <Res key={g} good={g} value={w.stored(PLAYER, g)} warn={(g === 'berries' || g === 'fish') && hungry} />
         ))}
         <span class={`res-plaque ${pop >= housing ? 'full' : ''}`} title={`${pop} settlers (${children} children) · homes for ${housing}`}>
           <img src={ICON.people} alt="Population" />
@@ -135,6 +140,66 @@ function Goals({ game }: { game: Game }) {
       ) : (
         current && <div class="goals-next">➤ {current.label}</div>
       )}
+    </section>
+  );
+}
+
+/** A family's title and boon badges, plus where the household came from. */
+function FamilyLine({ w, fam }: { w: World; fam: Family }) {
+  const best = SKILLS.reduce((a, k) => (fam.skills[k] > fam.skills[a] ? k : a), SKILLS[0]);
+  const craft = fam.skills[best] > 0 ? TRADES[best].titles[tierOf(fam.skills[best])] + 's' : 'folk';
+  const parents = fam.parents.map((id) => w.families.get(id)?.surname).filter(Boolean);
+  return (
+    <div class="family-line">
+      <p class="fam-title">
+        The {fam.surname}s, <em>{familyTitle(fam, craft)}</em>
+      </p>
+      {fam.boons.length > 0 && (
+        <p class="boon-badges">
+          {fam.boons.map((id) => (
+            <span key={id} class="boon-badge" title={`${BOONS[id].name}: ${BOONS[id].blurb}`}>
+              {BOONS[id].icon} {BOONS[id].name}
+            </span>
+          ))}
+        </p>
+      )}
+      {parents.length === 2 && <p class="muted small">A household joining the {parents[0]} and {parents[1]} lines.</p>}
+    </div>
+  );
+}
+
+/** Spore-style evolution picks: choose how a family grows. Never blocks the game. */
+function BoonTray({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const w = game.world;
+  const offers = w.players[PLAYER].offers;
+  const o = offers[0];
+  if (!o) return null;
+  const fam = w.families.get(o.familyId);
+  if (!fam) return null;
+  const left = Math.max(0, (o.expires - w.tick) / BOON_TIMEOUT);
+  return (
+    <section class="boon-tray" key={o.id} aria-label="Choose a family boon">
+      <header>
+        <span class="crest" style={{ background: hex(CREST_COLORS[fam.color]) }} />
+        <div>
+          <small>{o.reason}</small>
+          <strong>Choose a boon for the {fam.surname} family</strong>
+        </div>
+        {offers.length > 1 && <span class="more">+{offers.length - 1}</span>}
+      </header>
+      <div class="boon-cards">
+        {o.choices.map((id, i) => (
+          <button key={id} class="boon-card" style={{ animationDelay: `${i * 90}ms` }} onClick={() => game.chooseBoon(o.id, i)}>
+            <span class="bc-icon">{BOONS[id].icon}</span>
+            <strong>{BOONS[id].name}</strong>
+            <span class="bc-blurb">{BOONS[id].blurb}</span>
+          </button>
+        ))}
+      </div>
+      <div class="boon-timer">
+        <div style={{ width: `${left * 100}%` }} />
+      </div>
     </section>
   );
 }
@@ -281,8 +346,10 @@ function InfoPanel({ game }: { game: Game }) {
           {s.child ? 'Child' : 'Adult'} · age {ageYears(s)}
         </p>
         <p class="doing">{describeSettler(w, s)}</p>
+        {fam && <FamilyLine w={w} fam={fam} />}
+        {s.spouseId > 0 && w.settlers.get(s.spouseId) && <p class="muted small">Married to {w.settlers.get(s.spouseId)!.name}</p>}
         {!s.child && <SkillBars skills={s.skills} />}
-        {s.child && fam && <p class="muted small">Will inherit {Math.round(0.4 * 100)}% of the {fam.surname} family’s craft on coming of age.</p>}
+        {s.child && fam && <p class="muted small">Will inherit {BALANCE.inheritPct + (fam.mods.teach ?? 0)}% of the {fam.surname} family’s craft on coming of age.</p>}
       </aside>
     );
   }

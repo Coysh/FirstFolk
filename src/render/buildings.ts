@@ -26,9 +26,9 @@ interface View {
 
 /** Where stock piles sit, in building-local coordinates. */
 const PILE_SPOTS: Record<string, Partial<Record<Good, [number, number]>>> = {
-  store: { logs: [1.2, -0.45], planks: [1.2, 0.15], stone: [1.2, 0.7], berries: [-1.15, -0.1] },
-  site: { logs: [0.75, 0.8], planks: [0.75, 0.8], stone: [-0.75, 0.8], berries: [0, 0.8] },
-  output: { logs: [-0.7, 0.75], planks: [-0.7, 0.75], stone: [-0.7, 0.75], berries: [-0.7, 0.75] },
+  store: { logs: [1.2, -0.45], planks: [1.2, 0.15], stone: [1.2, 0.7], berries: [-1.15, -0.1], fish: [-1.15, 0.55] },
+  site: { logs: [0.75, 0.8], planks: [0.75, 0.8], stone: [-0.75, 0.8], berries: [0, 0.8], fish: [0, 0.8] },
+  output: { logs: [-0.7, 0.75], planks: [-0.7, 0.75], stone: [-0.7, 0.75], berries: [-0.7, 0.75], fish: [-0.7, 0.75] },
 };
 
 const MODEL_HEIGHT = 1.6;
@@ -177,6 +177,7 @@ export class BuildingsView {
       counts.planks = Math.min(12, b.stock.planks);
       counts.stone = Math.min(12, b.stock.stone);
       counts.berries = Math.min(9, Math.ceil(b.stock.berries / 2));
+      counts.fish = Math.min(9, Math.ceil(b.stock.fish / 2));
     } else if (!b.done) {
       spots = PILE_SPOTS.site;
       let used = Math.floor(progress * costTotal(def.cost));

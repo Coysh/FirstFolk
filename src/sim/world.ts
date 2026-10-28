@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, GOODS, SKILLS, costTotal, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
+import { BUILDINGS, FOODS, GOODS, SKILLS, costTotal, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
 import { generateMap, isWalkableTerrain, type MapData } from './mapgen';
 import { PathFinder } from './path';
 import { Rng } from './rng';
@@ -11,9 +11,10 @@ import { updatePopulation, createFamily } from './population';
 import { evaluateScenario, SCENARIOS, type Scenario, type ScenarioState } from './scenario';
 import { DIFFICULTY, type Difficulty, type Rules } from './rules';
 import { NO_OWNER, onBuildingComplete, updateExploration } from './territory';
+import { offerBoon, updateOffers, type BoonId, type Mod } from './boons';
 
 export type Stock = Record<Good, number>;
-export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0 });
+export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 });
 export type Skills = Record<Skill, number>;
 export const emptySkills = (): Skills => ({ woodcraft: 0, stonework: 0, husbandry: 0 });
 
@@ -57,6 +58,8 @@ export interface Building {
   alert: BuildingAlert;
   /** Trade tier the workplace has been transformed to (never decreases). */
   tier: number;
+  /** Family of the settler who finished building it (0 = none). */
+  builtBy: number;
 }
 
 export interface Discovery {
@@ -82,6 +85,11 @@ export interface Family {
   skills: Skills;
   /** Ticks until the family can next have a child. */
   birthCooldown: number;
+  /** Family boons (see boons.ts) and their summed effects. */
+  boons: BoonId[];
+  mods: Partial<Record<Mod, number>>;
+  /** Families this household was founded from by marriage. */
+  parents: number[];
 }
 
 export type Job =
@@ -115,6 +123,8 @@ export interface Settler {
   /** Tile the settler faces while working, or -1. */
   faceTile: number;
   skills: Skills;
+  /** Husband or wife (0 = unmarried). */
+  spouseId: number;
 }
 
 export type SimEvent =
@@ -138,6 +148,9 @@ export type SimEvent =
   | { type: 'discovered'; siteId: number; kind: DiscoveryKind; owner: number }
   | { type: 'claimed'; siteId: number; kind: DiscoveryKind; owner: number; text: string }
   | { type: 'rumour'; siteId: number; kind: DiscoveryKind; owner: number; dir: string }
+  | { type: 'boonOffered'; owner: number; offerId: number; familyId: number; surname: string; reason: string }
+  | { type: 'boonChosen'; owner: number; familyId: number; surname: string; boon: BoonId }
+  | { type: 'married'; owner: number; a: number; b: number; familyId: number; surname: string; buildingId: number }
   | { type: 'familySettled'; familyId: number; surname: string; buildingId: number }
   | { type: 'victory'; scenario: string };
 
@@ -154,6 +167,16 @@ export interface PlayerState {
   claimed: number;
   /** Tick after which a rumour reveals the next discovery (if none is in sight). */
   rumourAt: number;
+  /** Boon choices waiting for the player. */
+  offers: BoonOffer[];
+}
+
+export interface BoonOffer {
+  id: number;
+  familyId: number;
+  choices: BoonId[];
+  reason: string;
+  expires: number;
 }
 
 export interface WorldStats {
@@ -303,7 +326,7 @@ export class World {
   // ---- entities ---------------------------------------------------------
 
   addNode(kind: NodeKind, x: number, y: number, growth = 0, maxOverride?: number): ResourceNode {
-    const max = maxOverride ?? (kind === 'tree' ? BALANCE.treeLogs : kind === 'rock' ? BALANCE.rockStone : BALANCE.bushBerries);
+    const max = maxOverride ?? (kind === 'tree' ? BALANCE.treeLogs : kind === 'rock' ? BALANCE.rockStone : kind === 'fish' ? BALANCE.shoalFish : BALANCE.bushBerries);
     const node: ResourceNode = {
       id: this.newId(),
       kind,
@@ -349,6 +372,7 @@ export class World {
       status: done ? '' : 'Waiting for materials',
       alert: done ? '' : 'materials',
       tier: 0,
+      builtBy: 0,
     };
     this.buildings.set(b.id, b);
     for (let dy = 0; dy < def.size; dy++)
@@ -386,13 +410,14 @@ export class World {
       anim: 'idle',
       faceTile: -1,
       skills: emptySkills(),
+      spouseId: 0,
     };
     this.settlers.set(s.id, s);
     return s;
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [] };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -401,9 +426,11 @@ export class World {
     const e = this.entrance(wagon);
     // Founders: two adults and two children, the elder of whom comes of age within the first few minutes.
     const ages = [2, 2.2, 1.0, 0.6];
-    ages.forEach((age, i) => {
-      this.addSettler(owner, fam.id, this.randomName(), age, e.x + (i % 2) - 1 + (i > 1 ? 2 : 0), e.y + (i > 1 ? 1 : 0));
-    });
+    const folk = ages.map((age, i) => this.addSettler(owner, fam.id, this.randomName(), age, e.x + (i % 2) - 1 + (i > 1 ? 2 : 0), e.y + (i > 1 ? 1 : 0)));
+    folk[0].spouseId = folk[1].id;
+    folk[1].spouseId = folk[0].id;
+    // The very first choice: what kind of folk are the founders?
+    offerBoon(this, fam, 'The founders set out');
   }
 
   randomName(): string {
@@ -422,6 +449,13 @@ export class World {
   stored(owner: number, good: Good): number {
     let n = 0;
     for (const b of this.storages(owner)) n += b.stock[good];
+    return n;
+  }
+
+  /** All edible goods in storage. */
+  food(owner: number): number {
+    let n = 0;
+    for (const g of FOODS) n += this.stored(owner, g);
     return n;
   }
 
@@ -472,7 +506,10 @@ export class World {
     this.pendingCommands.length = 0;
 
     if (this.tick % 10 === 0) this.updateNature();
-    if (this.tick % 10 === 5) updateExploration(this);
+    if (this.tick % 10 === 5) {
+      updateExploration(this);
+      updateOffers(this);
+    }
     if (this.tick % 5 === 0) {
       assignJobs(this);
       updateLogistics(this);
@@ -502,7 +539,8 @@ export class World {
         s.child = false;
         const fam = this.families.get(s.familyId);
         // Inheritance: a new adult starts with part of the family's knowledge.
-        if (fam) for (const k of SKILLS) s.skills[k] = Math.max(s.skills[k], Math.floor((fam.skills[k] * BALANCE.inheritPct) / 100));
+        const pct = BALANCE.inheritPct + (fam?.mods.teach ?? 0);
+        if (fam) for (const k of SKILLS) s.skills[k] = Math.max(s.skills[k], Math.floor((fam.skills[k] * pct) / 100));
         this.emit({ type: 'cameOfAge', settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
       }
     }
@@ -525,11 +563,11 @@ export class World {
           node.stump = Math.max(0, node.stump - 10);
           if (node.stump === 0) this.removeNode(node);
         }
-      } else if (node.kind === 'bush' && node.amount < node.max) {
+      } else if ((node.kind === 'bush' || node.kind === 'fish') && node.amount < node.max) {
         node.regrow -= 10;
         if (node.regrow <= 0) {
           node.amount++;
-          node.regrow = BALANCE.berryRegrowTicks;
+          node.regrow = node.kind === 'fish' ? BALANCE.fishRegrowTicks : BALANCE.berryRegrowTicks;
           this.natureVersion++;
         }
       }
@@ -537,7 +575,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['discovered', 'rumour', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['discovered', 'rumour', 'boonOffered', 'married', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 export const comeOfAgeTicks = () => Math.round(BALANCE.comeOfAgeYears * BALANCE.yearTicks);
 

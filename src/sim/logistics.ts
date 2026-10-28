@@ -1,4 +1,4 @@
-import { BUILDINGS, GOODS, outputGood, type Good } from './defs';
+import { BUILDINGS, FOODS, GOODS, outputGood, type Good } from './defs';
 import { cheb, idleSettlers, nearestSettler, walkTo } from './settlers';
 import type { Building, Settler, World } from './world';
 
@@ -47,7 +47,7 @@ export function updateLogistics(world: World): void {
       const stored = world.stored(player.id, good);
       let score = avail;
       if (stored < 6) score += 6;
-      if (good === 'berries' && stored < pop) score += 10;
+      if (FOODS.includes(good) && world.food(player.id) < pop) score += 10;
       offers.push({ b, good, score });
     }
     offers.sort((a, b) => b.score - a.score || a.b.id - b.b.id);

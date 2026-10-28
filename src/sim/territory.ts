@@ -56,7 +56,9 @@ export function revealArea(world: World, owner: number, cx: number, cy: number, 
   for (const site of world.sites) {
     if (site.revealed & bit || !(world.explored[world.idx(site.x, site.y)] & bit)) continue;
     site.revealed |= bit;
-    if (site.claimedBy === NO_OWNER) world.emit({ type: 'discovered', siteId: site.id, kind: site.kind, owner });
+    if (site.claimedBy !== NO_OWNER) continue;
+    world.players[owner].rumourAt = world.tick + BALANCE.rumourDelay;
+    world.emit({ type: 'discovered', siteId: site.id, kind: site.kind, owner });
   }
 }
 
@@ -65,29 +67,27 @@ export function onBuildingComplete(world: World, b: Building): void {
   const def = BUILDINGS[b.type];
   const cx = b.x + Math.floor(def.size / 2);
   const cy = b.y + Math.floor(def.size / 2);
-  if (def.claim) claimArea(world, b.owner, cx, cy, def.claim);
+  if (def.claim) claimArea(world, b.owner, cx, cy, def.claim + (b.type === 'wagon' ? 0 : (world.families.get(b.builtBy)?.mods.claim ?? 0)));
   revealArea(world, b.owner, cx, cy, def.reveal ?? 4);
 }
 
 /** Settlers lift the fog a little wherever they walk. Runs about once a second. */
 export function updateExploration(world: World): void {
   const r = BALANCE.settlerSight;
-  for (const s of world.settlers.values()) revealArea(world, s.owner, s.x, s.y, r);
+  for (const s of world.settlers.values()) revealArea(world, s.owner, s.x, s.y, r + (world.families.get(s.familyId)?.mods.sight ?? 0));
   for (const p of world.players) updateRumours(world, p.id);
 }
 
 /**
- * There is always somewhere to head for: when a player can see no unclaimed discovery,
- * a traveller soon tells of the nearest one and its spot is revealed through the fog.
+ * There is always somewhere new to head for: when nothing has been spotted or claimed for
+ * a while (even if a known site is out of reach), a traveller tells of the nearest unseen
+ * discovery and its spot is revealed through the fog.
  */
 function updateRumours(world: World, owner: number): void {
   const player = world.players[owner];
   const bit = 1 << owner;
-  if (world.sites.some((s) => s.claimedBy === NO_OWNER && s.revealed & bit)) {
-    player.rumourAt = world.tick + BALANCE.rumourDelay;
-    return;
-  }
   if (world.tick < player.rumourAt) return;
+  player.rumourAt = world.tick + BALANCE.rumourDelay;
   const wagon = [...world.buildings.values()].find((b) => b.owner === owner && b.type === 'wagon');
   if (!wagon) return;
   let best: Discovery | undefined;
@@ -119,6 +119,7 @@ function claimCoveredSites(world: World): void {
     if (owner === NO_OWNER || !world.players[owner]) continue;
     site.claimedBy = owner;
     world.players[owner].claimed++;
+    world.players[owner].rumourAt = world.tick + BALANCE.rumourDelay;
     const text = claimReward(world, site, owner);
     world.emit({ type: 'claimed', siteId: site.id, kind: site.kind, owner, text });
   }

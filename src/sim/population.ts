@@ -1,7 +1,8 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, SKILLS, type Skill } from './defs';
+import { BUILDINGS, FOODS, SKILLS, type Good, type Skill } from './defs';
+import { addBoon, drawBoons, offerBoon } from './boons';
 import { walkTo } from './settlers';
-import { emptySkills, type Building, type Family, type PlayerState, type World } from './world';
+import { emptySkills, type Building, type Family, type PlayerState, type Settler, type World } from './world';
 
 export const SURNAMES = [
   'Ashby', 'Thorne', 'Holloway', 'Fenwick', 'Marsh', 'Brook', 'Whitlow', 'Hale', 'Oakley', 'Underhill',
@@ -11,18 +12,21 @@ export const SURNAMES = [
 /** Crest colours, shown on hats, banners and flags. */
 export const CREST_COLORS = [0xc0392b, 0x2e86c1, 0xd4ac0d, 0x8e44ad, 0x16a085, 0xd35400, 0x34495e, 0xe84393, 0x27ae60, 0x7f5539];
 
-export function createFamily(world: World, owner: number, homeId: number): Family {
+export function createFamily(world: World, owner: number, homeId: number, inherit?: string): Family {
   const used = new Set([...world.families.values()].map((f) => f.surname));
   const free = SURNAMES.filter((n) => !used.has(n));
-  const surname = free.length ? world.rng.pick(free) : world.rng.pick(SURNAMES);
-  const fam: Family = { id: world.newId(), owner, surname, color: world.families.size % CREST_COLORS.length, homeId, skills: emptySkills(), birthCooldown: BALANCE.birthInterval };
+  const surname = inherit ?? (free.length ? world.rng.pick(free) : world.rng.pick(SURNAMES));
+  const fam: Family = { id: world.newId(), owner, surname, color: world.families.size % CREST_COLORS.length, homeId, skills: emptySkills(), birthCooldown: BALANCE.birthInterval, boons: [], mods: {}, parents: [] };
   world.families.set(fam.id, fam);
   return fam;
 }
 
 export function updatePopulation(world: World): void {
   for (const player of world.players) {
-    player.mealAccum += world.population(player.id);
+    // Hearth-keepers eat less: appetite is summed per settler in percent.
+    let appetite = 0;
+    for (const s of world.settlers.values()) if (s.owner === player.id) appetite += 100 - (world.families.get(s.familyId)?.mods.appetite ?? 0);
+    player.mealAccum += Math.floor(appetite / 100);
     while (player.mealAccum >= world.rules.mealInterval) {
       player.mealAccum -= world.rules.mealInterval;
       eat(world, player);
@@ -39,7 +43,7 @@ export function updatePopulation(world: World): void {
  * Growth then comes from your own lineages, not just from waiting for migrants.
  */
 function checkBirths(world: World, player: PlayerState): void {
-  const fed = !player.hungry && world.stored(player.id, 'berries') >= world.rules.newcomerMinFood;
+  const fed = !player.hungry && world.food(player.id) >= world.rules.newcomerMinFood;
   for (const fam of world.families.values()) {
     if (fam.owner !== player.id) continue;
     if (fam.birthCooldown > 0) {
@@ -56,20 +60,30 @@ function checkBirths(world: World, player: PlayerState): void {
         members++;
         if (!s.child) adults++;
       }
-    if (adults < 2 || members >= (BUILDINGS[home.type].housing ?? 0)) continue;
+    const room = (BUILDINGS[home.type].housing ?? 0) - members;
+    if (adults < 2 || room <= 0) continue;
     const e = world.entrance(home);
-    const baby = world.addSettler(player.id, fam.id, world.randomName(), 0, e.x, e.y);
-    fam.birthCooldown = BALANCE.birthInterval;
-    world.emit({ type: 'born', settlerId: baby.id, name: baby.name, surname: fam.surname });
+    const n = room >= 2 && world.rng.int(100) < (fam.mods.twins ?? 0) ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+      const baby = world.addSettler(player.id, fam.id, world.randomName(), 0, e.x, e.y);
+      world.emit({ type: 'born', settlerId: baby.id, name: baby.name, surname: fam.surname });
+    }
+    fam.birthCooldown = Math.round((BALANCE.birthInterval * (100 - (fam.mods.birth ?? 0))) / 100);
   }
 }
 
 function eat(world: World, player: PlayerState): void {
+  // Eat whichever food is most plentiful, from the fullest store.
   let best: Building | undefined;
-  for (const b of world.storages(player.id))
-    if (b.stock.berries - b.reserved.berries > 0 && (!best || b.stock.berries > best.stock.berries)) best = b;
+  let food: Good = 'berries';
+  for (const g of FOODS)
+    for (const b of world.storages(player.id))
+      if (b.stock[g] - b.reserved[g] > 0 && (!best || b.stock[g] > best.stock[food])) {
+        best = b;
+        food = g;
+      }
   if (best) {
-    best.stock.berries--;
+    best.stock[food]--;
     if (player.hungry) {
       player.hungry = false;
       world.emit({ type: 'fed' });
@@ -80,7 +94,21 @@ function eat(world: World, player: PlayerState): void {
   }
 }
 
+/** Households whose members have all married away free their hut for someone else. */
+function clearEmptyHouseholds(world: World, owner: number): void {
+  const members = new Set<number>();
+  for (const s of world.settlers.values()) if (s.owner === owner) members.add(s.familyId);
+  for (const fam of [...world.families.values()]) {
+    if (fam.owner !== owner || members.has(fam.id)) continue;
+    const home = world.buildings.get(fam.homeId);
+    if (home && home.type !== 'wagon' && home.familyId === fam.id) home.familyId = 0;
+    world.families.delete(fam.id);
+    world.players[owner].offers = world.players[owner].offers.filter((o) => o.familyId !== fam.id);
+  }
+}
+
 function checkNewcomers(world: World, player: PlayerState): void {
+  clearEmptyHouseholds(world, player.id);
   if (player.newcomerCooldown > 0) {
     player.newcomerCooldown -= BALANCE.newcomerCheckInterval;
     return;
@@ -100,8 +128,42 @@ function checkNewcomers(world: World, player: PlayerState): void {
       world.emit({ type: 'familySettled', familyId: fam.id, surname: fam.surname, buildingId: hut.id });
       return;
     }
-  if (player.hungry || world.stored(player.id, 'berries') < world.rules.newcomerMinFood) return;
+  if (player.hungry) return;
+  if (marry(world, player, hut)) return;
+  if (world.food(player.id) < world.rules.newcomerMinFood) return;
   spawnFamily(world, player, hut);
+}
+
+/**
+ * Marriage: two unmarried adults from different families found a new household in a free
+ * hut. The household inherits the best skills of both houses and the union of their boons:
+ * the player's lever for breeding lineages.
+ */
+function marry(world: World, player: PlayerState, hut: Building): boolean {
+  const single = [...world.settlers.values()].filter((s) => s.owner === player.id && !s.child && s.spouseId === 0);
+  for (let i = 0; i < single.length; i++)
+    for (let j = i + 1; j < single.length; j++) {
+      const a = single[i];
+      const b = single[j];
+      if (a.familyId === b.familyId) continue;
+      const fa = world.families.get(a.familyId);
+      const fb = world.families.get(b.familyId);
+      if (!fa || !fb) continue;
+      const total = (f: Family) => SKILLS.reduce((n, k) => n + f.skills[k], 0);
+      const senior = total(fa) >= total(fb) ? fa : fb;
+      const fam = createFamily(world, player.id, hut.id, senior.surname);
+      hut.familyId = fam.id;
+      fam.parents = [fa.id, fb.id];
+      for (const k of SKILLS) fam.skills[k] = Math.max(fa.skills[k], fb.skills[k]);
+      for (const id of [...fa.boons, ...fb.boons]) addBoon(fam, id);
+      a.familyId = fam.id;
+      b.familyId = fam.id;
+      a.spouseId = b.id;
+      b.spouseId = a.id;
+      world.emit({ type: 'married', owner: player.id, a: a.id, b: b.id, familyId: fam.id, surname: fam.surname, buildingId: hut.id });
+      return true;
+    }
+  return false;
 }
 
 /**
@@ -133,6 +195,7 @@ export function spawnFamily(world: World, player: PlayerState, hut: Building | n
   const sy = (spawn - sx) / world.size;
   // Newcomers bring a little know-how of their own, which makes each family distinct.
   const craft: Skill = SKILLS[world.rng.int(SKILLS.length)];
+  const folk: Settler[] = [];
   for (let i = 0; i < size; i++) {
     const age = i < 2 ? 1.6 + world.rng.float() * 1.5 : world.rng.float() * 1.3;
     const s = world.addSettler(player.id, fam.id, world.randomName(), age, sx, sy);
@@ -141,7 +204,15 @@ export function spawnFamily(world: World, player: PlayerState, hut: Building | n
     fam.skills[craft] = Math.max(fam.skills[craft], s.skills[craft]);
     s.job = { kind: 'arrive' };
     walkTo(world, s, target);
+    if (i === 1 && folk.length) {
+      s.spouseId = folk[0].id;
+      folk[0].spouseId = s.id;
+    }
+    folk.push(s);
   }
+  // Every family arrives with a character of its own; wanderers' arrival is the player's pick.
+  if (skillXp) offerBoon(world, fam, 'Wanderers join you');
+  else for (const id of drawBoons(world, fam, 1)) addBoon(fam, id);
   player.newcomerCooldown = BALANCE.newcomerCooldown;
   world.stats.arrivals.push(world.tick);
   world.emit({ type: 'familyApproaching', familyId: fam.id, surname: fam.surname, size, skill: craft });

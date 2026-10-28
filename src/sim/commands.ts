@@ -1,13 +1,15 @@
 import { BUILDINGS, GOODS, type BuildingType } from './defs';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
 import { owns, territoryBox } from './territory';
+import { chooseBoon } from './boons';
 import { tradeTitle } from './trades';
 import type { World } from './world';
 
 /** Every player and AI action goes through a Command so games are replayable and the AI cannot cheat. */
 export type Command =
   | { type: 'place'; owner: number; building: BuildingType; x: number; y: number }
-  | { type: 'demolish'; owner: number; id: number };
+  | { type: 'demolish'; owner: number; id: number }
+  | { type: 'chooseBoon'; owner: number; offerId: number; choice: number };
 
 export interface PlaceCheck {
   ok: boolean;
@@ -119,6 +121,9 @@ export function applyCommand(world: World, cmd: Command): void {
       world.emit({ type: 'buildingPlaced', id: b.id, buildingType: b.type });
       return;
     }
+    case 'chooseBoon':
+      chooseBoon(world, cmd.owner, cmd.offerId, cmd.choice);
+      return;
     case 'demolish': {
       const b = world.buildings.get(cmd.id);
       if (!b || b.owner !== cmd.owner || b.type === 'wagon') return;

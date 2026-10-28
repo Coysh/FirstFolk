@@ -110,6 +110,16 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       fence(b, -0.85, 0.85, 0.85, 3);
       break;
     }
+    case 'fisher': {
+      // A reed-thatched hut with drying racks, a little jetty and an upturned boat.
+      cottage(b, C.wattle, C.thatchDark, 0.95, 0.75, 0.48, -0.2, -0.25);
+      for (const x of [0.35, 0.85]) b.add(box(0.05, 0.6, 0.05), C.wood, { pos: [x, 0.3, 0.2] });
+      b.add(box(0.6, 0.04, 0.04), C.wood, { pos: [0.6, 0.58, 0.2] });
+      for (const x of [0.45, 0.6, 0.75]) b.add(sphere(0.05, 5, 4), 0x8fa9b8, { pos: [x, 0.45, 0.2], scale: [0.8, 2.2, 0.6] });
+      b.add(new THREE.SphereGeometry(0.32, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), C.darkTimber, { pos: [-0.45, 0.02, 0.6], scale: [1.6, 0.6, 0.8], rot: [Math.PI, 0.3, 0] });
+      b.add(cyl(0.12, 0.12, 0.08, 10), C.cloth, { pos: [0.65, 0.04, -0.6] });
+      break;
+    }
     case 'quarry': {
       const t = opts.tier ?? 0;
       b.add(box(1.1, 0.12, 0.9), C.stoneDark, { pos: [-0.1, 0.02, -0.15] });
@@ -288,6 +298,11 @@ export function goodGeometry(good: Good): THREE.BufferGeometry {
     b.add(box(0.36, 0.03, 0.1), 0xd9b07a, { pos: [0.01, 0.032, 0.005] });
   }
   else if (good === 'stone') b.add(box(0.16, 0.1, 0.12), C.stone);
+  else if (good === 'fish') {
+    b.add(sphere(0.06, 6, 4), 0x8fa9b8, { scale: [2.2, 0.8, 1] });
+    b.add(cone(0.05, 0.08, 4), 0x6f8a99, { pos: [-0.16, 0, 0], rot: [0, 0, Math.PI / 2] });
+    b.add(sphere(0.05, 6, 4), 0x9fb7c4, { pos: [0.02, 0.06, 0.04], scale: [2, 0.8, 1], rot: [0, 0.5, 0] });
+  }
   else {
     b.add(cyl(0.09, 0.07, 0.08, 7), C.lightWood);
     b.add(sphere(0.035, 5, 4), C.berry, { pos: [0.03, 0.05, 0] });

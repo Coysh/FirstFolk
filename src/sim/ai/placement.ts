@@ -1,4 +1,4 @@
-import { BUILDINGS, type BuildingType } from '../defs';
+import { BUILDINGS, type BuildingType, type NodeKind } from '../defs';
 import { canPlace } from '../commands';
 import { cheb } from '../settlers';
 import { NO_OWNER, territoryBox } from '../territory';
@@ -10,7 +10,7 @@ import type { World } from '../world';
  * Candidates are scored first and validated best-first, since `canPlace` is the costly part.
  * Shared by the scripted playtest bot and the rival AI.
  */
-export function bestSite(world: World, owner: number, type: BuildingType, target?: { x: number; y: number }): { x: number; y: number } | null {
+export function bestSite(world: World, owner: number, type: BuildingType, target?: { x: number; y: number }, opts: { want?: NodeKind } = {}): { x: number; y: number } | null {
   const wagon = [...world.buildings.values()].find((b) => b.owner === owner && b.type === 'wagon');
   if (!wagon) return null;
   const def = BUILDINGS[type];
@@ -23,11 +23,15 @@ export function bestSite(world: World, owner: number, type: BuildingType, target
       const dist = cheb(x, y, wagon.x, wagon.y);
       let score: number;
       if (job?.kind === 'gather') {
-        score = countNodes(world, x, y + def.size, job.node, 5) * 2 - dist * 0.4;
+        const n = countNodes(world, x, y + def.size, job.node, Math.min(job.radius, 6));
+        if (n < 3) continue;
+        score = n * 2 - dist * 0.4;
       } else if (job?.kind === 'plant') {
         score = countNodes(world, x, y + def.size, 'tree', 5) - dist * 0.4;
       } else if (def.claim) {
         score = target ? -cheb(x, y, target.x, target.y) * 4 + newLand(world, x + 1, y + 1, def.claim) * 0.02 : newLand(world, x + 1, y + 1, def.claim) - dist * 0.5;
+        // Short of stone or wood? Head for land with rocks or trees.
+        if (opts.want) score += countNodes(world, x + 1, y + 1, opts.want, def.claim) * (target ? 0.3 : 1.5);
       } else if (def.storage) {
         // A second store pays off a little way out, towards the work.
         score = -Math.abs(dist - 9);

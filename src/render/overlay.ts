@@ -10,6 +10,8 @@ export const ICON: Record<string, string> = {
   planks: '/assets/icons/planks.png',
   stone: '/assets/icons/stone.png',
   berries: '/assets/icons/berries.png',
+  fish: '/assets/icons/fish.png',
+  fisher: '/assets/icons/fisher.png',
   people: '/assets/icons/people.png',
   hammer: '/assets/icons/hammer.png',
   scroll: '/assets/icons/scroll.png',
@@ -57,7 +59,7 @@ export class Overlay {
       p.bonus ||= bonus;
     } else {
       // Fan different goods out around the building so their floaters never stack.
-      const k = ['logs', 'planks', 'stone', 'berries'].indexOf(good);
+      const k = ['logs', 'planks', 'stone', 'berries', 'fish'].indexOf(good);
       const p2 = pos.clone().add(new THREE.Vector3((k - 1.5) * 0.45, 0, (k % 2) * 0.3));
       this.pending.set(key, { pos: p2, good, n: 1 + (bonus ? 1 : 0), bonus, t: 0.45 });
     }

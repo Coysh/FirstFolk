@@ -27,7 +27,7 @@ export function describeSettler(world: World, s: Settler): string {
       if (j.phase === 'process') return 'Sawing logs into planks';
       if (j.phase === 'deliver') return s.carry ? `Hauling ${GOOD_INFO[s.carry].name.toLowerCase()} to the store (no carriers free)` : 'Hauling to the store';
       if (j.phase === 'harvest')
-        return job.kind === 'plant' ? 'Planting a sapling' : job.kind === 'process' ? 'Working' : job.node === 'tree' ? 'Felling a tree' : job.node === 'rock' ? 'Breaking stone' : 'Picking berries';
+        return job.kind === 'plant' ? 'Planting a sapling' : job.kind === 'process' ? 'Working' : job.node === 'tree' ? 'Felling a tree' : job.node === 'rock' ? 'Breaking stone' : job.node === 'fish' ? 'Fishing' : 'Picking berries';
       if (j.phase === 'return') return s.carry ? `Bringing ${GOOD_INFO[s.carry].name.toLowerCase()} home` : 'Heading back';
       if (j.phase === 'toNode') return job.kind === 'plant' ? 'Looking for a spot to plant' : 'Heading out to work';
       return `Works at the ${BUILDINGS[b!.type].name}`;

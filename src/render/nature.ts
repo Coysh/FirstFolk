@@ -59,6 +59,7 @@ export class Nature {
   private rocks: THREE.InstancedMesh;
   private bushes: THREE.InstancedMesh;
   private berries: THREE.InstancedMesh;
+  private fish: THREE.InstancedMesh;
   private version = -1;
   private lastRebuild = 0;
   private m = new THREE.Matrix4();
@@ -95,6 +96,13 @@ export class Nature {
     this.bushes = mk(bush, withWind(vertexMat(), 0.08, 0.1));
     this.berries = mk(sphere(0.05, 5, 4), new THREE.MeshStandardMaterial({ color: C.berry, flatShading: true, roughness: 0.5 }));
     this.berries.castShadow = false;
+    // A shoal: a few dark fish shapes just under the surface, and one leaping.
+    const shoal = new ModelBuilder();
+    for (const [x, z, r] of [[0, 0, 0.3], [0.22, 0.14, 1.9], [-0.18, 0.2, 1.1], [0.05, -0.22, 2.6]])
+      shoal.add(sphere(0.05, 5, 3), 0x2f4a55, { pos: [x, 0, z], rot: [0, r, 0], scale: [2.4, 0.5, 1] });
+    shoal.add(sphere(0.045, 5, 3), 0x9fb7c4, { pos: [0.1, 0.12, 0.05], rot: [0, 0.8, 0.6], scale: [2.4, 0.9, 1] });
+    this.fish = mk(shoal.build(), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.4 }));
+    this.fish.castShadow = false;
   }
 
   update(world: World, time: number): void {
@@ -107,6 +115,7 @@ export class Nature {
     let nr = 0;
     let nbush = 0;
     let nberry = 0;
+    let nfish = 0;
     for (const n of world.nodes.values()) {
       const j = jitter(n.x, n.y);
       const x = n.x + 0.5 + j.dx;
@@ -127,6 +136,8 @@ export class Nature {
         mesh.setColorAt(i, tint.setRGB(0.88 + v * 0.22, 0.92 + v * 0.14, 0.86 + (1 - v) * 0.16));
       } else if (n.kind === 'rock') {
         this.place(this.rocks, nr++, x, y, z, j.rot, 0.55 + (0.45 * n.amount) / n.max);
+      } else if (n.kind === 'fish') {
+        if (n.amount > 0) this.place(this.fish, nfish++, x, this.hf.waterY + 0.03, z, j.rot, 0.6 + (0.4 * n.amount) / n.max);
       } else {
         this.place(this.bushes, nbush++, x, y, z, j.rot, j.scale * 0.9);
         for (let i = 0; i < n.amount; i++) {
@@ -147,6 +158,7 @@ export class Nature {
     fin(this.rocks, nr);
     fin(this.bushes, nbush);
     fin(this.berries, nberry);
+    fin(this.fish, nfish);
   }
 
   private place(mesh: THREE.InstancedMesh, i: number, x: number, y: number, z: number, rot: number, scale: number) {

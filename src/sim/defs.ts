@@ -1,11 +1,13 @@
 import { BALANCE, secs } from './balance';
 
-export type Good = 'logs' | 'stone' | 'berries' | 'planks';
-export const GOODS: readonly Good[] = ['logs', 'planks', 'stone', 'berries'];
+export type Good = 'logs' | 'stone' | 'berries' | 'planks' | 'fish';
+export const GOODS: readonly Good[] = ['logs', 'planks', 'stone', 'berries', 'fish'];
+/** Goods settlers eat, in the order they reach for them. */
+export const FOODS: readonly Good[] = ['berries', 'fish'];
 
-export type NodeKind = 'tree' | 'rock' | 'bush';
+export type NodeKind = 'tree' | 'rock' | 'bush' | 'fish';
 
-export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'hut' | 'lookout' | 'sawpit' | 'storehouse';
+export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'lookout' | 'sawpit' | 'storehouse';
 
 export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw';
 
@@ -107,6 +109,18 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     job: { kind: 'gather', node: 'bush', good: 'berries', radius: 9, workTicks: BALANCE.pickTicks, tool: 'basket', skill: 'husbandry', outputCap: 8 },
     buildable: true,
   },
+  fisher: {
+    type: 'fisher',
+    name: 'Fisher',
+    icon: '🐟',
+    blurb: 'Nets fish from rivers and lakes. Shoals never run dry. Needs a Journeyman Gatherer.',
+    cost: { logs: 4 },
+    buildTicks: secs(8),
+    size: 2,
+    job: { kind: 'gather', node: 'fish', good: 'fish', radius: 8, workTicks: secs(3), tool: 'basket', skill: 'husbandry', outputCap: 8 },
+    buildable: true,
+    requires: { skill: 'husbandry', tier: 1 },
+  },
   quarry: {
     type: 'quarry',
     name: 'Quarry',
@@ -145,7 +159,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     name: 'Lookout',
     icon: '🗼',
     blurb: 'Pushes your border outwards and reveals the land beyond. Build near the edge to reach discoveries.',
-    cost: { logs: 4, stone: 2 },
+    // Logs only: expansion must never deadlock when the stone runs out.
+    cost: { logs: 5 },
     buildTicks: secs(10),
     size: 2,
     buildable: true,
@@ -178,13 +193,14 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
 };
 
-export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'sawpit', 'storehouse'];
+export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse'];
 
 export const GOOD_INFO: Record<Good, { name: string; icon: string }> = {
   logs: { name: 'Logs', icon: '🪵' },
   planks: { name: 'Planks', icon: '🟫' },
   stone: { name: 'Stone', icon: '🪨' },
   berries: { name: 'Berries', icon: '🫐' },
+  fish: { name: 'Fish', icon: '🐟' },
 };
 
 export function costTotal(cost: Partial<Record<Good, number>>): number {

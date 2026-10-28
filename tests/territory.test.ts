@@ -59,7 +59,7 @@ describe('territory and discoveries', () => {
   it('a rumour reveals a discovery when none is in sight', () => {
     const w = new World({ seed: 3 });
     for (const s of w.sites) s.revealed = 0;
-    runSeconds(w, 45);
+    runSeconds(w, 50);
     expect(w.sites.some((s) => s.revealed & 1)).toBe(true);
   });
 

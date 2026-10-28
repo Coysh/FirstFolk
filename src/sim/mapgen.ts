@@ -204,6 +204,12 @@ export function generateMap(seed: number, size = BALANCE.mapSize): MapData {
         if (roll < prize.density) nodes.push({ kind: prize.node, x, y, max: prize.max });
         continue;
       }
+      if (t === Terrain.Water) {
+        // Fish shoals gather in the shallows, within reach of the bank.
+        const shore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => isWalkableTerrain(terrain[(y + dy) * N + x + dx]));
+        if (shore && roll < 0.14) nodes.push({ kind: 'fish', x, y });
+        continue;
+      }
       if (t === Terrain.Forest && roll < 0.7) nodes.push({ kind: 'tree', x, y });
       else if (t === Terrain.Grass && roll < 0.03) nodes.push({ kind: 'tree', x, y });
       else if (t === Terrain.Meadow && roll < (inCluster(x, y, 'meadow') ? 0.45 : 0.06)) nodes.push({ kind: 'bush', x, y });

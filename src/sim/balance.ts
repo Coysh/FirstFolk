@@ -17,17 +17,20 @@ export const BALANCE = {
   birthInterval: secs(40),
 
   treeFellTicks: secs(2.8),
-  treeLogs: 1,
+  treeLogs: 2,
   stumpDecayTicks: secs(40),
   saplingGrowTicks: secs(75),
   plantTicks: secs(3),
 
-  rockStone: 6,
+  rockStone: 8,
   mineTicks: secs(2.8),
 
   bushBerries: 4,
   pickTicks: secs(2),
   berryRegrowTicks: secs(18),
+
+  shoalFish: 3,
+  fishRegrowTicks: secs(10),
 
   /** Work units per tick a builder contributes (hungry builders contribute less). */
   buildRate: 10,
@@ -45,8 +48,8 @@ export const BALANCE = {
   ruinsXp: 120,
   wandererSkill: 220,
   stonesClaim: 7,
-  /** With no discovery in sight, a rumour reveals the nearest one after this long. */
-  rumourDelay: secs(40),
+  /** When nothing new has been seen or claimed for this long, a rumour reveals the nearest discovery. */
+  rumourDelay: secs(45),
 
   /** Share of the family's best skill XP a child inherits on coming of age. */
   inheritPct: 40,

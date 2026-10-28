@@ -125,6 +125,7 @@ export class SettlersView {
       planks: mk(goodGeometry('planks').scale(1.3, 1.3, 1.3), vmat, false),
       stone: mk(goodGeometry('stone').scale(1.3, 1.3, 1.3), vmat, false),
       berries: mk(goodGeometry('berries').scale(1.3, 1.3, 1.3), vmat, false),
+      fish: mk(goodGeometry('fish').scale(1.3, 1.3, 1.3), vmat, false),
     };
   }
 
@@ -160,7 +161,7 @@ export class SettlersView {
   }
 
   update(world: World, alpha: number, time: number, dt: number): void {
-    const counts = { tool: { axe: 0, pick: 0, hammer: 0, shovel: 0, basket: 0, saw: 0 } as Record<Tool, number>, cargo: { logs: 0, planks: 0, stone: 0, berries: 0 } as Record<Good, number> };
+    const counts = { tool: { axe: 0, pick: 0, hammer: 0, shovel: 0, basket: 0, saw: 0 } as Record<Tool, number>, cargo: { logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 } as Record<Good, number> };
     let i = 0;
     let nApron = 0;
     let nBadge = 0;

@@ -51,6 +51,9 @@ export function playtest(seed: number, minutes: number): PlaytestReport {
       else if (e.type === 'claimed' && e.owner === 0) timeline.push(`${t} ★ claimed ${e.kind}: ${e.text}`);
       else if (e.type === 'rumour' && e.owner === 0) timeline.push(`${t} 🗣 rumour of ${e.kind} to the ${e.dir}`);
       else if (e.type === 'familySettled') timeline.push(`${t} the ${e.surname} family moves into a hut`);
+      else if (e.type === 'boonOffered' && e.owner === 0) timeline.push(`${t} 🃏 boon choice for the ${e.surname}s (${e.reason})`);
+      else if (e.type === 'boonChosen' && e.owner === 0) timeline.push(`${t}    → the ${e.surname}s take ${e.boon}`);
+      else if (e.type === 'married' && e.owner === 0) timeline.push(`${t} 💍 a new ${e.surname} household is founded by marriage`);
       else if (e.type === 'born') timeline.push(`${t} 👶 ${e.name} ${e.surname} is born`);
       else if (e.type === 'hungry') timeline.push(`${t} ! hungry`);
       else if (e.type === 'fed') timeline.push(`${t} fed again`);

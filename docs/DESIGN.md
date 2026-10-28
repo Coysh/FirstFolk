@@ -406,3 +406,47 @@ The sim got faster because placement now scores candidates first and flood-fills
 - Every family is still interchangeable.
 
 Next come Family Boons and marriage, then seasons and settlement tiers.
+
+### v0.3.0 Fun Pass 3: Family Boons, marriage and fish (2026-10-28)
+**Family Boons** (`src/sim/boons.ts`). This is the Spore-style "pick your evolution" layer.
+- There are **16 boons**, all pure data. They are summed into `family.mods` and read where they apply:
+  - craft speed and bonus chance per skill,
+  - build speed, walking speed, XP and inheritance,
+  - birth rate and twins,
+  - appetite,
+  - sight radius and Lookout claim radius,
+  - hunger immunity.
+- **When choices appear:**
+  - **the founders get one at 0:00**, so the very first decision is "what kind of folk are we?",
+  - a family's **first** Journeyman or Master in a craft,
+  - wanderers joining.
+
+  Ordinary migrants arrive with one random boon, so every family has a character.
+- **The card tray never blocks.** It shows 3 flip-in cards, weighted towards the family's best craft, with a timer. An unanswered offer auto-picks after 60 s. Choices are a `chooseBoon` command, so replays and saves stay deterministic.
+- **Families carry a title** built from their boons and craft, such as *the Thornes, Fleet-footed Carpenters*, with boon badges in the settler panel.
+
+**Marriage:**
+- Unmarried adults of different families marry when a hut is free and bellies are full.
+- The new household takes the more skilled house's surname, the **best skills of both**, and the **union of both families' boons**. Breeding lineages is now a lever.
+- Founders and migrant couples start married. Emptied households free their hut.
+
+**Fish:** a second food that never runs dry, and a reason for Husbandry tiers to matter.
+- The **Fisher** is unlocked by a Journeyman Gatherer and nets fish from shoals in the river and lakes, working from the bank.
+- Food is now generic (`FOODS`), and settlers eat whatever is most plentiful.
+
+**Playtests found more stalls, and the fixes:**
+1. **The stone deadlock.** Seed 3 ran out of stone at 14 min. Lookouts cost stone, so the player could never expand to find more: a hard stall a human would hit. Lookouts now cost **logs only**. Trees give 2 logs and rocks give 8 stone.
+2. **The rumour block.** A revealed but unreachable discovery (across the river) suppressed rumours forever. Rumours are now a **stagnation timer**: 45 s without spotting or claiming anything brings the next one.
+3. **The berry ceiling.** Population hit about 60–70 and stayed permanently hungry once the bushes in reach were exhausted. Fish shoals regrow, which fixed it.
+4. **Bot hygiene.** The bot spammed Lookouts whenever any quarry was exhausted, and never built huts. It now treats a resource as "starved" only when stores are low, demolishes dead gatherers, and keeps a free hut. This mattered for measurement, not for the game.
+
+**Playtest results** (8 seeds, 30 min):
+
+| Metric | Value |
+|---|---|
+| Population | 117–136 |
+| Discoveries claimed | 7–16 |
+| Boon choices | about 1 a minute early, about 1 every 2–3 minutes late |
+| Longest major gap | 63–151 s |
+
+**Still boring:** the late game (20 min+) has long gaps once the map is claimed, because there is no rival, no rhythm and no climax. Seasons, settlement tiers and events are next.

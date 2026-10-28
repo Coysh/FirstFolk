@@ -48,7 +48,7 @@ export const TRADES: Record<Skill, TradeDef> = {
     titles: ['Forager', 'Gatherer', 'Master Gatherer'],
     speed: [1, 0.8, 0.65],
     bonus: [0, 15, 30],
-    perks: ['', 'Faster picking and bonus berries', 'Bushes give generously'],
+    perks: ['', 'Fisher unlocked: fish the rivers and lakes', 'Swift gathering and frequent bonus food'],
   },
 };
 
