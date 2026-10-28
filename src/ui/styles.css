@@ -1725,6 +1725,7 @@ button.danger.armed {
   font: 800 9.5px var(--body);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .deed {
   position: relative;
@@ -2028,5 +2029,47 @@ button.danger.armed {
   }
   .market {
     margin-top: 40px;
+  }
+}
+
+/* ---------- omens, origins, the Moot, the Daily Valley ---------- */
+.race-omens {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  font: 700 10px var(--body);
+  color: #e9d3a6;
+}
+.race-moot {
+  color: var(--gold);
+  font-weight: 900;
+}
+.choices.origins {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.choice.origin span {
+  font-size: 12px;
+}
+.or-icon {
+  font-size: 18px;
+}
+.omens {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 4px;
+}
+.omen {
+  font-size: 13px;
+}
+.omen small {
+  color: var(--ink-soft);
+}
+.plaque.daily .pl-sub {
+  color: #f6e2a8;
+}
+@media (max-width: 720px) {
+  .race-omens {
+    display: none;
   }
 }

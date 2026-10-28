@@ -15,7 +15,7 @@ FirstFolk is a fast, single-player browser settlement builder. It combines Settl
 - **Default scenario:** *The First Valley*, a race against the rival through four chapters that are also the settlement's age-ups (Camp → Hamlet → Village → Town → Renown). *Peaceful* is the same valley with no rival. Victory runs on a modular scenario system (§5).
 - **Fun Pass additions (v0.2–v0.7):** the frontier (fog, a growing border, discoveries and rumours), births, Family Boons, marriage that merges lineages, Fishers, seasons, settlement ranks, Valley Events and the rival. See §0 and the build log.
 - **The Renown Pass (v0.8+), superseding some of the above:**
-  - **Victory is a renown race:** first to 1,200 renown, or the most renown at 45:00.
+  - **Victory is a renown race:** first to 1,500 renown, or the most renown at 45:00 (the v0.8 goal was 1,200).
   - **Borders are living:** influence decides who holds each tile, so land can be lost. This replaces "claimed land is final".
   - **Landmarks are held:** they pay renown every minute and can be taken.
   - **The family system is your arsenal:** Family Deeds are call-down powers.
@@ -86,7 +86,7 @@ The second playtest verdict: *better, but at about 20 minutes it turns repetitiv
   - **When it updates:** borders are recomputed every 2 s and whenever a claim building finishes.
 - **Landmarks and renown** (`renown.ts`, `DISCOVERIES[].renown`). Grove and oakwood pay +2★/min, outcrops +4 and Standing Stones +5 while you hold them. Taking one from the rival pays +10 once.
   - **Other sources:** discoveries 8, objectives 5, a family's first Master in a craft 10, legends 15, Great Works 100, Market Day lots 2–6, festivals 5, and 1★/min per 800 tiles of land.
-  - **Ranks:** Landfall (the tutorial) gives Hamlet, 300 renown gives Village, 700 gives Town, and **1,200 wins**. At 45:00 the most renowned settlement wins.
+  - **Ranks:** Landfall (the tutorial) gives Hamlet, 300 renown gives Village, 750 gives Town, and **1,500 wins** (v0.9; in v0.8 it was 700 and 1,200). At 45:00 the most renowned settlement wins.
 - **Family Deeds** (`deeds.ts`). The council is each deed's most prestigious family, the top four by prestige. Prestige counts members, their tiers, deeds done and legends left.
 
   | Deed | Comes from | Effect |
@@ -125,6 +125,50 @@ The second playtest verdict: *better, but at about 20 minutes it turns repetitiv
 | Longest gap between major beats | 75 s | 61 s | < 90 s |
 
 Player renown by source (average): landmarks 386, masters 191, Great Works 163, Market Day 159, legends 82, discoveries 72, land 71, goals 50, deeds 11. No single source dominates.
+
+### v0.9: replayability (Battle Drones' openers, mutators and Daily Op)
+v0.8 made each game a contest, but every game was the same contest. v0.9 makes each one different:
+- **Origins (openers)** (`origins.ts`). Before the clock starts you choose your founding house. It replaces the founders' boon card at 0:00.
+
+  | Origin | What it brings |
+  |---|---|
+  | Woodfolk | Journeyman Carpenters, the Sawpit, Axe-Sworn, Timber Drive |
+  | Hill Clan | Journeyman Masons, the Storehouse, Master Builders, Raise |
+  | River Folk | Journeyman Gatherers, the Fisher, Bountiful, Harvest Home |
+  | Wayfarers | Wanderlust and Keen Eyes, Expeditions |
+  | Kinfolk | Two extra children, Big Hearts, Festivals |
+
+  The rival rolls its own origin from the seed and is announced at the start. Across 120 origin-plays in fair duels every origin won 41–56% of its games, and Wayfarers were lifted after an early 33% showing.
+- **Omens (mutators)** (`omens.ts`). Every valley rolls two of eight, shown on New Game and on the race bar:
+  - Hard Winters
+  - Rich Seams
+  - Bountiful Valley
+  - Restless Neighbours (the rival thinks 25% faster)
+  - The Old Kingdom
+  - Wanderers' Road
+  - Golden Age
+  - Fertile Folk
+
+  Each is a lookup at the one place its rule lives.
+- **Discovery pools.** Each ring of the mirrored discovery layout draws from a small pool, and the heart of the valley draws outcrop or spring. Five new finds:
+  - **Barrow Mound:** an ancient's legend.
+  - **Hermit's Hut:** an elder Master who teaches the largest family.
+  - **Buried Hoard:** +20 renown and goods.
+  - **Healing Spring:** a landmark whose holder's elders live a year longer.
+  - **Forest Shrine:** a landmark that blesses a family with a boon.
+- **The Moot (climax).** From 25:00 every landmark pays double, with a banner and a "Moot ×2" chip. Taking a landmark pays 10 plus 1 per 8 renown you trail by (up to +30), doubled at the Moot. Comebacks are a real plan, not luck.
+- **The goal rises to 1,500** (Town at 750) so the Moot always comes into play.
+- **Daily Valley.** A title-screen entry with today's seed and omens, Normal, against the rival, and you pick an origin. Your best result (won or lost, renown, time) is kept in localStorage.
+
+Measured (60 fair duels with origins and omens: `npm run sim -- --seed 100 --minutes 46 --games 15 --think 160 --real` over four seed blocks):
+
+| Metric | v0.8.0 (16 duels, no omens) | v0.9.0 |
+|---|---|---|
+| Length (median, range) | 29.9 min (22–34) | ~31 min (22.5–35.9) |
+| Lead changes per game | 2.0 | 2.6 |
+| Comeback wins | 19% | 20% |
+| Landmark flips per game | 2.2 | 4.4 |
+| Rival : player | 8 : 8 | 37 : 23, mostly from the Restless Neighbours omen |
 
 ---
 
@@ -743,4 +787,23 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - **The player bot never built a Lookout on seed 3:** with a wider border, the top 400 placement candidates were all edge tiles that failed. Candidates are now pre-filtered.
   - **Placement was 7× slower** because a flood fill ran per candidate. It now uses an exact ring-connectivity fast path with a cached reachability map.
   - **Outposts could be wasted inside your own land.** The tap is now checked, with a reason shown.
+
+### v0.9.0 Replayability: origins, omens, discovery pools, the Moot, the Daily Valley (2026-10-28)
+- **Built:**
+  - five origins (openers) with a rival origin;
+  - eight omens, two per valley;
+  - discovery pools with five new finds (barrow, hermit, hoard, spring, shrine) and their models;
+  - the Moot at 25:00 (landmarks ×2);
+  - a seize bonus that grows with how far behind you are;
+  - the goal raised to 1,500;
+  - the Daily Valley with today's best result;
+  - a New Game screen with an origin picker and an omens preview;
+  - omen chips on the race bar;
+  - rival-origin and omen toasts at the start;
+  - origins in the after-action report.
+- **Harness:** `npm run sim -- --real` cycles origins, applies the valley's omens and prints wins per origin.
+- **Duels caught:**
+  - Wayfarers were weaker (2 of 6). They now also get Keen Eyes.
+  - Games ended (about 28 min) before a 30:00 Moot could matter, so the goal is now 1,500 and the Moot starts at 25:00.
+- **Tests:** origins, the rival's origin, omen rolls, Rich Seams, the Old Kingdom, the Moot, the barrow, hermit and hoard, and saves keeping origins, omens and labels (95 tests).
 

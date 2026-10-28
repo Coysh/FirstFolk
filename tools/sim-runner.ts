@@ -4,6 +4,7 @@
  */
 import { playtest } from '../src/sim/playtest';
 import type { Difficulty } from '../src/sim/rules';
+import { ORIGIN_IDS } from '../src/sim/origins';
 
 const args = process.argv.slice(2);
 const arg = (name: string, def: number) => {
@@ -20,11 +21,13 @@ const games = arg('games', 1);
 const think = arg('think', 100);
 const difficulty = str('difficulty', 'normal') as Difficulty;
 const quiet = args.includes('--quiet');
+// --real: each game plays a rolled origin (cycling through all five) with the valley's omens.
+const real = args.includes('--real');
 
 const reports: ReturnType<typeof playtest>[] = [];
 for (let g = 0; g < games; g++) {
   const t0 = performance.now();
-  const r = playtest(seed + g, minutes, { think, difficulty });
+  const r = playtest(seed + g, minutes, { think, difficulty, origin: real ? ORIGIN_IDS[g % ORIGIN_IDS.length] : undefined, omens: real });
   reports.push(r);
   if (games === 1) {
     console.log(r.timeline.join('\n'));
@@ -35,7 +38,7 @@ for (let g = 0; g < games; g++) {
   }
   if (!quiet || games === 1)
     console.log(
-      `seed ${r.seed}: winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'}${r.byTime ? ' (time)' : ''} at ${r.victorySec < 0 ? '-' : `${(r.victorySec / 60).toFixed(1)}m`} · renown ${r.renownByMinute.at(-1)?.join(':')} · leads ${r.leadChanges} · comeback ${r.winnerDeficit} · flips ${r.holdingFlips} · idle ${r.idleAdultPct}% · major gap ${r.longestMajorGapSec}s · stock ${r.stockAt.join('/')} · chapters ${JSON.stringify(r.chapters)} · pop ${r.populationByMinute.at(-1)} · ${Math.round(performance.now() - t0)}ms`,
+      `seed ${r.seed}${real ? ` [${r.origins.join(' v ')} | ${r.omens.join(', ')}]` : ''}: winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'}${r.byTime ? ' (time)' : ''} at ${r.victorySec < 0 ? '-' : `${(r.victorySec / 60).toFixed(1)}m`} · renown ${r.renownByMinute.at(-1)?.join(':')} · leads ${r.leadChanges} · comeback ${r.winnerDeficit} · flips ${r.holdingFlips} · idle ${r.idleAdultPct}% · major gap ${r.longestMajorGapSec}s · stock ${r.stockAt.join('/')} · chapters ${JSON.stringify(r.chapters)} · pop ${r.populationByMinute.at(-1)} · ${Math.round(performance.now() - t0)}ms`,
     );
 }
 if (games > 1) {
@@ -51,4 +54,15 @@ if (games > 1) {
   const sources: Record<string, number> = {};
   for (const r of reports) for (const [k, v] of Object.entries(r.renownBy[0])) sources[k] = (sources[k] ?? 0) + (v ?? 0) / reports.length;
   console.log('avg player renown by source:', Object.entries(sources).map(([k, v]) => `${k} ${Math.round(v)}`).join(' · '));
+  if (real) {
+    // Opener balance: how each origin fares, whichever side played it.
+    const tally: Record<string, [number, number]> = {};
+    for (const r of reports)
+      r.origins.forEach((o, i) => {
+        const t = (tally[o || 'classic'] ??= [0, 0]);
+        t[1]++;
+        if (r.winner === i) t[0]++;
+      });
+    console.log('origin wins/games:', Object.entries(tally).map(([o, [w, n]]) => `${o} ${w}/${n}`).join(' · '));
+  }
 }

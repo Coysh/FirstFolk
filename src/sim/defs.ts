@@ -333,7 +333,7 @@ export function outputGood(type: BuildingType): Good | undefined {
 }
 
 /** Points of interest hidden in the fog. Whoever's border covers one first claims it. */
-export type DiscoveryKind = 'cart' | 'ruins' | 'wanderers' | 'grove' | 'oakwood' | 'outcrop' | 'stones';
+export type DiscoveryKind = 'cart' | 'ruins' | 'wanderers' | 'grove' | 'oakwood' | 'outcrop' | 'stones' | 'barrow' | 'hermit' | 'spring' | 'shrine' | 'hoard';
 
 export interface DiscoveryDef {
   name: string;
@@ -355,5 +355,10 @@ export const DISCOVERIES: Record<DiscoveryKind, DiscoveryDef> = {
   grove: { name: 'Berry Grove', icon: '🫐', blurb: 'A sheltered meadow thick with laden bushes. A landmark: renown while you hold it.', renown: 2 },
   oakwood: { name: 'Old-Growth Oakwood', icon: '🌳', blurb: 'Ancient trees that each give three logs. A landmark: renown while you hold it.', renown: 2 },
   outcrop: { name: 'Rich Outcrop', icon: '🪨', blurb: 'Deep seams of stone that take an age to work out. A landmark: renown while you hold it.', renown: 4 },
+  barrow: { name: 'Barrow Mound', icon: '⚱️', blurb: 'The grave of an ancient Master. Their legend becomes yours: one craft grows faster for good.' },
+  hermit: { name: 'Hermit’s Hut', icon: '🛖', blurb: 'An old Master living alone in the wilds, who might be persuaded to teach a family.' },
+  hoard: { name: 'Buried Hoard', icon: '💰', blurb: 'Silver and fine things hidden long ago. Whoever digs it up is talked of for years.' },
+  spring: { name: 'Healing Spring', icon: '💧', blurb: 'Clear, warm water that keeps old folk hale. A landmark: renown while you hold it, and your elders live a year longer.', renown: 3 },
+  shrine: { name: 'Forest Shrine', icon: '🕯️', blurb: 'A carved shrine deep in the woods. A landmark: renown while you hold it, and a family is blessed when you first claim it.', renown: 3 },
   stones: { name: 'Standing Stones', icon: '🗿', blurb: 'A ring of old stones. The land around them follows whoever holds them. A great landmark.', renown: 5, aura: [7, 70] },
 };

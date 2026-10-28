@@ -4,6 +4,15 @@ import { NO_OWNER, claimArea, owns } from '../src/sim/territory';
 import { World } from '../src/sim/world';
 import { newWorld, place, runSeconds, wagon } from './helpers';
 
+/** Valleys draw their discoveries from pools: find one that has this kind. */
+function withSite(kind: string) {
+  for (let seed = 1; seed < 60; seed++) {
+    const w = newWorld(seed);
+    if (w.sites.some((s) => s.kind === kind)) return w;
+  }
+  throw new Error(`no valley with a ${kind}`);
+}
+
 describe('territory and discoveries', () => {
   it('the wagon claims land and reveals around it', () => {
     const w = newWorld(3);
@@ -32,7 +41,7 @@ describe('territory and discoveries', () => {
   });
 
   it('claiming land over a discovery claims it once, for the first owner', () => {
-    const w = newWorld(3);
+    const w = withSite('cart');
     const site = w.sites.find((s) => s.kind === 'cart')!;
     const logs = wagon(w).stock.logs;
     claimArea(w, 0, site.x, site.y, 2);
@@ -44,7 +53,7 @@ describe('territory and discoveries', () => {
   });
 
   it('wanderers join homeless and move into the next free hut', () => {
-    const w = newWorld(3);
+    const w = withSite('wanderers');
     const site = w.sites.find((s) => s.kind === 'wanderers')!;
     const pop = w.population(0);
     claimArea(w, 0, site.x, site.y, 2);

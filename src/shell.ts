@@ -10,6 +10,8 @@ import { TICK_MS } from './sim/balance';
 import type { Difficulty } from './sim/rules';
 import { deserializeWorld, type SaveData } from './sim/save';
 import { World } from './sim/world';
+import { rollOmens } from './sim/omens';
+import type { OriginId } from './sim/origins';
 import { readSave, settings } from './settings';
 
 export type Screen = 'title' | 'loading' | 'game';
@@ -129,8 +131,9 @@ export class Shell {
     this.menuReady.value = false;
   }
 
-  async newGame(seed: number, difficulty: Difficulty, rival = true): Promise<void> {
-    await this.launch(async () => new World({ seed, difficulty, scenario: rival ? 'landfall' : 'peaceful' }), true);
+  /** A new valley: the omens come from the seed, the origin is the player's opener. */
+  async newGame(seed: number, difficulty: Difficulty, rival = true, origin?: OriginId, label = ''): Promise<void> {
+    await this.launch(async () => new World({ seed, difficulty, scenario: rival ? 'landfall' : 'peaceful', origin, omens: rollOmens(seed), label }), true);
   }
 
   async continueGame(): Promise<void> {

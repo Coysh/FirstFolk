@@ -3,6 +3,8 @@ import { TICK_HZ } from './balance';
 import { World } from './world';
 import { GOODS } from './defs';
 import type { Difficulty } from './rules';
+import type { OriginId } from './origins';
+import { rollOmens } from './omens';
 import { plural } from './population';
 
 export interface PlaytestReport {
@@ -33,6 +35,8 @@ export interface PlaytestReport {
   /** Landmarks that changed hands between settlements. */
   holdingFlips: number;
   renownBy: Partial<Record<string, number>>[];
+  origins: string[];
+  omens: string[];
   /** Goods sitting in the player's stores at minutes 10, 20 and 30: is stuff piling up? */
   stockAt: number[];
   /** Territory size (tiles) per minute: the frontier should keep moving. */
@@ -50,11 +54,14 @@ export interface PlaytestOptions {
   /** The scripted player's think interval (ticks); 100 is a brisk human. */
   think?: number;
   difficulty?: Difficulty;
+  /** Play as an origin with the valley's omens, like a real game (default: classic start, no omens). */
+  origin?: OriginId;
+  omens?: boolean;
 }
 
 /** Headless playtest: the scripted bot plays one game and we measure the pacing beats. */
 export function playtest(seed: number, minutes: number, opts: PlaytestOptions = {}): PlaytestReport {
-  const world = new World({ seed, difficulty: opts.difficulty });
+  const world = new World({ seed, difficulty: opts.difficulty, origin: opts.origin, omens: opts.omens ? rollOmens(seed) : [] });
   const bot = new OpeningBot(0, opts.think ?? 100);
   const renownByMinute: [number, number][] = [];
   const stockAt: number[] = [];
@@ -161,6 +168,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     winnerDeficit,
     holdingFlips,
     renownBy: world.players.map((p) => ({ ...p.renownBy })),
+    origins: world.players.map((p) => p.origin),
+    omens: [...world.omens],
     stockAt,
     territoryByMinute,
     populationByMinute,

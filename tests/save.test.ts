@@ -4,6 +4,7 @@ import { secs } from '../src/sim/balance';
 import { hashWorld } from '../src/sim/hash';
 import { SAVE_VERSION, deserializeWorld, serializeWorld } from '../src/sim/save';
 import { World } from '../src/sim/world';
+import { rollOmens } from '../src/sim/omens';
 
 function played(seed: number, minutes: number, difficulty: 'relaxed' | 'normal' | 'hard' = 'normal') {
   const w = new World({ seed, difficulty });
@@ -25,6 +26,22 @@ describe('save / load', () => {
     b.run(secs(120));
     expect(hashWorld(b)).toBe(hashWorld(a));
     expect(b.population(0)).toBe(a.population(0));
+  });
+
+  it('keeps origins, omens and the label, and continues identically', () => {
+    const a = new World({ seed: 31, origin: 'wayfarers', omens: rollOmens(31), label: 'daily-test' });
+    const bot = new OpeningBot();
+    for (let i = 0; i < secs(180); i++) {
+      bot.update(a);
+      a.step();
+    }
+    const b = deserializeWorld(JSON.parse(JSON.stringify(serializeWorld(a))));
+    expect(b.omens).toEqual(a.omens);
+    expect(b.label).toBe('daily-test');
+    expect(b.players.map((p) => p.origin)).toEqual(a.players.map((p) => p.origin));
+    a.run(secs(90));
+    b.run(secs(90));
+    expect(hashWorld(b)).toBe(hashWorld(a));
   });
 
   it('keeps difficulty, scenario and progress', () => {

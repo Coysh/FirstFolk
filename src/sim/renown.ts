@@ -1,6 +1,7 @@
 import { BALANCE, TICK_HZ } from './balance';
 import { DISCOVERIES } from './defs';
 import type { World } from './world';
+import { hasOmen } from './omens';
 
 /**
  * Renown is the score both settlements race for. It comes from many places, so there are
@@ -20,17 +21,23 @@ export function addRenown(world: World, owner: number, n: number, source: Renown
 /** Renown a minute from what a player holds right now: landmarks plus land. */
 export function renownRate(world: World, owner: number): { landmarks: number; land: number } {
   let landmarks = 0;
-  for (const s of world.sites) if (s.heldBy === owner) landmarks += DISCOVERIES[s.kind].renown ?? 0;
+  const bonus = hasOmen(world, 'oldKingdom') ? 1 : 0;
+  for (const s of world.sites) if (s.heldBy === owner) landmarks += (DISCOVERIES[s.kind].renown ?? 0) + bonus;
   // The Stone Circle makes held landmarks pay half as much again.
   if (world.hasWork(owner, 'henge')) landmarks = Math.floor((landmarks * 3) / 2);
+  // The Moot: the whole valley gathers for the final stretch, and landmarks pay double.
+  if (mootUnderway(world)) landmarks *= 2;
   let tiles = 0;
   for (let i = 0; i < world.territory.length; i++) if (world.territory[i] === owner) tiles++;
   return { landmarks, land: Math.floor(tiles / BALANCE.renown.landTiles) };
 }
 
+export const mootUnderway = (world: World) => !!world.scenario.timeLimit && world.tick >= BALANCE.mootAt;
+
 /** Pay out holdings. Runs every `renownTick`; remainders carry over exactly between payouts. */
 export function updateRenown(world: World): void {
   const minute = 60 * TICK_HZ;
+  if (world.scenario.timeLimit && world.tick >= BALANCE.mootAt && world.tick < BALANCE.mootAt + BALANCE.renownTick) world.emit({ type: 'moot' });
   for (const p of world.players) {
     const rate = renownRate(world, p.id);
     const sources = [['landmarks', rate.landmarks], ['land', rate.land]] as const;

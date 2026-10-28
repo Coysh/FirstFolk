@@ -61,17 +61,21 @@ export const BALANCE = {
    */
   renown: {
     discovery: 8,
-    /** Taking a landmark from another settlement. */
+    /** Taking a landmark from another settlement: 10, plus 1 per 8 renown you trail by (up to +30). */
     seized: 10,
+    seizedMax: 30,
     objective: 5,
     /** A family's first Master in a craft. */
     master: 10,
     legend: 15,
     festival: 5,
+    hoard: 20,
     /** Per minute, per this many tiles of land. */
     landTiles: 800,
   },
   renownTick: secs(10),
+  /** From this tick (the final stretch) the Moot doubles what landmarks pay. */
+  mootAt: secs(25 * 60),
 
   /** Market Day: each lot sold gluts that good by this much (percent), easing 1 point every 2 s. */
   glutPerSale: 25,

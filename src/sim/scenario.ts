@@ -144,7 +144,7 @@ export const LANDFALL: Scenario = {
   rival: true,
   timeLimit: secs(45 * 60),
   // Landfall teaches the basics; after that each rank is earned with renown, and the first
-  // settlement to 1,000 renown (or the one with most when the clock runs out) wins.
+  // settlement to 1,500 renown (or the one with most when the clock runs out) wins.
   objectives: [
     with_(objectives.building('woodcutter'), 'Landfall', 'Pick Woodcutter below, then place it beside the trees.'),
     with_(objectives.building('forager'), 'Landfall', 'Foragers feed everyone. Place one near the blue berry bushes.'),
@@ -157,8 +157,8 @@ export const LANDFALL: Scenario = {
     with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: planks build Watchtowers.'),
     with_(objectives.renown(300), 'Hamlet', 'Renown: landmarks, land, discoveries, Masters, deeds and Market Day all add to it.'),
     with_(objectives.building('watchtower'), 'Village', 'Watchtowers push hard: build them at the border to take land from your rival.'),
-    with_(objectives.renown(700), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
-    with_(objectives.renown(1200), 'Town', 'First to 1,200 renown wins. Take landmarks back if your rival has them!'),
+    with_(objectives.renown(750), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
+    with_(objectives.renown(1500), 'Town', 'First to 1,500 renown wins. From 25:00 the Moot makes landmarks pay double: take them back!'),
   ],
 };
 

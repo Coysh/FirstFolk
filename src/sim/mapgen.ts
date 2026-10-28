@@ -34,15 +34,17 @@ export interface MapData {
  * Discoveries per start, by distance: one just past the first border to pull the player
  * outwards, then a trail of richer prizes across the valley. Mirrored for the rival start.
  */
-const SITE_RINGS: { kind: DiscoveryKind; d: number }[] = [
-  { kind: 'cart', d: 15 },
-  { kind: 'ruins', d: 20 },
-  { kind: 'grove', d: 23 },
-  { kind: 'wanderers', d: 28 },
-  { kind: 'oakwood', d: 31 },
-  { kind: 'stones', d: 36 },
-  { kind: 'outcrop', d: 40 },
-  { kind: 'ruins', d: 46 },
+const SITE_RINGS: { kinds: DiscoveryKind[]; d: number }[] = [
+  // Each ring draws its kind from a small pool, so every valley holds different surprises
+  // (both starts always get the same draw: the race stays fair).
+  { kinds: ['cart', 'cart', 'hoard'], d: 15 },
+  { kinds: ['ruins', 'barrow', 'hermit'], d: 20 },
+  { kinds: ['grove', 'shrine'], d: 23 },
+  { kinds: ['wanderers', 'hermit', 'hoard'], d: 28 },
+  { kinds: ['oakwood', 'spring'], d: 31 },
+  { kinds: ['stones', 'shrine'], d: 36 },
+  { kinds: ['outcrop', 'oakwood'], d: 40 },
+  { kinds: ['ruins', 'barrow', 'hoard'], d: 46 },
 ];
 /** Prize sites paint their own terrain and resources. */
 const PRIZE: Partial<Record<DiscoveryKind, { terrain: TerrainId; node: NodeKind; r: number; density: number; max: number }>> = {
@@ -236,7 +238,8 @@ function placeSites(N: number, starts: { x: number; y: number }[], terrain: Uint
     [-100, 0], [-92, -38], [-71, -71], [-38, -92], [0, -100], [38, -92], [71, -71], [92, -38],
   ];
   const s0 = starts[0];
-  for (const ring of SITE_RINGS) {
+  for (const { kinds, d: dist } of SITE_RINGS) {
+    const ring = { kind: kinds[rng.int(kinds.length)], d: dist };
     for (let tries = 0; tries < 48; tries++) {
       const [dx, dy] = DIRS[rng.int(DIRS.length)];
       const d = ring.d + rng.range(-2, 2);
@@ -252,7 +255,8 @@ function placeSites(N: number, starts: { x: number; y: number }[], terrain: Uint
   }
   // Two rich prizes in the heart of the valley, equidistant from both starts: the race's hotspot.
   const mid = { x: Math.round((starts[0].x + starts[1].x) / 2), y: Math.round((starts[0].y + starts[1].y) / 2) };
-  for (const [kind, dx, dy] of [['outcrop', -7, 9], ['stones', 7, -9]] as const) {
+  const heart: [DiscoveryKind, number, number][] = [[rng.int(2) ? 'outcrop' : 'spring', -7, 9], ['stones', 7, -9]];
+  for (const [kind, dx, dy] of heart) {
     const p = nearestOk(mid.x + dx, mid.y + dy, (x, y) => ok(x, y) || (x === mid.x + dx && y === mid.y + dy && terrain[y * N + x] !== Terrain.Water));
     if (p) sites.push({ kind, ...p });
   }

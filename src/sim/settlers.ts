@@ -5,7 +5,8 @@ import { TRADES, tierOf, tradeTitle, unlocksFor } from './trades';
 import { offerBoon } from './boons';
 import { Terrain } from './mapgen';
 import { onBuildingComplete } from './territory';
-import type { Building, ResourceNode, Settler, World } from './world';
+import { berryRegrow, type Building, type ResourceNode, type Settler, type World } from './world';
+import { hasOmen } from './omens';
 
 export const cheb = (ax: number, ay: number, bx: number, by: number) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
@@ -345,7 +346,7 @@ function thinkBuild(world: World, s: Settler, job: Extract<Settler['job'], { kin
   const fam = world.families.get(s.familyId);
   let rate = world.players[s.owner].hungry && !fam?.mods.hardy ? Math.floor(BALANCE.buildRate * 0.6) : BALANCE.buildRate;
   rate = Math.floor((rate * (100 + (fam?.mods.build ?? 0))) / 100);
-  if (world.winterBites(s.owner)) rate = Math.max(1, Math.floor((rate * BALANCE.winterBuildPct) / 100));
+  if (world.winterBites(s.owner)) rate = Math.max(1, Math.floor((rate * (hasOmen(world, 'longWinters') ? 50 : BALANCE.winterBuildPct)) / 100));
   site.work = Math.min(site.workNeeded, site.work + rate);
   if (site.work >= site.workNeeded) {
     site.done = true;
@@ -633,6 +634,6 @@ function harvest(world: World, node: ResourceNode): void {
     world.emit({ type: 'rockMined', x: node.x, y: node.y, depleted });
     if (depleted) world.removeNode(node);
   } else if (node.regrow <= 0) {
-    node.regrow = node.kind === 'fish' ? BALANCE.fishRegrowTicks : BALANCE.berryRegrowTicks;
+    node.regrow = node.kind === 'fish' ? BALANCE.fishRegrowTicks : berryRegrow(world);
   }
 }

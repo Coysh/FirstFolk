@@ -432,6 +432,46 @@ export function discoveryGeometry(kind: DiscoveryKind): THREE.BufferGeometry {
       }
       b.add(box(0.5, 0.12, 0.3), C.stone, { pos: [0, 0.06, 0] });
       break;
+    case 'barrow':
+      // A long grassy mound with a dark stone doorway and a capstone.
+      b.add(sphere(0.9, 9, 6), C.moss, { pos: [0, -0.15, -0.1], scale: [1.2, 0.55, 0.9] });
+      for (const x of [-0.18, 0.18]) b.add(box(0.12, 0.42, 0.14), C.stone, { pos: [x, 0.21, 0.62] });
+      b.add(box(0.5, 0.1, 0.18), C.stoneDark, { pos: [0, 0.45, 0.62] });
+      b.add(box(0.24, 0.32, 0.04), 0x1d140c, { pos: [0, 0.16, 0.66] });
+      break;
+    case 'hermit':
+      // A tiny turf-roofed hut with a crooked chimney and a herb patch.
+      b.add(box(0.6, 0.38, 0.5), C.wattle, { pos: [0, 0.19, 0] });
+      b.add(gableRoof(0.66, 0.74, 0.36), C.moss, { pos: [0, 0.38, 0] });
+      b.add(box(0.1, 0.32, 0.1), C.stoneDark, { pos: [0.22, 0.6, -0.1], rot: [0, 0, 0.12] });
+      b.add(box(0.16, 0.26, 0.04), C.door, { pos: [-0.1, 0.13, 0.26] });
+      for (const x of [0.3, 0.42, 0.54]) b.add(ico(0.06, 0), C.leafLight, { pos: [x, 0.06, 0.4] });
+      break;
+    case 'hoard':
+      // A half-buried chest spilling silver, with a spade left in the earth.
+      b.add(box(0.5, 0.3, 0.34), C.darkTimber, { pos: [0, 0.12, 0], rot: [0, 0.4, 0.1] });
+      b.add(box(0.52, 0.06, 0.36), C.iron, { pos: [0, 0.3, 0], rot: [0, 0.4, 0.1] });
+      for (const [x, z] of [[0.3, 0.25], [0.38, 0.12], [0.22, 0.34], [-0.3, 0.3]] as const) b.add(cyl(0.06, 0.06, 0.02, 8), 0xe8e4d8, { pos: [x, 0.02, z] });
+      b.add(box(0.05, 0.6, 0.05), C.wood, { pos: [-0.35, 0.3, -0.2], rot: [0.2, 0, -0.3] });
+      b.add(box(0.16, 0.2, 0.03), C.iron, { pos: [-0.27, 0.05, -0.17], rot: [0.2, 0, -0.3] });
+      break;
+    case 'spring':
+      // A clear pool ringed with mossy stones, steam rising.
+      b.add(cyl(0.55, 0.6, 0.06, 12), 0x5fb0c9, { pos: [0, 0.03, 0] });
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        b.add(dodeca(0.12), i % 3 ? C.stone : C.moss, { pos: [Math.cos(a) * 0.62, 0.06, Math.sin(a) * 0.62] });
+      }
+      for (const [x, z, h] of [[-0.1, 0.05, 0.5], [0.12, -0.1, 0.65]] as const) b.add(sphere(0.09), 0xf4f1ea, { pos: [x, h, z], scale: [1, 1.4, 1] });
+      break;
+    case 'shrine':
+      // A carved wooden shrine: two posts, a little roof, an offering stone with a candle.
+      for (const x of [-0.3, 0.3]) b.add(cyl(0.05, 0.06, 0.9, 6), C.darkTimber, { pos: [x, 0.45, 0] });
+      b.add(gableRoof(0.4, 0.86, 0.26), C.thatchDark, { pos: [0, 0.9, 0] });
+      b.add(box(0.36, 0.2, 0.24), C.stone, { pos: [0, 0.1, 0] });
+      b.add(cyl(0.03, 0.03, 0.1, 6), 0xf4ead0, { pos: [0, 0.25, 0] });
+      b.add(cone(0.025, 0.06, 5), C.ember, { pos: [0, 0.33, 0] });
+      break;
     default:
       // Resource prizes get a carved waymarker post.
       b.add(cyl(0.06, 0.07, 0.9, 6), C.timber, { pos: [0, 0.45, 0] });

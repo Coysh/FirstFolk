@@ -1,10 +1,11 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, DISCOVERIES, GOODS, SKILLS, type Good } from './defs';
 import { spawnFamily } from './population';
-import { addRenown } from './renown';
+import { addRenown, mootUnderway } from './renown';
 import { greatWorkDone } from './works';
 import { grantXp } from './settlers';
 import { TIER_XP } from './trades';
+import { offerBoon } from './boons';
 import type { Building, Discovery, World } from './world';
 
 /**
@@ -263,8 +264,12 @@ export function updateHoldings(world: World): void {
       site.heldBy = owner;
       world.emit({ type: 'holdingChanged', siteId: site.id, kind: site.kind, owner, from });
       if (from !== NO_OWNER) {
-        world.players[owner].taken++;
-        addRenown(world, owner, BALANCE.renown.seized, 'landmarks', site.x, site.y);
+        // Taking a landmark is worth more the further behind you are, and double at the Moot.
+        const taker = world.players[owner];
+        const behind = Math.max(0, (world.players[from]?.renown ?? 0) - taker.renown);
+        const prize = (BALANCE.renown.seized + Math.min(BALANCE.renown.seizedMax, Math.floor(behind / 8))) * (mootUnderway(world) ? 2 : 1);
+        taker.taken++;
+        addRenown(world, owner, prize, 'landmarks', site.x, site.y);
       }
     }
   }
@@ -294,11 +299,52 @@ function claimReward(world: World, site: Discovery, owner: number): string {
       const fam = spawnFamily(world, world.players[owner], null, site.x, site.y, 4, BALANCE.wandererSkill);
       return `The ${fam.surname} family join you, skilled Journeymen. Build them a hut!`;
     }
+    case 'barrow': {
+      // The ancient's craft: whichever your folk know best, so the legend pays off at once.
+      const skill = SKILLS.reduce((a, k) => (bestXp(world, owner, k) > bestXp(world, owner, a) ? k : a), SKILLS[0]);
+      world.players[owner].legends.push({ name: 'The Ancient', surname: '', skill, tick: world.tick });
+      addRenown(world, owner, BALANCE.renown.legend, 'legends', site.x, site.y);
+      return `An ancient Master’s legend is yours: ${skill} is faster for everyone`;
+    }
+    case 'hermit': {
+      const fam = largestFamily(world, owner);
+      const home = fam && world.buildings.get(fam.homeId);
+      if (!fam) return 'The hermit wanders off.';
+      const skill = SKILLS[world.rng.int(SKILLS.length)];
+      const e = home ? world.entrance(home) : { x: site.x, y: site.y };
+      const s = world.addSettler(owner, fam.id, world.randomName(), BALANCE.elderYears + 0.1, e.x, e.y);
+      s.elder = true;
+      s.skills[skill] = TIER_XP[2];
+      fam.skills[skill] = Math.max(fam.skills[skill], TIER_XP[1]);
+      return `${s.name}, a Master of ${skill}, comes to live with the ${fam.surname} family and teach them`;
+    }
+    case 'hoard': {
+      const store = nearestStore(world, owner, site.x, site.y);
+      if (store) {
+        store.stock.planks += 10;
+        store.stock.stone += 10;
+      }
+      addRenown(world, owner, BALANCE.renown.hoard, 'discoveries', site.x, site.y);
+      return `Silver and treasures: +${BALANCE.renown.hoard} renown, +10 planks and +10 stone`;
+    }
+    case 'shrine': {
+      const fam = largestFamily(world, owner);
+      if (fam) offerBoon(world, fam, 'Blessed at the Forest Shrine');
+      return `A landmark: +${DISCOVERIES.shrine.renown} renown a minute while you hold it, and the ${fam?.surname ?? ''} family is blessed`;
+    }
     case 'stones':
       return `The land around the stones follows you now. +${DISCOVERIES.stones.renown} renown a minute while you hold them`;
     default:
       return DISCOVERIES[site.kind].renown ? `A landmark: +${DISCOVERIES[site.kind].renown} renown a minute while you hold it` : DISCOVERIES[site.kind].blurb;
   }
+}
+
+function largestFamily(world: World, owner: number) {
+  const counts = new Map<number, number>();
+  for (const s of world.settlers.values()) if (s.owner === owner) counts.set(s.familyId, (counts.get(s.familyId) ?? 0) + 1);
+  let best = 0;
+  for (const [id, n] of counts) if (n > (counts.get(best) ?? 0) || (n === counts.get(best) && id < best)) best = id;
+  return world.families.get(best);
 }
 
 function bestXp(world: World, owner: number, skill: (typeof SKILLS)[number]): number {

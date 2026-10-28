@@ -70,3 +70,35 @@ function readSummary(): SaveSummary | null {
 }
 
 export const saveSummary = signal<SaveSummary | null>(readSummary());
+
+/** Today's Daily Valley: the same seed and omens for everyone, and your best result. */
+const DAILY_KEY = 'firstfolk.daily.v1';
+
+export interface DailyResult {
+  date: string;
+  won: boolean;
+  renown: number;
+  /** Seconds of game time to the result. */
+  time: number;
+}
+
+export function todayKey(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export const dailySeed = (date: string) => Number(date.replace(/-/g, '')) % 900000 + 100000;
+
+export const dailyBest = signal<DailyResult | null>(read<DailyResult>(DAILY_KEY));
+
+/** Keep the better of today's results: a win beats a loss, then higher renown, then faster. */
+export function recordDaily(r: DailyResult): void {
+  const prev = dailyBest.value;
+  const better = !prev || prev.date !== r.date || (r.won && !prev.won) || (r.won === prev.won && (r.renown > prev.renown || (r.renown === prev.renown && r.time < prev.time)));
+  if (!better) return;
+  dailyBest.value = r;
+  try {
+    localStorage.setItem(DAILY_KEY, JSON.stringify(r));
+  } catch {
+    /* storage unavailable */
+  }
+}

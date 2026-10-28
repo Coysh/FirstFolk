@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 import { audio } from '../audio/audio';
 import { DIFFICULTY_INFO, type Difficulty } from '../sim/rules';
-import { saveSettings, saveSummary, settings, type Quality } from '../settings';
+import { dailyBest, dailySeed, saveSettings, saveSummary, settings, todayKey, type Quality } from '../settings';
+import { ORIGINS, ORIGIN_IDS, type OriginId } from '../sim/origins';
+import { OMENS, rollOmens } from '../sim/omens';
 import type { Shell } from '../shell';
 import { formatTime } from './describe';
 import { Hud } from './Hud';
@@ -19,7 +21,7 @@ export function Root({ shell }: { shell: Shell }) {
   );
 }
 
-type Panel = null | 'new' | 'settings' | 'howto';
+type Panel = null | 'new' | 'daily' | 'settings' | 'howto';
 
 function Title({ shell }: { shell: Shell }) {
   const [panel, setPanel] = useState<Panel>(null);
@@ -50,6 +52,13 @@ function Title({ shell }: { shell: Shell }) {
             <span class="pl-title">New Game</span>
             <span class="pl-sub">A fresh valley awaits</span>
           </button>
+          <button class="plaque daily" onClick={() => open('daily')}>
+            <span class="pl-title">Daily Valley</span>
+            <span class="pl-sub">
+              {OmensLine(dailySeed(todayKey()))}
+              {dailyBest.value?.date === todayKey() && ` · today’s best: ${dailyBest.value.won ? 'won' : 'lost'}, ${dailyBest.value.renown}★`}
+            </span>
+          </button>
           <button class="plaque" onClick={() => open('howto')}>
             <span class="pl-title">How to Play</span>
           </button>
@@ -61,6 +70,7 @@ function Title({ shell }: { shell: Shell }) {
       </div>
       <footer class="title-foot">v{__APP_VERSION__} · Early build · Low-poly world rendered live with Three.js</footer>
       {panel === 'new' && <NewGame shell={shell} onClose={() => setPanel(null)} />}
+      {panel === 'daily' && <NewGame shell={shell} onClose={() => setPanel(null)} daily />}
       {panel === 'settings' && <SettingsPanel onClose={() => setPanel(null)} />}
       {panel === 'howto' && <HowTo onClose={() => setPanel(null)} />}
     </div>
@@ -96,46 +106,85 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
 
 const randomSeed = () => Math.floor(Math.random() * 899999) + 100000;
 
-function NewGame({ shell, onClose }: { shell: Shell; onClose: () => void }) {
+/** The valley's two omens, as a short line. */
+function OmensLine(seed: number): string {
+  return rollOmens(seed)
+    .map((o) => `${OMENS[o].icon} ${OMENS[o].name}`)
+    .join(' · ');
+}
+
+/**
+ * New Game, and the Daily Valley (today's fixed seed and omens, Normal, against the rival).
+ * The opener (origin) is chosen before the clock starts.
+ */
+function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void; daily?: boolean }) {
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-  const [seed, setSeed] = useState(String(randomSeed()));
+  const [seed, setSeed] = useState(String(daily ? dailySeed(todayKey()) : randomSeed()));
   const [rival, setRival] = useState(true);
-  const start = () => void shell.newGame(Number(seed.replace(/\D/g, '')) || randomSeed(), difficulty, rival);
+  const [origin, setOrigin] = useState<OriginId>('woodfolk');
+  const seedNum = Number(seed.replace(/\D/g, '')) || 0;
+  const start = () =>
+    daily ? void shell.newGame(dailySeed(todayKey()), 'normal', true, origin, `daily-${todayKey()}`) : void shell.newGame(seedNum || randomSeed(), difficulty, rival, origin);
   return (
-    <Modal title="New Game" onClose={onClose}>
-      <p class="muted">Your family arrives with a wagon of supplies in an unexplored valley.</p>
-      <div class="field-label">Difficulty</div>
-      <div class="choices">
-        {(Object.keys(DIFFICULTY_INFO) as Difficulty[]).map((d) => (
-          <button key={d} class={`choice ${difficulty === d ? 'on' : ''}`} onClick={() => setDifficulty(d)} aria-pressed={difficulty === d}>
-            <strong>{DIFFICULTY_INFO[d].name}</strong>
-            <span>{DIFFICULTY_INFO[d].blurb}</span>
+    <Modal title={daily ? `Daily Valley · ${todayKey()}` : 'New Game'} onClose={onClose} wide>
+      <p class="muted">{daily ? 'Everyone gets the same valley today. Win it, then beat your own renown.' : 'Your family arrives with a wagon of supplies in an unexplored valley.'}</p>
+      <div class="field-label">Your founding house</div>
+      <div class="choices origins">
+        {ORIGIN_IDS.map((id) => (
+          <button key={id} class={`choice origin ${origin === id ? 'on' : ''}`} onClick={() => setOrigin(id)} aria-pressed={origin === id}>
+            <strong>
+              <span class="or-icon">{ORIGINS[id].icon}</span> {ORIGINS[id].name}
+            </strong>
+            <span>{ORIGINS[id].blurb}</span>
           </button>
         ))}
       </div>
-      <div class="field-label">Rival</div>
-      <div class="choices">
-        <button class={`choice ${rival ? 'on' : ''}`} onClick={() => setRival(true)} aria-pressed={rival}>
-          <strong>Race a rival</strong>
-          <span>Another settlement across the valley races you for its prizes. First to renown wins.</span>
-        </button>
-        <button class={`choice ${!rival ? 'on' : ''}`} onClick={() => setRival(false)} aria-pressed={!rival}>
-          <strong>Peaceful</strong>
-          <span>The valley is yours alone. Build and explore at your own pace.</span>
-        </button>
-      </div>
-      <label class="field-label" for="seed">
-        Valley seed
-      </label>
-      <div class="seed-row">
-        <input id="seed" inputMode="numeric" value={seed} onInput={(e) => setSeed((e.target as HTMLInputElement).value)} onKeyDown={(e) => e.key === 'Enter' && start()} />
-        <button onClick={() => setSeed(String(randomSeed()))} title="Random valley" aria-label="Random seed">
-          🎲
-        </button>
-      </div>
+      {seedNum > 0 && (
+        <div class="omens">
+          <span class="field-label">This valley’s omens</span>
+          {rollOmens(daily ? dailySeed(todayKey()) : seedNum).map((o) => (
+            <span class="omen" key={o} title={OMENS[o].blurb}>
+              {OMENS[o].icon} <b>{OMENS[o].name}</b> <small>{OMENS[o].blurb}</small>
+            </span>
+          ))}
+        </div>
+      )}
+      {!daily && (
+        <>
+          <div class="field-label">Difficulty</div>
+          <div class="choices">
+            {(Object.keys(DIFFICULTY_INFO) as Difficulty[]).map((d) => (
+              <button key={d} class={`choice ${difficulty === d ? 'on' : ''}`} onClick={() => setDifficulty(d)} aria-pressed={difficulty === d}>
+                <strong>{DIFFICULTY_INFO[d].name}</strong>
+                <span>{DIFFICULTY_INFO[d].blurb}</span>
+              </button>
+            ))}
+          </div>
+          <div class="field-label">Rival</div>
+          <div class="choices">
+            <button class={`choice ${rival ? 'on' : ''}`} onClick={() => setRival(true)} aria-pressed={rival}>
+              <strong>Race a rival</strong>
+              <span>Another settlement across the valley races you for renown. First to 1,500 wins.</span>
+            </button>
+            <button class={`choice ${!rival ? 'on' : ''}`} onClick={() => setRival(false)} aria-pressed={!rival}>
+              <strong>Peaceful</strong>
+              <span>The valley is yours alone. Build and explore at your own pace.</span>
+            </button>
+          </div>
+          <label class="field-label" for="seed">
+            Valley seed
+          </label>
+          <div class="seed-row">
+            <input id="seed" inputMode="numeric" value={seed} onInput={(e) => setSeed((e.target as HTMLInputElement).value)} onKeyDown={(e) => e.key === 'Enter' && start()} />
+            <button onClick={() => setSeed(String(randomSeed()))} title="Random valley" aria-label="Random seed">
+              🎲
+            </button>
+          </div>
+        </>
+      )}
       {saveSummary.value && <p class="warn-note">Starting a new game replaces your current save.</p>}
       <button class="primary big" onClick={start}>
-        Found your village
+        {daily ? 'Take on today’s valley' : 'Found your village'}
       </button>
     </Modal>
   );
@@ -177,7 +226,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 export function HowTo({ onClose }: { onClose: () => void }) {
   const steps = [
-    { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,200 renown wins, or the most renown when the clock reaches 45:00. Landmarks, land, discoveries, Masters, deeds, Great Works and Market Day all count.' },
+    { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,500 renown wins, or the most renown when the clock reaches 45:00. From 25:00 the Moot makes landmarks pay double. Landmarks, land, discoveries, Masters, deeds, Great Works and Market Day all count.' },
     { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Families with room and food have children; empty huts draw newcomers; young adults marry into new households.' },
     { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Influence decides the border: Lookouts and Watchtowers push it, and your rival can push back. Landmarks (groves, oakwoods, outcrops, standing stones) pay renown every minute you hold them.' },
     { icon: '/assets/icons/people.png', title: 'Raise great houses', text: 'Work makes Journeymen and Masters. Pick each family’s boons. Your four greatest houses each lend a Deed (Z X C V): Raise, Expeditions, Festivals and more.' },

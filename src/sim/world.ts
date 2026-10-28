@@ -15,7 +15,10 @@ import { NO_OWNER, onBuildingComplete, recomputeTerritory, updateExploration } f
 import { addRenown, updateRenown, type RenownSource } from './renown';
 import type { DeedId } from './deeds';
 import { updateMarket } from './market';
-import { offerBoon, updateOffers, type BoonId, type Mod } from './boons';
+import { addBoon, offerBoon, updateOffers, type BoonId, type Mod } from './boons';
+import { ORIGINS, rivalOrigin, type OriginId } from './origins';
+import { hasOmen, type OmenId } from './omens';
+import { unlocksFor } from './trades';
 import { isWinter, updateSeasons, type Season } from './seasons';
 import { updateValleyEvents } from './events';
 import { OpeningBot } from './ai/openingBot';
@@ -183,6 +186,7 @@ export type SimEvent =
   | { type: 'landLost'; owner: number; tiles: number }
   | { type: 'renown'; owner: number; amount: number; source: RenownSource; x: number; y: number }
   | { type: 'deed'; owner: number; familyId: number; surname: string; deed: DeedId; x: number; y: number; text: string }
+  | { type: 'moot' }
   | { type: 'sold'; owner: number; good: Good; n: number; renown: number }
   | { type: 'workBegun'; owner: number; buildingType: BuildingType }
   | { type: 'workLost'; owner: number; buildingType: BuildingType; winner: number }
@@ -227,6 +231,8 @@ export interface PlayerState {
   /** Market glut per good (percent) and goods sold, see market.ts. */
   glut: Stock;
   sold: number;
+  /** Founding origin ('' when the founders chose a boon instead). */
+  origin: OriginId | '';
   /** Deed effects running until a tick. */
   buffs: { timber: number; harvest: number };
   deedsUsed: number;
@@ -268,6 +274,12 @@ export interface WorldOptions {
   difficulty?: Difficulty;
   /** Skip initial setup (used when restoring a save). */
   blank?: boolean;
+  /** The player's founding origin (see origins.ts); without one, the founders choose a boon at 0:00. */
+  origin?: OriginId;
+  /** Rule twists for this valley (see omens.ts). */
+  omens?: OmenId[];
+  /** A tag for special games, e.g. 'daily-20261028'. */
+  label?: string;
 }
 
 export class World {
@@ -325,9 +337,13 @@ export class World {
   boxCache: { version: number; box: { x0: number; y0: number; x1: number; y1: number } }[] = [];
 
   readonly pathfinder: PathFinder;
+  readonly omens: OmenId[];
+  readonly label: string;
 
   constructor(opts: WorldOptions) {
     this.seed = opts.seed;
+    this.omens = opts.omens ?? [];
+    this.label = opts.label ?? '';
     this.scenario = typeof opts.scenario === 'string' ? SCENARIOS[opts.scenario] : (opts.scenario ?? SCENARIOS.landfall);
     this.difficulty = opts.difficulty ?? 'normal';
     this.rules = DIFFICULTY[this.difficulty];
@@ -341,9 +357,10 @@ export class World {
     this.pathfinder = new PathFinder(this.size, (i) => this.walkable(i));
 
     if (opts.blank) return;
-    for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y, 0, n.max);
+    const seams = hasOmen(this, 'richSeams') ? 2 : 1;
+    for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y, 0, n.kind === 'rock' ? (n.max ?? BALANCE.rockStone) * seams : n.max);
     for (const site of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER, heldBy: NO_OWNER });
-    this.setupPlayer(0, this.map.starts[0]);
+    this.setupPlayer(0, this.map.starts[0], opts.origin);
     if (this.scenario.rival) this.addRival();
   }
 
@@ -495,27 +512,40 @@ export class World {
     return s;
   }
 
-  private setupPlayer(owner: number, start: { x: number; y: number }): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0 };
+  private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId): void {
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, origin: originId ?? '' };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
     const fam = createFamily(this, owner, wagon.id);
     wagon.familyId = fam.id;
     const e = this.entrance(wagon);
-    // Founders: two adults and two children, the elder of whom comes of age within the first few minutes.
-    const ages = [2, 2.2, 1.0, 0.6];
+    const origin = originId ? ORIGINS[originId] : null;
+    // Founders: two adults and two children (more for Kinfolk), the elder of whom comes of age within the first few minutes.
+    const ages = [2, 2.2, 1.0, 0.6, 0.4, 0.2].slice(0, 4 + (origin?.children ?? 0));
     const folk = ages.map((age, i) => this.addSettler(owner, fam.id, this.randomName(), age, e.x + (i % 2) - 1 + (i > 1 ? 2 : 0), e.y + (i > 1 ? 1 : 0)));
     folk[0].spouseId = folk[1].id;
     folk[1].spouseId = folk[0].id;
-    // The very first choice: what kind of folk are the founders?
-    offerBoon(this, fam, 'The founders set out');
+    if (!origin) {
+      // The very first choice: what kind of folk are the founders?
+      offerBoon(this, fam, 'The founders set out');
+      return;
+    }
+    // An origin is that choice made before the clock starts: a craft, a boon (and its deed), supplies.
+    for (const g of GOODS) wagon.stock[g] += origin.stock[g] ?? 0;
+    for (const b of origin.boons) addBoon(fam, b);
+    if (origin.skill) {
+      for (const s of folk.slice(0, 2)) s.skills[origin.skill] = TIER_XP[1];
+      fam.skills[origin.skill] = TIER_XP[1];
+      for (const t of unlocksFor(origin.skill, 1)) this.players[owner].unlocked.push(t);
+    }
   }
 
   /** Player 1 at the mirrored start, played by the bot at a difficulty-set pace. */
   addRival(): void {
-    if (!this.players[1]) this.setupPlayer(1, this.map.starts[1]);
-    this.ais = [new OpeningBot(1, this.rules.rivalThink, this.tick)];
+    if (!this.players[1]) this.setupPlayer(1, this.map.starts[1], this.players[0]?.origin ? rivalOrigin(this.seed) : undefined);
+    const think = hasOmen(this, 'restless') ? Math.round((this.rules.rivalThink * 3) / 40) * 10 : this.rules.rivalThink;
+    this.ais = [new OpeningBot(1, think, this.tick)];
   }
 
   randomName(): string {
@@ -571,6 +601,11 @@ export class World {
 
   canAffordBuilding(owner: number, type: BuildingType): boolean {
     return Object.entries(this.buildCost(owner, type)).every(([g, n]) => this.stored(owner, g as Good) >= (n ?? 0));
+  }
+
+  /** Does this player hold a landmark of this kind right now? */
+  holds(owner: number, kind: DiscoveryKind): boolean {
+    return this.sites.some((s) => s.kind === kind && s.heldBy === owner);
   }
 
   /** Does this player own a finished Great Work of this type? */
@@ -669,7 +704,7 @@ export class World {
         s.elder = true;
         releaseJob(this, s);
         this.emit({ type: 'elder', owner: s.owner, settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
-      } else if (s.elder && s.age >= lifespan(s)) {
+      } else if (s.elder && s.age >= lifespan(s) + (this.holds(s.owner, 'spring') ? BALANCE.yearTicks : 0)) {
         this.die(s);
       } else if (s.elder && teach) {
         // Elders pass their best craft on to the family's working adults.
@@ -728,7 +763,7 @@ export class World {
         node.regrow -= 10;
         if (node.regrow <= 0) {
           node.amount++;
-          node.regrow = node.kind === 'fish' ? BALANCE.fishRegrowTicks : BALANCE.berryRegrowTicks;
+          node.regrow = node.kind === 'fish' ? BALANCE.fishRegrowTicks : berryRegrow(this);
           this.natureVersion++;
         }
       }
@@ -736,7 +771,10 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+
+/** Ticks for a berry to regrow (a Bountiful Valley halves it). */
+export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);
 
 export const comeOfAgeTicks = () => Math.round(BALANCE.comeOfAgeYears * BALANCE.yearTicks);
 

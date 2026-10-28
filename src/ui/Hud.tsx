@@ -18,7 +18,9 @@ import { DEED_KEYS, HOTKEYS } from '../input/input';
 import { lockLabel } from '../sim/commands';
 import { DEEDS, council, deedCost, deedOf, deedPower, deedWait, prestige } from '../sim/deeds';
 import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../sim/market';
-import { renownRate } from '../sim/renown';
+import { mootUnderway, renownRate } from '../sim/renown';
+import { OMENS } from '../sim/omens';
+import { ORIGINS } from '../sim/origins';
 import { workOwner } from '../sim/works';
 import { workSlots } from '../sim/settlers';
 
@@ -267,8 +269,18 @@ function RaceBar({ game }: { game: Game }) {
         <span>
           First to <b>{goal.toLocaleString('en-GB')}★</b> renown
         </span>
+        {mootUnderway(w) && <span class="race-moot" title="The Valley Moot: landmarks pay double">📯 Moot ×2</span>}
         {left <= secs(5 * 60) ? <span class="race-clock pulse">⏳ {formatTime(left)} left</span> : limit ? <span class="race-clock">ends {formatTime(limit)}</span> : null}
       </div>
+      {w.omens.length > 0 && (
+        <div class="race-omens">
+          {w.omens.map((o) => (
+            <span key={o} title={`${OMENS[o].name}: ${OMENS[o].blurb}`}>
+              {OMENS[o].icon} {OMENS[o].name}
+            </span>
+          ))}
+        </div>
+      )}
       {row(PLAYER, 'You')}
       {w.players[1] && row(1, 'Rival')}
     </section>
@@ -814,6 +826,12 @@ function Victory({ game }: { game: Game }) {
               {greatest && (
                 <li>
                   Greatest house: the {plural(greatest.surname)} ({familyTitle(greatest, 'folk')})
+                </li>
+              )}
+              {me.origin && (
+                <li>
+                  Founded by {ORIGINS[me.origin].name}
+                  {them?.origin ? `, against ${ORIGINS[them.origin].name}` : ''}
                 </li>
               )}
               <li>

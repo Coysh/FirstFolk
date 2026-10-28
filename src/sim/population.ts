@@ -2,6 +2,7 @@ import { BALANCE } from './balance';
 import { BUILDINGS, FOODS, SKILLS, type BuildingType, type Good, type Skill } from './defs';
 import { addBoon, drawBoons, offerBoon } from './boons';
 import { walkTo } from './settlers';
+import { hasOmen } from './omens';
 import { emptySkills, type Building, type Family, type PlayerState, type Settler, type World } from './world';
 
 export const SURNAMES = [
@@ -33,7 +34,7 @@ export function updatePopulation(world: World): void {
     let appetite = 0;
     for (const s of world.settlers.values()) if (s.owner === player.id) appetite += 100 - (world.families.get(s.familyId)?.mods.appetite ?? 0);
     // Winter cold: everyone eats a quarter more.
-    player.mealAccum += Math.floor((appetite * (world.winterBites(player.id) ? 100 + BALANCE.winterAppetitePct : 100)) / 10000);
+    player.mealAccum += Math.floor((appetite * (world.winterBites(player.id) ? 100 + BALANCE.winterAppetitePct * (hasOmen(world, 'longWinters') ? 2 : 1) : 100)) / 10000);
     while (player.mealAccum >= world.rules.mealInterval) {
       player.mealAccum -= world.rules.mealInterval;
       eat(world, player);
@@ -75,7 +76,7 @@ function checkBirths(world: World, player: PlayerState): void {
       const baby = world.addSettler(player.id, fam.id, world.randomName(), 0, e.x, e.y);
       world.emit({ type: 'born', owner: player.id, settlerId: baby.id, name: baby.name, surname: fam.surname });
     }
-    fam.birthCooldown = Math.round((BALANCE.birthInterval * (100 - (fam.mods.birth ?? 0))) / 100);
+    fam.birthCooldown = Math.round((BALANCE.birthInterval * (100 - (fam.mods.birth ?? 0)) * (hasOmen(world, 'fertile') ? 70 : 100)) / 10000);
   }
 }
 
@@ -220,7 +221,7 @@ export function spawnFamily(world: World, player: PlayerState, hut: Building | n
   // Every family arrives with a character of its own; wanderers' arrival is the player's pick.
   if (skillXp) offerBoon(world, fam, 'Wanderers join you');
   else for (const id of drawBoons(world, fam, 1)) addBoon(fam, id);
-  player.newcomerCooldown = BALANCE.newcomerCooldown;
+  player.newcomerCooldown = hasOmen(world, 'wanderersRoad') ? BALANCE.newcomerCooldown / 2 : BALANCE.newcomerCooldown;
   world.stats.arrivals.push(world.tick);
   world.emit({ type: 'familyApproaching', owner: player.id, familyId: fam.id, surname: fam.surname, size, skill: craft });
   return fam;

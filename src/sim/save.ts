@@ -1,11 +1,11 @@
 import { BUILDINGS, type NodeKind } from './defs';
-import { OpeningBot } from './ai/openingBot';
+import type { OmenId } from './omens';
 import type { Difficulty } from './rules';
 import type { ScenarioState } from './scenario';
 import { World, type Building, type Discovery, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
 
 /** Bump when the shape of saved state changes; older saves are refused rather than misread. */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 const KINDS: NodeKind[] = ['tree', 'rock', 'bush', 'fish'];
 
@@ -31,6 +31,8 @@ export interface SaveData {
   territory: number[];
   explored: number[];
   sites: Discovery[];
+  omens: OmenId[];
+  label: string;
 }
 
 function rle(a: ArrayLike<number>): number[] {
@@ -72,12 +74,14 @@ export function serializeWorld(w: World): SaveData {
     territory: rle(w.territory),
     explored: rle(w.explored),
     sites: clone(w.sites),
+    omens: [...w.omens],
+    label: w.label,
   };
 }
 
 export function deserializeWorld(d: SaveData): World {
   if (d.version !== SAVE_VERSION) throw new Error(`Save version ${d.version} is not compatible with this build (${SAVE_VERSION}).`);
-  const w = new World({ seed: d.seed, size: d.size, difficulty: d.difficulty, scenario: d.scenario, blank: true });
+  const w = new World({ seed: d.seed, size: d.size, difficulty: d.difficulty, scenario: d.scenario, blank: true, omens: d.omens, label: d.label });
   w.tick = d.tick;
   w.nextId = d.nextId;
   w.rng.setState(d.rng);
@@ -100,7 +104,7 @@ export function deserializeWorld(d: SaveData): World {
   unrle(d.territory, w.territory);
   unrle(d.explored, w.explored);
   w.sites = d.sites;
-  if (w.scenario.rival && w.players[1]) w.ais = [new OpeningBot(1, w.rules.rivalThink, w.tick)];
+  if (w.scenario.rival && w.players[1]) w.addRival();
   return w;
 }
 

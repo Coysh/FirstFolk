@@ -14,7 +14,9 @@ import { TRADES, tradeTitle } from './sim/trades';
 import type { SimEvent, World } from './sim/world';
 import type { Overlay } from './render/overlay';
 import type { GameRenderer } from './render/scene';
-import { writeSave } from './settings';
+import { recordDaily, writeSave } from './settings';
+import { ORIGINS, type OriginId } from './sim/origins';
+import { OMENS } from './sim/omens';
 
 export const PLAYER = 0;
 
@@ -88,7 +90,12 @@ export class Game {
     rig.yaw = fresh ? -0.9 : -0.4;
     rig.goalYaw = 0;
     rig.goalDistance = 21;
-    if (fresh) this.toast('/assets/icons/hut.png', 'Your family has arrived in the valley. Build a Woodcutter near the trees!', 'info');
+    if (fresh) {
+      this.toast('/assets/icons/hut.png', 'Your family has arrived in the valley. Build a Woodcutter near the trees!', 'info');
+      const rival = this.world.players[1];
+      if (rival?.origin) setTimeout(() => this.toast('/assets/icons/scroll.png', `Across the valley a rival house has settled: ${ORIGINS[rival.origin as OriginId].icon} ${ORIGINS[rival.origin as OriginId].name}.`, 'warn'), 2500);
+      if (this.world.omens.length) setTimeout(() => this.toast('/assets/icons/scroll.png', `Omens for this valley: ${this.world.omens.map((o) => `${OMENS[o].icon} ${OMENS[o].name}`).join(', ')}.`, 'info'), 5000);
+    }
     else this.toast('/assets/icons/scroll.png', 'Welcome back. Your folk carried on where you left them.', 'info');
   }
 
@@ -344,8 +351,14 @@ export class Game {
             setTimeout(() => (this.banner.value = null), 5200);
           } else this.toast('/assets/icons/people.png', `${e.name} ${e.surname} has died, aged ${e.age}. The family mourns.`, 'info');
           break;
+        case 'moot':
+          audio.play('tierUp');
+          this.banner.value = { title: '📯 The Valley Moot!', sub: 'Folk from all around gather for the final stretch: every landmark now pays double renown' };
+          setTimeout(() => (this.banner.value = null), 5200);
+          break;
         case 'victory':
           this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime };
+          if (this.world.label.startsWith('daily-')) recordDaily({ date: this.world.label.slice(6), won: e.winner === PLAYER, renown: this.world.players[PLAYER].renown, time: Math.floor(this.world.tick / 10) });
           this.save(false);
           break;
       }

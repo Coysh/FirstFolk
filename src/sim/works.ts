@@ -1,5 +1,6 @@
 import { BUILDINGS, GOODS, type BuildingType } from './defs';
 import { addRenown } from './renown';
+import { hasOmen } from './omens';
 import { demolish } from './commands';
 import type { Building, World } from './world';
 
@@ -17,7 +18,7 @@ export function workOwner(world: World, type: BuildingType): number {
 export function greatWorkDone(world: World, b: Building): void {
   const great = BUILDINGS[b.type].great;
   if (!great) return;
-  addRenown(world, b.owner, great.renown, 'works', b.x + 1, b.y + 1);
+  addRenown(world, b.owner, great.renown + (hasOmen(world, 'goldenAge') ? 50 : 0), 'works', b.x + 1, b.y + 1);
   for (const other of [...world.buildings.values()]) {
     if (other.type !== b.type || other.done || other.owner === b.owner) continue;
     // Half the delivered materials come home; the rest is lost with the abandoned site.
