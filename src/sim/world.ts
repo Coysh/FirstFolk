@@ -25,6 +25,7 @@ import { isWinter, updateSeasons, type Season } from './seasons';
 import { updateValleyEvents } from './events';
 import { OpeningBot } from './ai/openingBot';
 import { styleOf, type BotStyle } from './ai/styles';
+import { updateWarbands, type Warband } from './warfare';
 
 export type Stock = Record<Good, number>;
 export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 });
@@ -202,6 +203,9 @@ export type SimEvent =
   | { type: 'sold'; owner: number; good: Good; n: number; renown: number }
   | { type: 'workBegun'; owner: number; buildingType: BuildingType }
   | { type: 'workLost'; owner: number; buildingType: BuildingType; winner: number }
+  | { type: 'raidLaunched'; owner: number; defender: number; targetId: number; buildingType: BuildingType; x: number; y: number; strength: number; eta: number }
+  | { type: 'raidResolved'; owner: number; defender: number; won: boolean; buildingType: BuildingType; x: number; y: number; attack: number; defence: number; renown: number }
+  | { type: 'razed'; owner: number; id: number; buildingType: BuildingType; x: number; y: number }
   | { type: 'victory'; scenario: string; winner: number; byTime: boolean; acclaim?: boolean };
 
 export interface PlayerState {
@@ -258,6 +262,10 @@ export interface PlayerState {
   deedsUsed: number;
   /** How this settlement's bot plays when one runs it (the rival; see ai/styles.ts). */
   style: BotStyle;
+  /** Raids (see warfare.ts): when the huscarls can march again, raids won, raids driven off. */
+  raidReady: number;
+  raidsWon: number;
+  repelled: number;
 }
 
 export interface Legend {
@@ -358,6 +366,10 @@ export class World {
   challenge: { def: string; endsAt: number; start: number[] } | null = null;
   nextChallengeAt = BALANCE.firstChallenge;
   lastChallenge = '';
+  /** Raiding parties on the march (see warfare.ts). */
+  warbands: Warband[] = [];
+  /** Set while a raid burns a post, so landmarks it frees don't also pay the seizing prize. */
+  quietSeize = false;
   /** AI players (the rival), driven through Commands exactly like a human. */
   ais: OpeningBot[] = [];
   /** Bumps when buildings are added or removed (runtime only, for path caches). */
@@ -544,7 +556,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced' };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, raidsWon: 0, repelled: 0 };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -708,6 +720,7 @@ export class World {
       applyCommand(this, cmd);
     }
     this.pendingCommands.length = 0;
+    updateWarbands(this);
 
     updateSeasons(this);
     if (this.tick % 10 === 0) this.updateNature();
@@ -828,7 +841,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['challenge', 'challengeWon', 'starfall', 'moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'challenge', 'challengeWon', 'starfall', 'moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);

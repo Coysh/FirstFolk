@@ -7,7 +7,7 @@ export const FOODS: readonly Good[] = ['berries', 'fish'];
 
 export type NodeKind = 'tree' | 'rock' | 'bush' | 'fish';
 
-export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'stockade' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary';
+export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'stockade' | 'musterhall' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary';
 
 export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw' | 'spear';
 
@@ -214,7 +214,22 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     frontier: true,
     capped: true,
     garrison: 2,
+    // Its stone footing: harder to burn than a timber lookout.
+    defence: [0, 10],
     reveal: 20,
+  },
+  musterhall: {
+    type: 'musterhall',
+    name: 'Mustering Hall',
+    icon: '⚔️',
+    blurb: 'Where huscarls drill. Send them to raid a rival tower, outpost or stockade: if they are stronger than its defenders it burns, and its land is open again. At home they turn out to defend any post close by. Needs a Hamlet; raids begin at 10:00.',
+    cost: { planks: 8, logs: 10, stone: 6 },
+    buildTicks: secs(16),
+    size: 2,
+    buildable: true,
+    rank: 1,
+    garrison: 4,
+    reveal: 8,
   },
   stockade: {
     type: 'stockade',
@@ -337,7 +352,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
 };
 
-export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse', 'watchtower', 'stockade', 'longhouse', 'henge', 'meadhall', 'granary'];
+export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse', 'watchtower', 'stockade', 'musterhall', 'longhouse', 'henge', 'meadhall', 'granary'];
 
 export const GREAT_WORKS: BuildingType[] = ['henge', 'meadhall', 'granary'];
 

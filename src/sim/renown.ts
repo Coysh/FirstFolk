@@ -8,7 +8,7 @@ import { hasOmen } from './omens';
  * many ways to win: holding landmarks and land (a steady income that can be taken from you),
  * discoveries, Masters, family deeds and great works (one-off sums).
  */
-export type RenownSource = 'landmarks' | 'land' | 'discoveries' | 'masters' | 'goals' | 'events' | 'deeds' | 'legends' | 'works' | 'trade' | 'contests';
+export type RenownSource = 'landmarks' | 'land' | 'discoveries' | 'masters' | 'goals' | 'events' | 'deeds' | 'legends' | 'works' | 'trade' | 'contests' | 'raids' | 'defence';
 
 export function addRenown(world: World, owner: number, n: number, source: RenownSource, x = -1, y = -1): void {
   const p = world.players[owner];

@@ -1,3 +1,4 @@
+import { hallOf } from '../sim/warfare';
 import { BUILD_MENU } from '../sim/defs';
 import { council } from '../sim/deeds';
 import type { Game } from '../game';
@@ -168,6 +169,7 @@ export class Input {
     }
     else if (k === 'f') this.game.focusSelection();
     else if (k === 'm') toggleMute();
+    else if (k === 'r' && hallOf(this.game.world, 0)) this.game.startRaid();
     else if (DEED_KEYS.includes(k)) {
       const fam = council(this.game.world, 0)[DEED_KEYS.indexOf(k)];
       if (fam) this.game.useDeed(fam.id);

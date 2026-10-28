@@ -7,6 +7,7 @@ import { resolveEvent } from './events';
 import { tradeTitle } from './trades';
 import { performDeed } from './deeds';
 import { workOwner } from './works';
+import { launchRaid } from './warfare';
 import type { Building, World } from './world';
 
 /** Every player and AI action goes through a Command so games are replayable and the AI cannot cheat. */
@@ -18,7 +19,8 @@ export type Command =
   | { type: 'deed'; owner: number; familyId: number; x: number; y: number }
   | { type: 'sell'; owner: number; good: Good }
   | { type: 'setTrade'; owner: number; good: Good; keep: number | null }
-  | { type: 'setAutoHomes'; owner: number; on: boolean };
+  | { type: 'setAutoHomes'; owner: number; on: boolean }
+  | { type: 'raid'; owner: number; targetId: number };
 
 /** What a locked building is waiting for, e.g. "Hamlet" or "Journeyman Carpenter". */
 export function lockLabel(world: World, owner: number, type: BuildingType): string {
@@ -44,6 +46,7 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
     if (holder >= 0) return { ok: false, reason: holder === owner ? 'Already yours' : 'Your rival raised it first' };
     if (world.countBuildings(owner, type, true)) return { ok: false, reason: 'Already begun' };
   }
+  if (type === 'musterhall' && world.countBuildings(owner, type, true)) return { ok: false, reason: 'You have a Mustering Hall already' };
   if (def.capped && world.frontierCount(owner) >= world.frontierCap(owner))
     return { ok: false, reason: `Your folk can hold ${world.frontierCap(owner)} towers and stockades at this rank: rank up for more` };
   const size = def.size;
@@ -192,6 +195,9 @@ export function applyCommand(world: World, cmd: Command): void {
       return;
     case 'setAutoHomes':
       if (world.players[cmd.owner]) world.players[cmd.owner].autoHomes = cmd.on;
+      return;
+    case 'raid':
+      launchRaid(world, cmd.owner, cmd.targetId);
       return;
     case 'setTrade':
       setTrade(world, cmd.owner, cmd.good, cmd.keep);

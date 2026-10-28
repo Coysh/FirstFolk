@@ -2,7 +2,7 @@
  * The rival has a voice: their house's head sends word when the race turns, boasting,
  * grumbling or goading. Pure flavour (UI only), so it may pick lines at random.
  */
-export type RivalMoment = 'greet' | 'theyTook' | 'youTook' | 'theyWon' | 'youWon' | 'theirWork' | 'yourWork' | 'starfall' | 'moot' | 'theyLead' | 'youLead';
+export type RivalMoment = 'greet' | 'theyTook' | 'youTook' | 'theyWon' | 'youWon' | 'theirWork' | 'yourWork' | 'starfall' | 'moot' | 'theyLead' | 'youLead' | 'raid' | 'burned' | 'repelled';
 
 const LINES: Record<RivalMoment, string[]> = {
   greet: ['“The valley is wide, neighbour. Not wide enough for two great towns.”', '“Welcome to our valley. Do try to keep up.”'],
@@ -16,6 +16,9 @@ const LINES: Record<RivalMoment, string[]> = {
   moot: ['“The whole valley is watching now. Let them see who is greater.”', '“The Moot! Our bards have been practising your lament.”'],
   theyLead: ['“The bards sing of {house} this season. Your name? They forgot it.”'],
   youLead: ['“Renown is fickle, neighbour. The race is not over.”'],
+  raid: ['“Your {building} looks lonely. We are coming to keep it company.”', '“Hear that horn? It blows for your {building}.”', '“A tower with no spears is a bonfire waiting for a spark.”'],
+  burned: ['“You burned our {building}?! Our huscarls will remember this.”', '“Cowards, striking a tower by night. We will build it taller.”'],
+  repelled: ['“Lucky. Your guards will not be so lucky twice.”', '“A stout wall. We will find a weaker one.”'],
 };
 
 export function rivalLine(moment: RivalMoment, vars: Record<string, string>): string {

@@ -6,7 +6,9 @@ import { seasonOf } from './sim/seasons';
 import { canPlace } from './sim/commands';
 import { BUILDINGS, DISCOVERIES, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Tool } from './sim/defs';
 import { DEEDS, bestCraft, council, deedOf, deedPower, prestige, deedTargetProblem, outpostSpot, type DeedId } from './sim/deeds';
-import { previewInfluence } from './sim/territory';
+import { NO_OWNER, previewInfluence, previewRemoval } from './sim/territory';
+import { defenceOf, hallOf, huscarls, raidProblem, raidStrength } from './sim/warfare';
+import { ICON } from './render/overlay';
 import { serializeWorld } from './sim/save';
 import { BOONS } from './sim/boons';
 import { eventDef } from './sim/events';
@@ -24,7 +26,7 @@ import { rivalLine, type RivalMoment } from './ui/rivalVoice';
 
 export const PLAYER = 0;
 
-export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; familyId: number; deed: DeedId };
+export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; familyId: number; deed: DeedId } | { kind: 'raid' };
 export type Selection = { kind: 'building'; id: number } | { kind: 'settler'; id: number } | null;
 
 export interface Toast {
@@ -52,6 +54,18 @@ export interface GhostState {
 export interface ClaimPreview {
   gained: number;
   fromRival: number;
+  sites: string[];
+}
+
+/** What a raid on a rival post would face, and what burning it would free. */
+export interface RaidPreview {
+  targetId: number;
+  name: string;
+  problem: string;
+  attack: number;
+  defence: number;
+  /** Tiles the rival would lose, and landmarks that would slip from their grasp. */
+  lost: number;
   sites: string[];
 }
 
@@ -87,6 +101,7 @@ export class Game {
   /** The ledger letter being read (see Hud's Ledger), and whether the first one has opened itself. */
   readonly ledgerOpen = signal<string | null>(null);
   readonly deedPreview = signal<DeedPreview | null>(null);
+  readonly raidPreview = signal<RaidPreview | null>(null);
   ledgerTaught = false;
   /** The Market Day popover is open. */
   readonly marketOpen = signal(false);
@@ -454,6 +469,46 @@ export class Game {
           this.toast('/assets/icons/people.png', `${d.icon} ${d.name}! ${e.text}`, 'big');
           break;
         }
+        case 'raidLaunched': {
+          const name = BUILDINGS[e.buildingType].name;
+          if (e.defender === PLAYER) {
+            audio.stinger('warhorn');
+            this.tenseUntil = this.world.tick + 600;
+            const who = e.owner === NO_OWNER ? 'Reavers' : 'Raiders from your rival';
+            this.banner.value = { title: `⚔ ${who} march on your ${name}!`, sub: `${e.strength} strong, there in about ${e.eta}s. Guards, a stockade or your huscarls nearby can hold it.` };
+            setTimeout(() => (this.banner.value = null), 4200);
+            if (e.owner !== NO_OWNER) setTimeout(() => this.rivalVoice('raid', { building: name }), 2500);
+          } else if (e.owner === PLAYER) {
+            audio.play('click');
+            this.toast(ICON.shield, `Your huscarls march on the rival’s ${name} (${e.strength} strong, about ${e.eta}s away).`, 'info');
+          }
+          break;
+        }
+        case 'raidResolved': {
+          const name = BUILDINGS[e.buildingType].name;
+          if (e.owner === PLAYER) {
+            if (e.won) {
+              audio.stinger('clash');
+              this.toast(ICON.shield, `🔥 Your huscarls burned the rival’s ${name} (${e.attack} against ${e.defence}): +${e.renown} renown.`, 'big');
+              setTimeout(() => this.rivalVoice('burned', { building: name }), 2500);
+            } else {
+              audio.stinger('loss');
+              this.toast(ICON.shield, `Your huscarls were driven off from the ${name} (${e.attack} against ${e.defence}). They are coming home.`, 'warn');
+            }
+          } else if (e.defender === PLAYER) {
+            if (e.won) {
+              audio.stinger('loss');
+              this.tenseUntil = this.world.tick + 600;
+              this.banner.value = { title: `🔥 Your ${name} burns`, sub: `${e.attack} against your ${e.defence}. More guards, a stockade or a Mustering Hall nearby would have held it.` };
+              setTimeout(() => (this.banner.value = null), 4200);
+            } else {
+              audio.stinger('clash');
+              this.toast(ICON.shield, `🛡 Your ${name} held the line (${e.defence} against ${e.attack}): +${e.renown} renown.`, 'big');
+              if (e.owner !== NO_OWNER) setTimeout(() => this.rivalVoice('repelled', {}), 2500);
+            }
+          }
+          break;
+        }
         case 'sold':
           audio.play('deliver');
           this.news(`/assets/icons/${e.good}.png`, `Market Day: ${e.n} ${GOOD_INFO[e.good].name.toLowerCase()} sold for +${e.renown} renown`, 'good');
@@ -555,7 +610,10 @@ export class Game {
   }
 
   cancel(): void {
-    if (this.mode.value.kind === 'deed') {
+    if (this.mode.value.kind === 'raid') {
+      this.mode.value = { kind: 'select' };
+      this.raidPreview.value = null;
+    } else if (this.mode.value.kind === 'deed') {
       this.mode.value = { kind: 'select' };
       this.deedPreview.value = null;
       this.view.showTargetRing(null);
@@ -576,6 +634,10 @@ export class Game {
       this.updateDeedPreview(sx, sy);
       return;
     }
+    if (this.mode.value.kind === 'raid') {
+      this.updateRaidPreview(sx, sy);
+      return;
+    }
     const sid = this.view.settlerAt(sx, sy, 20);
     const bid = sid === null ? this.view.buildingAt(sx, sy) : null;
     this.hovered = sid !== null ? { kind: 'settler', id: sid } : bid !== null ? { kind: 'building', id: bid } : null;
@@ -591,6 +653,13 @@ export class Game {
       this.updateDeedPreview(sx, sy);
       this.touchPlacing.value = touch;
       if (!touch) this.confirmDeed();
+      return;
+    }
+    if (mode.kind === 'raid') {
+      this.raidPreview.value = null;
+      this.updateRaidPreview(sx, sy);
+      this.touchPlacing.value = touch;
+      if (!touch) this.confirmRaid();
       return;
     }
     if (mode.kind === 'place') {
@@ -650,6 +719,56 @@ export class Game {
     this.mode.value = { kind: 'deed', familyId, deed: id };
   }
 
+  /** Pick a rival post for the huscarls: the map waits for a tap on one. */
+  startRaid(): void {
+    audio.play('click');
+    const problem = raidProblem(this.world, PLAYER, -1);
+    if (problem && !problem.startsWith('Pick')) {
+      audio.play('warn');
+      this.toast(ICON.shield, problem, 'warn');
+      return;
+    }
+    this.selection.value = null;
+    this.raidPreview.value = null;
+    this.mode.value = { kind: 'raid' };
+  }
+
+  confirmRaid(): void {
+    const pv = this.raidPreview.value;
+    if (this.mode.value.kind !== 'raid' || !pv) return;
+    if (pv.problem) {
+      audio.play('warn');
+      this.toast(ICON.shield, pv.problem, 'warn');
+      return;
+    }
+    this.world.enqueue({ type: 'raid', owner: PLAYER, targetId: pv.targetId });
+    this.mode.value = { kind: 'select' };
+    this.raidPreview.value = null;
+  }
+
+  /** Hovering a rival post while choosing a raid: the odds, and what it would free. */
+  private updateRaidPreview(sx: number, sy: number): void {
+    const id = this.view.buildingAt(sx, sy);
+    const b = id === null ? undefined : this.world.buildings.get(id);
+    if (!b) {
+      this.raidPreview.value = null;
+      return;
+    }
+    if (this.raidPreview.value?.targetId === b.id) return;
+    const problem = raidProblem(this.world, PLAYER, b.id);
+    const attack = raidStrength(this.world, PLAYER, huscarls(this.world, hallOf(this.world, PLAYER)));
+    const pv = problem ? null : previewRemoval(this.world, b.id, PLAYER);
+    this.raidPreview.value = {
+      targetId: b.id,
+      name: BUILDINGS[b.type].name,
+      problem,
+      attack,
+      defence: defenceOf(this.world, b),
+      lost: pv?.lost ?? 0,
+      sites: pv?.sites.map((s) => `${DISCOVERIES[s.kind].icon} ${DISCOVERIES[s.kind].name}`) ?? [],
+    };
+  }
+
   setAutoHomes(on: boolean): void {
     audio.play('click');
     this.world.enqueue({ type: 'setAutoHomes', owner: PLAYER, on });
@@ -687,6 +806,10 @@ export class Game {
   focusSite(id: number): void {
     const p = this.view.sites.position(this.world, id);
     if (p) this.view.rig.lookAt(p.x, p.z);
+  }
+
+  lookAt(x: number, y: number): void {
+    this.view.rig.lookAt(x + 0.5, y + 0.5);
   }
 
   focusBuilding(id: number): void {
@@ -789,7 +912,7 @@ export class Game {
 }
 
 /** Rival news the player hears about. */
-const RIVAL_NEWS = new Set<SimEvent['type']>(['claimed', 'rankUp', 'deed', 'workBegun']);
+const RIVAL_NEWS = new Set<SimEvent['type']>(['claimed', 'rankUp', 'deed', 'workBegun', 'raidLaunched', 'raidResolved', 'razed']);
 
 export function icon(type: BuildingType | string): string {
   return `/assets/icons/${type === 'wagon' ? 'hut' : type}.png`;

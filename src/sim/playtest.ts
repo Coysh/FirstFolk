@@ -51,6 +51,10 @@ export interface PlaytestReport {
   towers: number[];
   /** Each side's bot style. */
   styles: string[];
+  /** Raids launched and won by [player, rival], raids each side drove off. */
+  raids: number[];
+  raidsWon: number[];
+  repelled: number[];
   timeline: string[];
 }
 
@@ -77,6 +81,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const bot = new OpeningBot(0, opts.think ?? 100, 0, opts.style);
   world.players[0].style = bot.style;
   const towers = [0, 0];
+  const raids = [0, 0];
   const renownByMinute: [number, number][] = [];
   const stockAt: number[] = [];
   let holdingFlips = 0;
@@ -98,6 +103,9 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
       if (e.type === 'buildingComplete' && BUILDINGS[e.buildingType].capped) towers[e.owner]++;
+      if (e.type === 'raidLaunched' && e.owner >= 0) raids[e.owner]++;
+      if (e.type === 'raidLaunched') timeline.push(`${t} ⚔ ${e.owner === 0 ? 'you raid' : e.owner === 1 ? 'RIVAL raids' : 'REAVERS march on'} ${e.defender === 0 ? 'your' : 'their'} ${e.buildingType} (${e.strength})`);
+      if (e.type === 'raidResolved') timeline.push(`${t}    ${e.won ? '🔥 burned' : '🛡 held'}: ${e.attack} vs ${e.defence}`);
       if ('owner' in e && e.owner !== 0 && !['claimed', 'rankUp', 'deed', 'workBegun'].includes(e.type) && !(e.type === 'holdingChanged' && e.from === 0)) continue;
       if (e.type === 'buildingComplete') timeline.push(`${t} built ${e.buildingType}`);
       else if (e.type === 'familyApproaching') timeline.push(`${t} the ${e.surname} family (${e.size}) arrives`);
@@ -202,6 +210,9 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     populationByMinute,
     towers,
     styles: world.players.map((p) => p.style),
+    raids,
+    raidsWon: world.players.map((p) => p.raidsWon),
+    repelled: world.players.map((p) => p.repelled),
     timeline,
   };
 }

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE, secs } from '../src/sim/balance';
-import { BUILDINGS } from '../src/sim/defs';
+import { BUILDINGS, DISCOVERIES } from '../src/sim/defs';
 import { canPlace } from '../src/sim/commands';
-import { previewInfluence, recomputeTerritory } from '../src/sim/territory';
-import { defenceOf } from '../src/sim/warfare';
+import { previewInfluence, recomputeTerritory, updateHoldings } from '../src/sim/territory';
+import { defenceOf, raidProblem, raidStrength } from '../src/sim/warfare';
+import { World } from '../src/sim/world';
+import { hashWorld } from '../src/sim/hash';
+import { deserializeWorld, serializeWorld } from '../src/sim/save';
 import { newWorld, wagon } from './helpers';
 
 const tiles = (w: ReturnType<typeof newWorld>, o: number) => w.territory.reduce((n, t) => n + (t === o ? 1 : 0), 0);
@@ -59,5 +62,99 @@ describe('garrisons: every banner needs a spear', () => {
     for (let i = w.frontierCount(0); i < w.frontierCap(0); i++) w.addBuilding('lookout', 0, home.x - 8, home.y - 8 + i * 3, true);
     const site = { x: home.x + 3, y: home.y - 5 };
     expect(canPlace(w, 0, 'stockade', site.x, site.y).reason ?? '').toMatch(/hold/);
+  });
+});
+
+describe('raids', () => {
+  /** A duel world past 10:00 with our Mustering Hall manned by n huscarls and a rival post in sight. */
+  function setup(n: number, rivalType: 'lookout' | 'stockade' = 'lookout') {
+    const w = new World({ seed: 2 });
+    w.tick = BALANCE.raidsFrom;
+    const home = wagon(w);
+    const hall = w.addBuilding('musterhall', 0, home.x + 3, home.y - 4, true);
+    const adults = [...w.settlers.values()].filter((s) => s.owner === 0).slice(0, n);
+    for (const s of adults) {
+      s.child = false;
+      s.job = { kind: 'guard', buildingId: hall.id, phase: 'watch' };
+      s.x = hall.x;
+      s.y = hall.y + 2;
+    }
+    const target = w.addBuilding(rivalType, 1, home.x + 16, home.y + 1, true);
+    for (let i = 0; i < w.explored.length; i++) w.explored[i] |= 1;
+    w.ais = [];
+    return { w, hall, target };
+  }
+  const march = (w: World) => {
+    for (let i = 0; i < secs(60) && w.warbands.some((b) => b.phase === 'march'); i++) w.step();
+  };
+
+  it('stronger huscarls burn an unguarded post and win spoils', () => {
+    const { w, target } = setup(3);
+    expect(raidProblem(w, 0, target.id)).toBe('');
+    w.enqueue({ type: 'raid', owner: 0, targetId: target.id });
+    w.step();
+    expect(w.warbands.length).toBe(1);
+    const events: string[] = [];
+    for (let i = 0; i < secs(60) && w.buildings.has(target.id); i++) {
+      w.step();
+      for (const e of w.drainEvents()) events.push(e.type);
+    }
+    expect(w.buildings.has(target.id)).toBe(false);
+    expect(events).toContain('razed');
+    expect(w.players[0].renownBy.raids ?? 0).toBeGreaterThan(0);
+    expect(w.players[0].raidsWon).toBe(1);
+    // They come home and stand at the hall again, and must rest before the next raid.
+    w.run(secs(60));
+    expect(w.warbands.length).toBe(0);
+    expect(raidProblem(w, 0, target.id)).not.toBe('');
+  });
+
+  it('a post that is stronger holds the line, and its defenders are honoured', () => {
+    const { w, target } = setup(2, 'stockade');
+    target.guarded = 3;
+    expect(defenceOf(w, target)).toBeGreaterThan(raidStrength(w, 0, 2));
+    w.enqueue({ type: 'raid', owner: 0, targetId: target.id });
+    w.step();
+    expect(w.warbands.length).toBe(1);
+    march(w);
+    expect(w.buildings.has(target.id)).toBe(true);
+    expect(w.players[1].repelled).toBe(1);
+    expect(w.players[1].renownBy.defence).toBe(BALANCE.repelRenown);
+  });
+
+  it('huscarls at home turn out for a post close to their Mustering Hall', () => {
+    const { w, target } = setup(2);
+    const before = defenceOf(w, target);
+    const theirHall = w.addBuilding('musterhall', 1, target.x + 3, target.y + 3, true);
+    const s = [...w.settlers.values()].find((x) => x.owner === 1)!;
+    s.job = { kind: 'guard', buildingId: theirHall.id, phase: 'watch' };
+    expect(defenceOf(w, target)).toBe(before + BALANCE.guardStrength);
+  });
+
+  it('a landmark freed by a raid changes hands without paying the seizing prize too', () => {
+    const { w, target } = setup(3);
+    w.quietSeize = true;
+    const site = w.sites.find((x) => DISCOVERIES[x.kind].renown)!;
+    site.heldBy = 1;
+    site.claimedBy = 1;
+    w.territory[w.idx(site.x, site.y)] = 0;
+    updateHoldings(w);
+    w.quietSeize = false;
+    expect(site.heldBy).toBe(0);
+    expect(w.players[0].renownBy.landmarks ?? 0).toBe(0);
+    void target;
+  });
+
+  it('a save in the middle of a march restores to the same game', () => {
+    const { w, target } = setup(3);
+    w.enqueue({ type: 'raid', owner: 0, targetId: target.id });
+    w.run(secs(4));
+    const back = deserializeWorld(JSON.parse(JSON.stringify(serializeWorld(w))));
+    back.ais = [];
+    expect(hashWorld(back)).toBe(hashWorld(w));
+    w.run(secs(40));
+    back.run(secs(40));
+    expect(hashWorld(back)).toBe(hashWorld(w));
+    expect(back.buildings.has(target.id)).toBe(w.buildings.has(target.id));
   });
 });

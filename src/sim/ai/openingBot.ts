@@ -10,6 +10,8 @@ import { BOON_TIMEOUT } from '../boons';
 import { isHome } from '../population';
 import { bestSite } from './placement';
 import { STYLES, type BotStyle } from './styles';
+import { defenceOf, hallOf, huscarls, raidProblem, raidStrength, raidable } from '../warfare';
+import { previewRemoval } from '../territory';
 
 type Idea = [boolean, BuildingType, { x: number; y: number }?, NodeKind?];
 
@@ -75,6 +77,7 @@ export class OpeningBot {
       }
     const target = this.frontierTarget(world);
     if (this.useDeed(world, target)) return;
+    if (this.raid(world)) return;
     if (this.trade(world)) return;
     const hungry = world.food(this.owner) < 12;
     const home: BuildingType = world.isUnlocked(this.owner, 'longhouse') && this.affordable(world, 'longhouse') ? 'longhouse' : 'hut';
@@ -89,6 +92,7 @@ export class OpeningBot {
     const towers = count('lookout') + (this.style === 'balanced' ? 0 : count('watchtower') + count('outpost'));
     const hold = this.landmarkToHold(world);
     const keep: Idea = [!!hold && st.stockades, 'stockade', hold ?? undefined];
+    const muster: Idea = [st.muster && count('musterhall') === 0 && pop >= 24, 'musterhall'];
     const push: Idea = [towerSites === 0 && (!!target || !!want || (!st.towersOnlyWithAim && towers < pop / st.towerPer)), tower, target ?? undefined, want];
 
     // Ordered ideas; the first one that is wanted, affordable and has a valid site is done.
@@ -100,11 +104,13 @@ export class OpeningBot {
       [world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0, 'watchtower', target ?? undefined],
       [world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0, 'storehouse'],
       ...(st.towersFirst ? [push, keep] : [keep]),
+      ...(st.raids === 2 ? [muster] : []),
       // The late game's race: always have one Great Work under way.
       [!!work, work ?? 'hut'],
       [hungry && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 10), 'fisher'],
       [hungry && count('forager') < Math.ceil(pop / 6), 'forager'],
       ...(st.towersFirst ? [] : [push]),
+      ...(st.raids === 2 ? [] : [muster]),
       [starving('woodcutter') && count('forester') < count('woodcutter') / 2, 'forester'],
       [count('woodcutter') < Math.ceil(pop / 7) && world.stored(this.owner, 'logs') < 80, 'woodcutter'],
       [emptyHuts === 0, 'hut'],
@@ -228,6 +234,28 @@ export class OpeningBot {
       if (world.territory[world.idx(x, y)] === this.owner) return Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) <= 12 ? { x, y } : null;
     }
     return null;
+  }
+
+  /** Send the huscarls against the rival post that is worth most and that they can beat. */
+  private raid(world: World): boolean {
+    const st = STYLES[this.style];
+    if (!st.raids) return false;
+    const hall = hallOf(world, this.owner);
+    const n = huscarls(world, hall);
+    if (!hall || n < 2) return false;
+    const attack = raidStrength(world, this.owner, n);
+    let best: { id: number; value: number } | null = null;
+    for (const b of world.buildings.values()) {
+      if (b.owner === this.owner || !raidable(b) || raidProblem(world, this.owner, b.id)) continue;
+      if (defenceOf(world, b) >= attack) continue;
+      const pv = previewRemoval(world, b.id, this.owner);
+      if (st.raids === 1 && !pv.sites.length && pv.gained < 25) continue;
+      const value = pv.sites.length * 40 + pv.gained / 8 + (b.guarded ? 10 : 0) - Math.max(Math.abs(b.x - hall.x), Math.abs(b.y - hall.y)) / 4;
+      if (!best || value > best.value) best = { id: b.id, value };
+    }
+    if (!best) return false;
+    world.enqueue({ type: 'raid', owner: this.owner, targetId: best.id });
+    return true;
   }
 
   /** A landmark we hold with the rival's land close by and no stockade guarding it yet. */

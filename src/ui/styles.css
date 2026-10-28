@@ -2365,3 +2365,67 @@ button.danger.armed {
   height: 16px;
   vertical-align: -3px;
 }
+
+/* Raids under way against you: a strip under the race bar. */
+.threats {
+  position: absolute;
+  bottom: 250px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 6;
+}
+.threat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-radius: 10px;
+  border: 2px solid #6b2f0f;
+  background: linear-gradient(#c0632b, #9a4a1c);
+  color: #fff6e0;
+  font-weight: 700;
+  text-align: left;
+  box-shadow: var(--shadow);
+  animation: threat-pulse 1.2s ease-in-out infinite;
+}
+.threat.holding {
+  background: linear-gradient(#5b7a3a, #3f5a26);
+  border-color: #2d4019;
+  animation: none;
+}
+.threat-icon {
+  font-size: 22px;
+}
+.threat-odds {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+@keyframes threat-pulse {
+  50% {
+    box-shadow: 0 0 0 4px rgba(255, 120, 60, 0.45), var(--shadow);
+  }
+}
+@media (max-width: 720px) {
+  .threats {
+    bottom: 262px;
+    width: calc(100vw - 32px);
+  }
+  .threat {
+    font-size: 13px;
+  }
+}
+.pin.war {
+  border-color: #6b2f0f;
+}
+.pin.war.mine {
+  background: #fff6e0;
+}
+.pin.war.theirs {
+  background: #f4c9b8;
+  animation: threat-pulse 1.2s ease-in-out infinite;
+}

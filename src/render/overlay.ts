@@ -44,6 +44,7 @@ export class Overlay {
   private floaters: Floater[] = [];
   private pending = new Map<string, { pos: THREE.Vector3; good: Good; n: number; bonus: boolean; t: number }>();
   private pins = new Map<number, HTMLDivElement>();
+  private warPins = new Map<number, HTMLDivElement>();
   private v = new THREE.Vector3();
   visible = true;
 
@@ -152,6 +153,40 @@ export class Overlay {
       }
     }
 
+    // Warbands on the march: a war pin over each one in sight, so a raid reads from afar.
+    const bandsSeen = new Set<number>();
+    for (const band of world.warbands) {
+      const next = band.path[band.step];
+      const f = band.progress / 1000;
+      const bx = band.x + (next === undefined ? 0 : ((next % world.size) - band.x) * f);
+      const by = band.y + (next === undefined ? 0 : (Math.floor(next / world.size) - band.y) * f);
+      if (!this.visible || !(world.explored[world.idx(Math.round(bx), Math.round(by))] & 1)) continue;
+      bandsSeen.add(band.id);
+      let pin = this.warPins.get(band.id);
+      if (!pin) {
+        pin = document.createElement('div');
+        this.root.appendChild(pin);
+        this.warPins.set(band.id, pin);
+      }
+      const side = band.owner === 0 ? 'mine' : 'theirs';
+      const label = `${band.owner === 0 ? 'Your huscarls' : band.owner < 0 ? 'Reavers' : 'Rival raiders'} · ${band.strength}${band.phase === 'home' ? ' · going home' : ''}`;
+      if (pin.dataset.label !== label) {
+        pin.dataset.label = label;
+        pin.className = `pin war ${side}`;
+        pin.innerHTML = `<span class="pin-icon">⚔️</span><span class="pin-name">${label}</span>`;
+      }
+      const v = new THREE.Vector3(bx + 0.5, 0, by + 0.5);
+      v.y = buildings.baseHeight(Math.round(bx), Math.round(by), 1);
+      const s = project(v, 1.9);
+      pin.style.display = s.on ? '' : 'none';
+      pin.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -100%) scale(${Math.max(0.75, scale)})`;
+    }
+    for (const [id, pin] of this.warPins)
+      if (!bandsSeen.has(id)) {
+        pin.remove();
+        this.warPins.delete(id);
+      }
+
     // Spawn merged floaters.
     for (const [key, p] of this.pending) {
       p.t -= dt;
@@ -183,6 +218,7 @@ export class Overlay {
     this.root.innerHTML = '';
     this.bubbles.clear();
     this.pins.clear();
+    this.warPins.clear();
     this.floaters = [];
     this.pending.clear();
   }

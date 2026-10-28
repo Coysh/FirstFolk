@@ -25,7 +25,7 @@ import { OMENS } from '../sim/omens';
 import { ORIGINS } from '../sim/origins';
 import { workOwner } from '../sim/works';
 import { workSlots } from '../sim/settlers';
-import { defenceOf } from '../sim/warfare';
+import { defenceOf, hallOf, huscarls, raidStrength } from '../sim/warfare';
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
@@ -43,8 +43,9 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       <Toasts game={game} />
       <InfoPanel game={game} />
       {game.marketOpen.value && <Market game={game} />}
+      <Threats game={game} />
       {game.mode.value.kind === 'select' && <Council game={game} />}
-      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : <BuildBar game={game} />}
+      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : <BuildBar game={game} />}
       <Banner game={game} />
       <Victory game={game} />
       {game.menuOpen.value && <PauseMenu game={game} shell={shell} />}
@@ -341,12 +342,98 @@ const renownGoal = (w: World) => {
   return o ? Number(o.id.slice(7)) : 0;
 };
 
+/** Warbands marching on your posts: who, where, and how long until they arrive. */
+function Threats({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const w = game.world;
+  const bands = w.warbands.filter((b) => b.phase === 'march' && w.buildings.get(b.targetId)?.owner === PLAYER);
+  if (!bands.length) return null;
+  return (
+    <section class="threats" aria-label="Raids under way">
+      {bands.map((band) => {
+        const t = w.buildings.get(band.targetId)!;
+        const secsLeft = Math.ceil(((band.path.length - band.step) * 1000) / BALANCE.adultSpeed / TICK_HZ);
+        const def = defenceOf(w, t);
+        return (
+          <button key={band.id} class={`threat ${band.strength > def ? 'losing' : 'holding'}`} onClick={() => game.lookAt(t.x, t.y)} title="Look">
+            <span class="threat-icon">⚔</span>
+            <span>
+              <strong>{band.owner === NO_OWNER ? 'Reavers' : 'Rival raiders'}</strong> → your {BUILDINGS[t.type].name} in {secsLeft}s
+              <span class="threat-odds">
+                {band.strength} against your {def}: {band.strength > def ? 'it will burn unless help comes' : 'it should hold'}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+/** Your warband: ready to raid, marching, or resting. */
+function Warband({ game }: { game: Game }) {
+  const w = game.world;
+  const hall = hallOf(w, PLAYER);
+  if (!hall) return null;
+  const n = huscarls(w, hall);
+  const out = w.warbands.some((b) => b.owner === PLAYER);
+  const rest = Math.max(0, w.players[PLAYER].raidReady - w.tick);
+  const early = w.tick < BALANCE.raidsFrom;
+  const ready = !out && !rest && n > 0 && !early;
+  const pct = rest ? 1 - rest / BALANCE.raidCooldown : out ? 0 : 1;
+  const band = w.warbands.find((b) => b.owner === PLAYER);
+  const status = band ? (band.phase === 'march' ? `${band.strength} marching` : 'coming home') : early ? 'from 10:00' : rest ? `${Math.ceil(rest / TICK_HZ)}s` : n ? `${n} × ${BALANCE.guardStrength}` : 'no huscarls';
+  return (
+    <button
+      class={`deed warband ${ready ? 'ready' : ''}`}
+      disabled={!ready}
+      onClick={() => game.startRaid()}
+      title={`Raid (R): send your ${n} huscarls (${raidStrength(w, PLAYER, n)} strong) to burn a rival tower, outpost or stockade. They win if they are stronger than its defence: its guards, stockades and huscarls nearby. A burned post frees its land, and any landmark it held may change hands. At home, your huscarls defend posts within ${BALANCE.interceptRange} tiles of the Mustering Hall.`}
+    >
+      <span class="deed-ring" style={{ background: `conic-gradient(var(--gold) ${pct * 360}deg, rgba(0,0,0,0.35) 0)` }}>
+        <span class="deed-icon">⚔️</span>
+      </span>
+      <span class="deed-name">Raid</span>
+      <span class="deed-fam">{band ? 'out raiding' : `${raidStrength(w, PLAYER, n)} strong`}</span>
+      {ready ? <span class="hotkey">R</span> : <span class="deed-wait">{status}</span>}
+    </button>
+  );
+}
+
+/** Choosing which rival post the huscarls strike. */
+function RaidBar({ game }: { game: Game }) {
+  const pv = game.raidPreview.value;
+  const hint = !pv
+    ? 'Tap a rival tower, outpost or stockade'
+    : pv.problem
+      ? pv.problem
+      : `${pv.name}: your ${pv.attack} against its ${pv.defence} · ${pv.attack > pv.defence ? 'they should burn it' : 'they would be driven off'}${pv.attack > pv.defence && (pv.lost || pv.sites.length) ? ` · frees ${pv.lost} tiles${pv.sites.length ? ` and ${pv.sites.join(', ')}` : ''}` : ''}`;
+  const tone = !pv ? 'ok' : pv.problem || pv.attack <= pv.defence ? 'bad' : pv.sites.length ? 'great' : 'ok';
+  return (
+    <div class="placebar panel">
+      <span class="deed-icon big">⚔️</span>
+      <div class="ptext">
+        <strong>Raid</strong>
+        <span class={tone}>{hint}</span>
+      </div>
+      <div class="pbtns">
+        {game.touchPlacing.value && pv && (
+          <button class="primary" disabled={!!pv.problem} onClick={() => game.confirmRaid()}>
+            ✓ Raid
+          </button>
+        )}
+        <button onClick={() => game.cancel()}>✕</button>
+      </div>
+    </div>
+  );
+}
+
 /** The council of great houses: each lends its deed, a call-down power with a cooldown. */
 function Council({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
   const seats = council(w, PLAYER);
-  if (!seats.length) return null;
+  if (!seats.length && !hallOf(w, PLAYER)) return null;
   return (
     <section class="council" aria-label="Great Houses">
       <span class="council-label">Great Houses</span>
@@ -380,6 +467,7 @@ function Council({ game }: { game: Game }) {
           </button>
         );
       })}
+      <Warband game={game} />
     </section>
   );
 }
@@ -699,7 +787,7 @@ function BuildBar({ game }: { game: Game }) {
             {HOTKEYS[i] && <span class="hotkey">{HOTKEYS[i]}</span>}
             {def.frontier && unlocked && <span class={`card-count ${capped ? 'full' : ''}`} title="Towers and outposts you hold, of what your rank allows">{w.frontierCount(PLAYER)}/{w.frontierCap(PLAYER)}</span>}
             <img class="card-icon" src={icon(t)} alt="" />
-            <span class="card-name">{def.name.replace(/^The /, '')}</span>
+            <span class="card-name">{def.name.replace(/^The /, '').replace(/^Mustering /, 'Muster ')}</span>
             <span class="card-cost">
               {holder === PLAYER ? <span class="lock">✓ Yours</span> : holder >= 0 ? <span class="lock">✗ Rival’s</span> : begun ? <span class="lock">Under way</span> : unlocked ? costChips(t, w.buildCost(PLAYER, t)) : <span class="lock">🔒 {lock.replace(/^Journeyman /, '')}</span>}
             </span>
@@ -864,7 +952,21 @@ function InfoPanel({ game }: { game: Game }) {
           )}
         </div>
       )}
-      {b.done && def.garrison && (
+      {b.done && b.type === 'musterhall' && (
+        <div class="worker">
+          <p>
+            <img class="inline-icon" src={ICON.shield} alt="" /> Huscarls: <strong>{huscarls(w, b)}/{def.garrison}</strong>
+            <span class="muted small"> · raid strength {raidStrength(w, b.owner, huscarls(w, b))}</span>
+          </p>
+          <p class="muted small">At home they defend any post within {BALANCE.interceptRange} tiles. Out raiding, they leave those posts to their own guards.</p>
+          {b.owner === PLAYER && (
+            <button class="primary" onClick={() => game.startRaid()}>
+              ⚔️ Raid a rival post (R)
+            </button>
+          )}
+        </div>
+      )}
+      {b.done && def.garrison && b.type !== 'musterhall' && (
         <div class="worker">
           <p>
             <img class="inline-icon" src={ICON.shield} alt="" /> Guards: <strong>{b.guarded}/{def.garrison}</strong>
@@ -985,6 +1087,8 @@ function Awards({ w, won }: { w: World; won: boolean }) {
   if ((me.renownBy.trade ?? 0) >= 150) list.push(['⚖️', 'Merchant Prince', `${me.renownBy.trade} renown from Market Day`]);
   if (outposts >= 4) list.push(['🧭', 'Pathfinder', `${outposts} outposts`]);
   if (me.deedsUsed >= 25) list.push(['✦', 'Great Houses', `${me.deedsUsed} family deeds`]);
+  if (me.raidsWon >= 3) list.push(['🔥', 'Warlord', `${me.raidsWon} rival posts burned`]);
+  if (me.repelled >= 3) list.push(['🛡️', 'Unbroken', `${me.repelled} raids driven off`]);
   if (me.challengesWon >= 3) list.push(['🏆', 'Champion of the Valley', `${me.challengesWon} challenges won`]);
   if (!list.length) return null;
   return (

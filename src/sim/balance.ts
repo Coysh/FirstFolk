@@ -63,6 +63,14 @@ export const BALANCE = {
   guardStrength: 10,
   /** Close to home (radius) the hall wards its buildings: strength, plus more per rank. */
   hallWard: [12, 20, 10] as [number, number, number],
+  /** Raids: how far from the Mustering Hall a warband can strike, spoils (base, cap), the defender's reward, the rest after, and how close a home warband turns out. */
+  raidReach: 48,
+  /** No raids before this tick: the opening is for building. */
+  raidsFrom: secs(10 * 60),
+  raidSpoils: [15, 40] as [number, number],
+  repelRenown: 12,
+  raidCooldown: secs(90),
+  interceptRange: 12,
   /** Extra home influence per Master in the household (up to four). */
   masterPull: 15,
   /** Losing at least this many tiles at once is news. */

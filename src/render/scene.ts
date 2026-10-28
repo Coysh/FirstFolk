@@ -211,7 +211,14 @@ export class GameRenderer {
         const p = this.sites.position(this.world, e.siteId);
         if (p && seen(Math.floor(p.x), Math.floor(p.z))) this.effects.emit('sparkle', p.x, p.y + 1.5, p.z, 50);
       } else if (e.type === 'died' && e.legend && seen(e.x, e.y)) this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 1, e.y + 0.5, 40);
-      else if (e.type === 'saplingPlanted') this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 6);
+      else if (e.type === 'razed' && seen(e.x, e.y)) {
+        // A burned post: a burst of flame and smoke that smoulders for a while.
+        const y = this.hf.at(e.x + 1, e.y + 1);
+        this.effects.emit('ember', e.x + 1, y + 0.6, e.y + 1, 60);
+        this.effects.emit('smoke', e.x + 1, y + 0.8, e.y + 1, 30);
+        this.effects.emit('dust', e.x + 1, y + 0.2, e.y + 1, 24);
+        this.fires.push({ x: e.x + 1, z: e.y + 1, y, left: 25 });
+      } else if (e.type === 'saplingPlanted') this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 6);
     }
   }
 
@@ -371,6 +378,9 @@ export class GameRenderer {
     return null;
   }
 
+  /** Posts burned by raids, smouldering (render-only). */
+  private fires: { x: number; z: number; y: number; left: number }[] = [];
+
   render(alpha: number, dt: number): void {
     this.time += dt;
     windTime.value = this.time;
@@ -416,6 +426,13 @@ export class GameRenderer {
     this.settlers.update(this.world, alpha, this.time, dt);
     this.paths.update(dt);
     this.wildlife.update(this.time, dt);
+    // Burned posts smoulder.
+    for (const f of this.fires) {
+      f.left -= dt;
+      if (Math.random() < dt * (f.left > 10 ? 6 : 2)) this.effects.emit('smoke', f.x + (Math.random() - 0.5) * 0.8, f.y + 0.3, f.z + (Math.random() - 0.5) * 0.8, 1);
+      if (f.left > 12 && Math.random() < dt * 8) this.effects.emit('ember', f.x + (Math.random() - 0.5) * 0.6, f.y + 0.2, f.z + (Math.random() - 0.5) * 0.6, 1);
+    }
+    this.fires = this.fires.filter((f) => f.left > 0);
     this.effects.update(dt);
     if (this.ring.visible) this.ring.rotation.y += dt * 0.8;
     this.renderer.render(this.scene, this.rig.camera);

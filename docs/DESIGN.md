@@ -290,6 +290,34 @@ The measurements behind each:
   - **No flicker:** a post counts new guards at once but loses them one per 10 s.
   - **The Stockade** (Hamlet: 10 logs and 6 stone): small reach (6), high power (110), and a defence aura (+20 to your buildings within 7). It counts against the frontier cap, so the cap becomes a choice between wide towers and tall stockades. The bots raise one by each contested landmark they hold.
   - **Measured** (same matrix): Balanced 56%, Expander 53%, Builder 41%. Population at 30:00 is about 12% lower, which is the cost of standing guard. Expander still wins the land race without anything to fear, which is the job of raids.
+- **v0.14.1 raids:** the counter to spreading thin.
+  - **The Mustering Hall** (Hamlet: 8 planks, 10 logs, 6 stone, one per settlement) trains up to 4 huscarls. They take up the watch before ordinary posts.
+  - **Raids from 10:00.** **Raid (R)** sends the huscarls against a rival tower, outpost or stockade that you have seen, up to 48 tiles from the hall.
+  - **The warband marches visibly**, about 15–25 s, with a war pin overhead. The defender gets a war-horn, a banner and a live strip showing the countdown and odds: "40 against your 20: it will burn unless help comes".
+  - **Plain arithmetic, no dice:**
+    - **Attack:** 10 per huscarl.
+    - **Defence:** 10 per guard (tracked as `guarded`), +10 for a Watchtower's stone footing, +20 from each Stockade within 7, the hall's ward near home (20 + 10 per rank within 12 tiles), and **10 for each huscarl at home within 12 tiles of the defender's Mustering Hall**. So raiding leaves your own posts without that cover.
+    - The stronger side wins; exact ties are a coin flip. The targeting preview shows both numbers and what a burn would free ("frees 140 tiles and the Oakwood").
+  - **A win** burns the post (smoke and embers, then smouldering). The raider gets spoils of 15 + half its cost (max 40), halved if it was unmanned. Its land is open to whoever pushes, and a landmark freed this way changes hands *without* also paying the seizing prize.
+  - **A loss** sends the band home, and the defender gets +12 renown for holding the line.
+  - **The huscarls then rest for 90 s.** Nobody is ever killed.
+  - **Manned posts keep watch.** They re-reveal their sight every 5 s, so you can see the posts facing yours.
+  - **New challenges:** "Banners on the Hills" rewarded building a tower, so it was replaced by **Burn a Beacon** (win a raid) and **Hold Fast** (raise a Stockade by a landmark you hold). New honours: **Warlord** (burn 3) and **Unbroken** (hold 3).
+  - **Bot styles:** **Raider** builds the hall early and strikes any post it can beat. **Warden** guards contested landmarks with stockades and keeps a home warband. **Balanced** raids only for a landmark or a lot of land.
+  - **Measured** (8 seeds × both sides, 5 styles):
+
+    | Matchup | Win rate |
+    |---|---|
+    | Raider vs Expander | 56–69% |
+    | Builder vs Raider | 63% |
+    | Expander vs Builder | 56% |
+    | Expander vs Warden | 63–75% |
+
+    Every style falls between 38% and 59% overall, with about 2 lead changes a game and 23–26% comebacks.
+- **Raids were rare at first, and the measurements showed why:**
+  - **Huscarls waited behind every tower's guards,** so the first raid came at 20:00 or later. They now staff first.
+  - **Posts never took workers.** The watch can now borrow an extra crew hand from a busy workplace.
+  - **Rival posts were never seen.** Hence manned posts keeping watch.
 - **A trap found on the way.** Free adults are the porters. The first version of guards took every free adult, so nothing got hauled and the towns starved (population 125 fell to 42 on seed 1). That's why the porter reserve exists.
 - **With omens on (`--real`)** the rival side wins 37 of 48 games; Restless Neighbours tilts it on purpose. Fairness checks therefore use `--origins` without omens.
 
@@ -1046,4 +1074,21 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - `warfare.ts` with `defenceOf`;
   - the bots raising stockades by contested landmarks.
 - **Tests:** guards staff posts, unmanned posts push less, and stockades shield their neighbours and count against the cap.
+
+### v0.14.1 Raids: the Mustering Hall, warbands and burning towers (2026-10-28)
+- **Built:**
+  - the Mustering Hall (model and generated icon);
+  - huscarls (the guard job, with an `away` phase);
+  - `warfare.ts` (warbands, skirmishes, razing, `previewRemoval`);
+  - the `raid` Command;
+  - the Raid button (R), a targeting bar with odds and what a burn frees, an incoming-raid strip with a countdown and odds, and war pins over marching bands;
+  - war-horn and clash stingers;
+  - burn smoke and embers;
+  - rival lines for raids;
+  - the Burn a Beacon and Hold Fast challenges;
+  - the Warlord and Unbroken honours;
+  - Raider and Warden bot styles;
+  - raid metrics in the harness.
+- **Rules:** manned posts keep watch, and the Watchtower has a stone footing worth +10 defence.
+- **Tests:** burn and spoils, holding the line, the home warband turning out, freed landmarks not paying the seizing prize twice, and save/load mid-march.
 

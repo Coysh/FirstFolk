@@ -15,7 +15,7 @@ import { Instruments } from './instruments';
  * never becomes wallpaper. Short stingers (fanfares, bells) mark big moments.
  */
 export type Mood = 'theme' | 'village' | 'winter' | 'tension' | 'moot';
-export type Stinger = 'discovery' | 'landmark' | 'loss' | 'rankUp' | 'victory' | 'defeat' | 'starfall' | 'moot' | 'deed' | 'work';
+export type Stinger = 'discovery' | 'landmark' | 'loss' | 'rankUp' | 'victory' | 'defeat' | 'starfall' | 'moot' | 'deed' | 'work' | 'warhorn' | 'clash';
 
 interface Piece {
   name: string;
@@ -225,6 +225,22 @@ const STINGERS: Record<Stinger, (band: Instruments, t: number) => number> = {
     ['A5', 'E6'].forEach((n, i) => b.pluck(t + i * 0.08, noteToMidi(n), 0.7));
     b.bell(t + 0.16, noteToMidi('A6'), 0.45);
     return 1;
+  },
+  // Raiders on the march: a low war-horn, twice, over a drum roll.
+  warhorn: (b, t) => {
+    b.horn(t, noteToMidi('A3'), 0.9, 1);
+    b.horn(t + 1.1, noteToMidi('A3'), 0.5, 0.9);
+    b.horn(t + 1.7, noteToMidi('C4'), 1.0, 1);
+    for (let i = 0; i < 10; i++) b.drum(t + 0.3 + i * 0.22, 0.35 + (i % 3) * 0.12, i % 2 === 1);
+    return 3.2;
+  },
+  // A skirmish won: drums and a rising horn call.
+  clash: (b, t) => {
+    for (let i = 0; i < 4; i++) b.drum(t + i * 0.15, 0.6 + i * 0.1, i % 2 === 1);
+    b.horn(t + 0.6, noteToMidi('D4'), 0.25, 0.9);
+    b.horn(t + 0.9, noteToMidi('A4'), 0.9, 1);
+    b.bell(t + 0.9, noteToMidi('D6'), 0.5);
+    return 2.2;
   },
   work: (b, t) => {
     ['D5', 'A5', 'D6', 'F#6'].forEach((n, i) => b.bell(t + i * 0.25, noteToMidi(n), 0.8));

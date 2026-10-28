@@ -66,11 +66,11 @@ function familyPull(world: World, b: Building): number {
 }
 
 /** Everything that radiates influence right now. */
-export function influenceSources(world: World): InfluenceSource[] {
+export function influenceSources(world: World, skipId = 0): InfluenceSource[] {
   const out: InfluenceSource[] = [];
   for (const b of world.buildings.values()) {
     const def = BUILDINGS[b.type];
-    if (!b.done || !def.claim) continue;
+    if (!b.done || !def.claim || b.id === skipId) continue;
     const size = def.size;
     let r = def.claim + b.reach;
     let p = def.power ?? 60;
@@ -107,7 +107,7 @@ let lockedScratch: Int8Array = new Int8Array(0);
  * Who would hold each tile given these influence sources (pure: reads the current border
  * for tie-breaks and the challenger's margin, writes nothing). Returns a shared scratch array.
  */
-function settle(world: World, sources: InfluenceSource[], out: Int8Array): Int8Array {
+function settle(world: World, sources: InfluenceSource[], out: Int8Array, skipId = 0): Int8Array {
   const n = world.size * world.size;
   const players = world.players.length;
   if (scratch.length !== players || scratch[0]?.length !== n) scratch = world.players.map(() => new Int32Array(n));
@@ -127,6 +127,7 @@ function settle(world: World, sources: InfluenceSource[], out: Int8Array): Int8A
   if (lockedScratch.length !== n) lockedScratch = new Int8Array(n);
   const locked = lockedScratch.fill(NO_OWNER);
   for (const b of world.buildings.values()) {
+    if (b.id === skipId) continue;
     const size = BUILDINGS[b.type].size;
     for (let dy = 0; dy <= size; dy++) for (let dx = 0; dx < size; dx++) if (world.inBounds(b.x + dx, b.y + dy)) locked[world.idx(b.x + dx, b.y + dy)] = b.owner;
   }
@@ -176,6 +177,26 @@ export function previewInfluence(world: World, extra: InfluenceSource): { gained
     return next[i] === extra.owner && world.territory[i] !== extra.owner && (s.claimedBy === NO_OWNER || DISCOVERIES[s.kind].renown);
   });
   return { gained, fromRival, sites };
+}
+
+/**
+ * What burning a building would do, for raid previews: tiles its owner would lose (and how
+ * many the raider would gain), and the landmarks that would change hands. Changes nothing.
+ */
+export function previewRemoval(world: World, id: number, raider: number): { lost: number; gained: number; sites: Discovery[] } {
+  const b = world.buildings.get(id);
+  if (!b) return { lost: 0, gained: 0, sites: [] };
+  const n = world.size * world.size;
+  if (previewScratch.length !== n) previewScratch = new Int8Array(n);
+  const next = settle(world, influenceSources(world, id), previewScratch, id);
+  let lost = 0;
+  let gained = 0;
+  for (let i = 0; i < n; i++) {
+    if (world.territory[i] === b.owner && next[i] !== b.owner) lost++;
+    if (next[i] === raider && world.territory[i] !== raider) gained++;
+  }
+  const sites = world.sites.filter((s) => DISCOVERIES[s.kind].renown && s.heldBy === b.owner && next[world.idx(s.x, s.y)] !== b.owner);
+  return { lost, gained, sites };
 }
 
 let settleScratch: Int8Array = new Int8Array(0);
@@ -277,6 +298,12 @@ export function onBuildingComplete(world: World, b: Building): void {
 export function updateExploration(world: World): void {
   const r = BALANCE.settlerSight;
   for (const s of world.settlers.values()) revealArea(world, s.owner, s.x, s.y, r + (world.families.get(s.familyId)?.mods.sight ?? 0));
+  // Manned posts keep watch: whatever comes into view of a guarded tower is seen.
+  if (world.tick % 50 === 5)
+    for (const b of world.buildings.values()) {
+      const def = BUILDINGS[b.type];
+      if (b.done && def.garrison && b.guarded && def.reveal) revealArea(world, b.owner, b.x + 1, b.y + 1, def.reveal);
+    }
   for (const p of world.players) updateRumours(world, p.id);
 }
 
@@ -334,7 +361,7 @@ export function updateHoldings(world: World): void {
       const from = site.heldBy;
       site.heldBy = owner;
       world.emit({ type: 'holdingChanged', siteId: site.id, kind: site.kind, owner, from });
-      if (from !== NO_OWNER) {
+      if (from !== NO_OWNER && !world.quietSeize) {
         // Taking a landmark is worth more the further behind you are, and double at the Moot.
         const taker = world.players[owner];
         const behind = Math.max(0, (world.players[from]?.renown ?? 0) - taker.renown);

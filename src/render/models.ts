@@ -272,6 +272,28 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       b.add(box(0.2, 0.22, 0.05), C.darkTimber, { pos: [0, 1.4, 0.41] });
       break;
     }
+    case 'musterhall': {
+      // A long timber hall where the huscarls drill: shields along the wall, a weapon rack,
+      // a straw practice dummy and a war banner.
+      b.add(box(1.7, 0.12, 1.0), C.stoneDark, { pos: [0, 0.02, -0.25] });
+      b.add(box(1.6, 0.55, 0.85), C.darkTimber, { pos: [0, 0.34, -0.25] });
+      for (const x of [-0.8, -0.4, 0, 0.4, 0.8]) b.add(box(0.07, 0.55, 0.88), C.timber, { pos: [x, 0.34, -0.25] });
+      b.add(gableRoof(1.05, 1.85, 0.7), C.thatchDark, { pos: [0, 0.6, -0.25] });
+      for (const x of [-0.9, 0.9]) b.add(cone(0.06, 0.32, 4), C.darkTimber, { pos: [x, 1.38, -0.25], rot: [0, 0, x > 0 ? -0.5 : 0.5] });
+      b.add(box(0.28, 0.4, 0.05), C.door, { pos: [0, 0.26, 0.19] });
+      // Painted shields hung along the front wall.
+      for (const [x, c] of [[-0.6, 0xc0392b], [-0.3, 0xf2c14e], [0.3, 0x2e86c1], [0.6, opts.crest ?? 0xc0392b]] as const)
+        b.add(cyl(0.11, 0.11, 0.03, 9), c, { pos: [x, 0.45, 0.2], rot: [Math.PI / 2, 0, 0] });
+      // A spear rack and a practice dummy in the yard.
+      b.add(box(0.5, 0.05, 0.05), C.wood, { pos: [-0.5, 0.45, 0.62] });
+      for (const x of [-0.7, -0.57, -0.44, -0.31]) b.add(box(0.02, 0.85, 0.02), C.wood, { pos: [x, 0.42, 0.58], rot: [0.12, 0, 0] });
+      b.add(cyl(0.025, 0.025, 0.7, 5), C.wood, { pos: [0.55, 0.35, 0.62] });
+      b.add(cyl(0.12, 0.1, 0.32, 7), C.thatch, { pos: [0.55, 0.55, 0.62] });
+      b.add(box(0.5, 0.05, 0.05), C.wood, { pos: [0.55, 0.6, 0.62] });
+      b.add(cyl(0.025, 0.03, 1.8, 5), C.wood, { pos: [0.85, 0.9, 0.3] });
+      b.add(box(0.03, 0.36, 0.42), opts.crest ?? 0xc0392b, { pos: [0.85, 1.6, 0.5] });
+      break;
+    }
     case 'stockade': {
       // A palisade of sharpened stakes around a little guardhouse, with a gate facing the road.
       b.add(cyl(0.95, 0.98, 0.06, 14), 0x7a6646, { pos: [0, 0.02, -0.05] });

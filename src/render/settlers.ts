@@ -139,6 +139,22 @@ export class SettlersView {
 
   /** Sim-space position of a settler (tile units, centre of tile = +0.5). */
   private simPos(world: World, s: Settler): { x: number; z: number } {
+    if (s.job.kind === 'guard' && s.job.phase === 'away') {
+      // Out with a warband: march in a little column around the band's position.
+      const band = world.warbands.find((w) => w.members.includes(s.id));
+      if (band) {
+        const k = band.members.indexOf(s.id);
+        const next = band.path[band.step];
+        let bx = band.x;
+        let by = band.y;
+        if (next !== undefined) {
+          const f = band.progress / 1000;
+          bx += ((next % world.size) - bx) * f;
+          by += (Math.floor(next / world.size) - by) * f;
+        }
+        return { x: bx + 0.5 + ((k % 2) - 0.5) * 0.5, z: by + 0.5 + (Math.floor(k / 2) - 0.5) * 0.5 };
+      }
+    }
     let x = s.x;
     let y = s.y;
     if (s.next >= 0) {
@@ -176,8 +192,8 @@ export class SettlersView {
     let nShield = 0;
     for (const s of world.settlers.values()) {
       if (i >= MAX) break;
-      if (s.owner !== 0 && !(world.explored[world.idx(s.x, s.y)] & 1)) continue;
       const cur = this.simPos(world, s);
+      if (s.owner !== 0 && !(world.explored[world.idx(Math.min(world.size - 1, Math.max(0, Math.floor(cur.x))), Math.min(world.size - 1, Math.max(0, Math.floor(cur.z))))] & 1)) continue;
       const prev = this.prev.get(s.id) ?? cur;
       const x = prev.x + (cur.x - prev.x) * alpha;
       const z = prev.z + (cur.z - prev.z) * alpha;
@@ -208,7 +224,8 @@ export class SettlersView {
       // Children grow visibly from toddler to near-adult size.
       const scale = s.child ? 0.55 + 0.32 * Math.min(1, s.age / comeOfAgeTicks()) : 1.15;
       const seed = s.id * 1.37;
-      const moving = s.anim === 'walk' && (mdx * mdx + mdz * mdz > 1e-7 || s.next >= 0);
+      const away = s.job.kind === 'guard' && s.job.phase === 'away';
+      const moving = (s.anim === 'walk' || away) && (mdx * mdx + mdz * mdz > 1e-7 || s.next >= 0);
 
       // --- pose ---------------------------------------------------------
       let legSwing = 0;
@@ -282,7 +299,7 @@ export class SettlersView {
       this.limb(this.parts.armL, i, -0.105, SHOULDER_Y, armL);
       const handR = this.limb(this.parts.armR, i, 0.105, SHOULDER_Y, armR);
 
-      const guard = s.job.kind === 'guard' && s.job.phase !== 'away';
+      const guard = s.job.kind === 'guard';
       if (s.tool && !s.carry && (s.job.kind === 'work' || s.job.kind === 'build' || guard)) {
         const mesh = this.tools[s.tool];
         if (guard && !moving) {

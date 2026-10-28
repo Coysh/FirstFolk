@@ -88,7 +88,7 @@ export function assignJobs(world: World): void {
   // Builders per site (Great Works take a crew) and workers per workplace (more as its trade grows).
   const crews = new Map<number, number>();
   const hands = new Map<number, number>();
-  const guards = guardCounts(world);
+  const guards = guardCounts(world, true);
   for (const s of world.settlers.values()) {
     if (s.job.kind === 'build') crews.set(s.job.siteId, (crews.get(s.job.siteId) ?? 0) + 1);
     else if (s.job.kind === 'work') {
@@ -141,8 +141,9 @@ export function assignJobs(world: World): void {
       }
     const porters = Math.ceil(adults / BALANCE.porterShare);
     let spare = idle.length - Math.max(0, porters - carrying);
-    const posts = [...world.buildings.values()].filter((b) => b.owner === player.id && b.done && BUILDINGS[b.type].garrison);
-    for (let k = 0; k < 3; k++)
+    // The Mustering Hall's huscarls first (a deliberate investment), then the posts.
+    const posts = [...world.buildings.values()].filter((b) => b.owner === player.id && b.done && BUILDINGS[b.type].garrison).sort((p, q) => (q.type === 'musterhall' ? 1 : 0) - (p.type === 'musterhall' ? 1 : 0));
+    for (let k = 0; k < 4; k++)
       for (const b of posts) {
         if ((guards.get(b.id) ?? 0) !== k || k >= BUILDINGS[b.type].garrison!) continue;
         const e = world.entrance(b);
@@ -150,7 +151,7 @@ export function assignJobs(world: World): void {
         if (s) {
           idle.splice(idle.indexOf(s), 1);
           spare--;
-        } else if (k === 0 && carrying >= porters) s = spareHand(world, hands, player.id, e.x, e.y);
+        } else if (k === 0 || b.type === 'musterhall') s = spareHand(world, hands, player.id, e.x, e.y);
         if (!s) continue;
         guards.set(b.id, k + 1);
         s.job = { kind: 'guard', buildingId: b.id, phase: 'toPost' };
@@ -197,10 +198,10 @@ function spareHand(world: World, hands: Map<number, number>, owner: number, x: n
   return s;
 }
 
-/** Guards standing watch (or on their way) at each post. */
-export function guardCounts(world: World): Map<number, number> {
+/** Guards standing watch (or on their way) at each post; with `away`, huscarls out raiding too. */
+export function guardCounts(world: World, away = false): Map<number, number> {
   const out = new Map<number, number>();
-  for (const s of world.settlers.values()) if (s.job.kind === 'guard' && s.job.phase !== 'away') out.set(s.job.buildingId, (out.get(s.job.buildingId) ?? 0) + 1);
+  for (const s of world.settlers.values()) if (s.job.kind === 'guard' && (away || s.job.phase !== 'away')) out.set(s.job.buildingId, (out.get(s.job.buildingId) ?? 0) + 1);
   return out;
 }
 

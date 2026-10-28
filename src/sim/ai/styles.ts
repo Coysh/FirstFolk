@@ -5,8 +5,8 @@ import type { OriginId } from '../origins';
  * character (it follows its origin) and give the balance harness distinct strategies to pit
  * against each other, so a dominant strategy shows up as a lopsided win matrix.
  */
-export type BotStyle = 'balanced' | 'expander' | 'builder';
-export const BOT_STYLES: BotStyle[] = ['balanced', 'expander', 'builder'];
+export type BotStyle = 'balanced' | 'expander' | 'builder' | 'raider' | 'warden';
+export const BOT_STYLES: BotStyle[] = ['balanced', 'expander', 'builder', 'raider', 'warden'];
 
 export interface StyleDef {
   name: string;
@@ -20,12 +20,17 @@ export interface StyleDef {
   sellKeep: number;
   /** Raises a stockade by each contested landmark it holds. */
   stockades: boolean;
+  /** Builds a Mustering Hall (from Village), and how keenly it raids: 0 never, 1 for a landmark or much land, 2 any post it can beat. */
+  muster: boolean;
+  raids: 0 | 1 | 2;
 }
 
 export const STYLES: Record<BotStyle, StyleDef> = {
-  balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: true },
-  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120, stockades: false },
-  builder: { name: 'Builder', towerPer: 16, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60, stockades: true },
+  balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: true, muster: true, raids: 1 },
+  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120, stockades: false, muster: false, raids: 0 },
+  builder: { name: 'Builder', towerPer: 16, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60, stockades: false, muster: false, raids: 0 },
+  raider: { name: 'Raider', towerPer: 9, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: false, muster: true, raids: 2 },
+  warden: { name: 'Warden', towerPer: 12, towersFirst: false, towersOnlyWithAim: true, sellKeep: 80, stockades: true, muster: true, raids: 0 },
 };
 
 /** The rival's character follows where it comes from (a classic start plays balanced). */
