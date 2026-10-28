@@ -13,6 +13,7 @@ import { DIFFICULTY, type Difficulty, type Rules } from './rules';
 import { NO_OWNER, onBuildingComplete, updateExploration } from './territory';
 import { offerBoon, updateOffers, type BoonId, type Mod } from './boons';
 import { isWinter, updateSeasons, type Season } from './seasons';
+import { updateValleyEvents } from './events';
 
 export type Stock = Record<Good, number>;
 export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 });
@@ -155,6 +156,8 @@ export type SimEvent =
   | { type: 'season'; season: Season }
   | { type: 'winterComing' }
   | { type: 'rankUp'; owner: number; rank: number; unlocks: BuildingType[] }
+  | { type: 'valleyEvent'; owner: number; eventId: number; def: string }
+  | { type: 'eventResolved'; owner: number; def: string; choice: string; text: string }
   | { type: 'familySettled'; familyId: number; surname: string; buildingId: number }
   | { type: 'victory'; scenario: string };
 
@@ -171,12 +174,17 @@ export interface PlayerState {
   claimed: number;
   /** Tick after which a rumour reveals the next discovery (if none is in sight). */
   rumourAt: number;
-  /** Boon choices waiting for the player. */
+  /** Boon choices waiting for the player; only the first is live (expires > 0). */
   offers: BoonOffer[];
+  nextOfferAt: number;
   /** Winters survived. */
   winters: number;
   /** Settlement rank: 0 Camp, 1 Hamlet, 2 Village, 3 Town. */
   rank: number;
+  /** The valley event awaiting a choice (see events.ts), and when the next one comes. */
+  event: { id: number; def: string; expires: number } | null;
+  nextEventAt: number;
+  lastEvent: string;
 }
 
 export interface BoonOffer {
@@ -425,7 +433,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], winters: 0, rank: 0 };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '' };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -518,6 +526,7 @@ export class World {
     if (this.tick % 10 === 5) {
       updateExploration(this);
       updateOffers(this);
+      updateValleyEvents(this);
     }
     if (this.tick % 5 === 0) {
       assignJobs(this);
@@ -588,7 +597,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 export const comeOfAgeTicks = () => Math.round(BALANCE.comeOfAgeYears * BALANCE.yearTicks);
 

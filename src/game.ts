@@ -6,6 +6,8 @@ import { canPlace } from './sim/commands';
 import { BUILDINGS, DISCOVERIES, RANK_NAMES, type BuildingType, type Tool } from './sim/defs';
 import { serializeWorld } from './sim/save';
 import { BOONS } from './sim/boons';
+import { eventDef } from './sim/events';
+import { plural } from './sim/population';
 import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
 import { TRADES, tradeTitle } from './sim/trades';
 import type { SimEvent, World } from './sim/world';
@@ -223,7 +225,7 @@ export class Game {
         case 'boonChosen':
           if (e.owner !== PLAYER) break;
           audio.play('tierUp');
-          this.toast('/assets/icons/people.png', `The ${e.surname}s are now ${BOONS[e.boon].name}: ${BOONS[e.boon].blurb}`, 'good');
+          this.toast('/assets/icons/people.png', `The ${plural(e.surname)} are now ${BOONS[e.boon].name}: ${BOONS[e.boon].blurb}`, 'good');
           break;
         case 'married': {
           if (e.owner !== PLAYER) break;
@@ -252,6 +254,15 @@ export class Game {
           };
           setTimeout(() => (this.banner.value = null), 5200);
           break;
+        case 'valleyEvent':
+          if (e.owner === PLAYER) audio.play('arrive');
+          break;
+        case 'eventResolved': {
+          if (e.owner !== PLAYER) break;
+          const d = eventDef(e.def);
+          this.toast('/assets/icons/scroll.png', `${d?.icon ?? ''} ${e.text}`, 'info');
+          break;
+        }
         case 'familySettled':
           this.toast('/assets/icons/hut.png', `The ${e.surname} family have a home at last`, 'good');
           break;
@@ -342,6 +353,11 @@ export class Game {
       this.ghost.value = null;
       this.view.setGhost(null);
     }
+  }
+
+  chooseEvent(eventId: number, option: number): void {
+    audio.play('click');
+    this.world.enqueue({ type: 'chooseEvent', owner: PLAYER, eventId, option });
   }
 
   chooseBoon(offerId: number, choice: number): void {

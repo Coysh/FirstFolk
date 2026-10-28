@@ -56,6 +56,11 @@ export const BALANCE = {
   winterAppetitePct: 25,
   winterBuildPct: 70,
 
+  /** Valley events: the first arrives after the opening, then one every 80–140 s; unanswered after 45 s they resolve cautiously. */
+  firstEvent: secs(150),
+  eventGap: [secs(80), secs(140)] as [number, number],
+  eventTimeout: secs(45),
+
   /** Share of the family's best skill XP a child inherits on coming of age. */
   inheritPct: 40,
   xpPerHarvest: 10,

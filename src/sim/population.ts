@@ -10,6 +10,9 @@ export const SURNAMES = [
   'Rook', 'Elwood', 'Garth', 'Harrow', 'Kettle', 'Lambert', 'Moss', 'Pike', 'Stow', 'Wren',
 ];
 
+/** "the Ashbys", "the Mosses", "the Marshes". */
+export const plural = (surname: string) => (/(s|sh|ch|x|z)$/.test(surname) ? `${surname}es` : `${surname}s`);
+
 /** Crest colours, shown on hats, banners and flags. */
 export const CREST_COLORS = [0xc0392b, 0x2e86c1, 0xd4ac0d, 0x8e44ad, 0x16a085, 0xd35400, 0x34495e, 0xe84393, 0x27ae60, 0x7f5539];
 

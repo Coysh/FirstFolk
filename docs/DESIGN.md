@@ -492,3 +492,38 @@ The plank-count chores are gone.
 | Winter hunger | short hungry spells mid-game: tension without collapse |
 
 **Still boring:** without a rival the valley is all yours, and the bot claims 16 of 16 discoveries. There's no one to race and nothing unexpected happens. Valley events and the rival are next.
+
+### v0.5.0 Fun Pass 5: Valley Events, and paced boons (2026-10-28)
+**Valley Events** (`src/sim/events.ts`). Every 80–140 s (the first at 2:30), a messenger's card brings news and a choice. There are **11 events**, all data: a condition, plus options with costs and effects.
+
+| Event | Choice |
+|---|---|
+| Travelling Trader | buy planks or stone |
+| Wolves in the Woods | build a palisade, or risk the larder |
+| Bountiful Season | preserve food, or hold a fair for XP |
+| Great Storm | clear logs, or replant saplings |
+| Lost Child | adopt, or follow their tale to a discovery |
+| Midsummer Feast | spend food on XP for all |
+| Hard Frost (winter) | burn logs, or lose food |
+| Smoke Beyond the Ridge | scout a far discovery |
+| Masons from the South (Hamlet+) | buy stonework training |
+| A Match from Afar (Hamlet+) | a skilled family joins |
+| Pilgrims at the Stones (if claimed) | a family boon, or alms |
+
+- Choices are a `chooseEvent` command, and unaffordable options are greyed out.
+- Every event's last option is free, and an ignored card resolves to it after 45 s, so **ignoring is always safe and the game never waits**.
+
+**Paced boons.** Playtests counted **44 boon offers in 30 min**: bursts of 3 after mass XP grants, which is choice fatigue. Now:
+- only the front offer is live, and its 60 s timer starts when it's shown,
+- the queue holds 3,
+- there's a **45 s gap** between choices.
+
+Previously queued offers could also expire unseen; that's fixed too. Plural surnames are fixed ("the Mosses", not "the Mosss").
+
+**Playtest results** (8 seeds, 35 min):
+
+| Metric | Value |
+|---|---|
+| Longest major gap | 65–75 s on every seed (avg 70 s) |
+| Victory | 20–26 min |
+| Idle adults | about 5% |

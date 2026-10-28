@@ -1,3 +1,4 @@
+import { secs } from './balance';
 import { SKILLS, type Skill } from './defs';
 import type { Family, World } from './world';
 
@@ -113,26 +114,45 @@ export function drawBoons(world: World, fam: Family, n = 3): BoonId[] {
   return out;
 }
 
-/** Offer the player a choice of boons for a family (queued; auto-picked if left too long). */
+/**
+ * Queue a choice of boons for a family. Only the front offer is live (its timer starts when
+ * it's shown), and live offers are spaced out so choices stay special, never a chore.
+ */
 export function offerBoon(world: World, fam: Family, reason: string): void {
   const player = world.players[fam.owner];
   if (!player || fam.boons.length >= MAX_BOONS) return;
   if (player.offers.some((o) => o.familyId === fam.id) || player.offers.length >= 3) return;
   const choices = drawBoons(world, fam);
   if (!choices.length) return;
-  const offer = { id: world.newId(), familyId: fam.id, choices, reason, expires: world.tick + BOON_TIMEOUT };
-  player.offers.push(offer);
-  world.emit({ type: 'boonOffered', owner: fam.owner, offerId: offer.id, familyId: fam.id, surname: fam.surname, reason });
+  player.offers.push({ id: world.newId(), familyId: fam.id, choices, reason, expires: 0 });
+  activateNext(world, fam.owner);
 }
 
-export const BOON_TIMEOUT = 600;
+export const BOON_TIMEOUT = secs(60);
+/** Minimum quiet time between one boon choice and the next. */
+export const BOON_GAP = secs(45);
+
+function activateNext(world: World, owner: number): void {
+  const player = world.players[owner];
+  const o = player.offers[0];
+  if (!o || o.expires > 0 || world.tick < player.nextOfferAt) return;
+  const fam = world.families.get(o.familyId);
+  if (!fam) {
+    player.offers.shift();
+    return activateNext(world, owner);
+  }
+  o.expires = world.tick + BOON_TIMEOUT;
+  world.emit({ type: 'boonOffered', owner, offerId: o.id, familyId: fam.id, surname: fam.surname, reason: o.reason });
+}
 
 export function chooseBoon(world: World, owner: number, offerId: number, choice: number): void {
   const player = world.players[owner];
   const i = player?.offers.findIndex((o) => o.id === offerId) ?? -1;
   if (i < 0) return;
   const offer = player.offers[i];
+  if (offer.expires === 0) return;
   player.offers.splice(i, 1);
+  player.nextOfferAt = world.tick + BOON_GAP;
   const fam = world.families.get(offer.familyId);
   const id = offer.choices[Math.max(0, Math.min(offer.choices.length - 1, choice))];
   if (!fam || !id) return;
@@ -142,7 +162,11 @@ export function chooseBoon(world: World, owner: number, offerId: number, choice:
 
 /** Offers left unanswered resolve themselves (first card) so the game never waits on the player. */
 export function updateOffers(world: World): void {
-  for (const p of world.players) for (const o of [...p.offers]) if (world.tick >= o.expires) chooseBoon(world, p.id, o.id, 0);
+  for (const p of world.players) {
+    const o = p.offers[0];
+    if (o && o.expires > 0 && world.tick >= o.expires) chooseBoon(world, p.id, o.id, 0);
+    activateNext(world, p.id);
+  }
 }
 
 /** "the Thornes, Fleet-footed Masons": a family title from its boons and best craft. */

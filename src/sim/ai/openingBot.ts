@@ -1,6 +1,9 @@
 import { BUILDINGS, type BuildingType, type Good, type NodeKind } from '../defs';
 import type { World } from '../world';
 import { NO_OWNER } from '../territory';
+import { BALANCE } from '../balance';
+import { canAfford, eventDef } from '../events';
+import { BOON_TIMEOUT } from '../boons';
 import { isHome } from '../population';
 import { bestSite } from './placement';
 
@@ -22,9 +25,16 @@ export class OpeningBot {
 
   update(world: World): void {
     if (world.tick % 10 !== 0) return;
+    // Events: take the first option it can afford after a few seconds' thought.
+    const ev = world.players[this.owner].event;
+    if (ev && ev.expires - world.tick < BALANCE.eventTimeout - 60) {
+      const def = eventDef(ev.def)!;
+      const pick = def.options.findIndex((o) => canAfford(world, this.owner, o.cost));
+      world.enqueue({ type: 'chooseEvent', owner: this.owner, eventId: ev.id, option: pick < 0 ? def.options.length - 1 : pick });
+    }
     // Boons: take the first card a few seconds after it's offered, like a quick human.
     for (const o of world.players[this.owner].offers)
-      if (o.expires - world.tick < 550) world.enqueue({ type: 'chooseBoon', owner: this.owner, offerId: o.id, choice: 0 });
+      if (o.expires > 0 && o.expires - world.tick < BOON_TIMEOUT - 60) world.enqueue({ type: 'chooseBoon', owner: this.owner, offerId: o.id, choice: 0 });
     while (this.opening.length && this.opening[0].at <= world.tick) {
       this.place(world, this.opening.shift()!.type);
     }

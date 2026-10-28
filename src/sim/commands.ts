@@ -2,6 +2,7 @@ import { BUILDINGS, GOODS, RANK_NAMES, type BuildingType } from './defs';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
 import { owns, territoryBox } from './territory';
 import { chooseBoon } from './boons';
+import { resolveEvent } from './events';
 import { tradeTitle } from './trades';
 import type { World } from './world';
 
@@ -9,7 +10,8 @@ import type { World } from './world';
 export type Command =
   | { type: 'place'; owner: number; building: BuildingType; x: number; y: number }
   | { type: 'demolish'; owner: number; id: number }
-  | { type: 'chooseBoon'; owner: number; offerId: number; choice: number };
+  | { type: 'chooseBoon'; owner: number; offerId: number; choice: number }
+  | { type: 'chooseEvent'; owner: number; eventId: number; option: number };
 
 /** What a locked building is waiting for, e.g. "Hamlet" or "Journeyman Carpenter". */
 export function lockLabel(world: World, owner: number, type: BuildingType): string {
@@ -125,6 +127,9 @@ export function applyCommand(world: World, cmd: Command): void {
       world.emit({ type: 'buildingPlaced', id: b.id, buildingType: b.type });
       return;
     }
+    case 'chooseEvent':
+      resolveEvent(world, cmd.owner, cmd.eventId, cmd.option);
+      return;
     case 'chooseBoon':
       chooseBoon(world, cmd.owner, cmd.offerId, cmd.choice);
       return;

@@ -5,9 +5,10 @@ import { BUILDINGS, BUILD_MENU, DISCOVERIES, GOODS, GOOD_INFO, RANK_NAMES, SKILL
 import { NO_OWNER, territoryBox } from '../sim/territory';
 import { BOONS, BOON_TIMEOUT, familyTitle } from '../sim/boons';
 import { BALANCE, TICK_HZ } from '../sim/balance';
+import { canAfford, eventDef } from '../sim/events';
 import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
 import type { Family, World } from '../sim/world';
-import { CREST_COLORS } from '../sim/population';
+import { CREST_COLORS, plural } from '../sim/population';
 import { TIER_NAMES, TRADES, tierOf, tierProgress, tradeTitle } from '../sim/trades';
 import { settings } from '../settings';
 import type { Shell } from '../shell';
@@ -28,6 +29,7 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       <Goals game={game} />
       <Frontier game={game} />
       <BoonTray game={game} />
+      <EventCard game={game} />
       <Toasts game={game} />
       <InfoPanel game={game} />
       {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : <BuildBar game={game} />}
@@ -177,7 +179,7 @@ function FamilyLine({ w, fam }: { w: World; fam: Family }) {
   return (
     <div class="family-line">
       <p class="fam-title">
-        The {fam.surname}s, <em>{familyTitle(fam, craft)}</em>
+        The {plural(fam.surname)}, <em>{familyTitle(fam, craft)}</em>
       </p>
       {fam.boons.length > 0 && (
         <p class="boon-badges">
@@ -193,13 +195,47 @@ function FamilyLine({ w, fam }: { w: World; fam: Family }) {
   );
 }
 
+/** A messenger's news with a choice attached. Never blocks; resolves cautiously if ignored. */
+function EventCard({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const w = game.world;
+  const ev = w.players[PLAYER].event;
+  if (!ev) return null;
+  const def = eventDef(ev.def);
+  if (!def) return null;
+  const left = Math.max(0, (ev.expires - w.tick) / BALANCE.eventTimeout);
+  return (
+    <section class="event-card" key={ev.id} aria-label={def.title}>
+      <header>
+        <span class="ev-icon">{def.icon}</span>
+        <strong>{def.title}</strong>
+      </header>
+      <p class="ev-text">{def.text}</p>
+      <div class="ev-options">
+        {def.options.map((o, i) => {
+          const ok = canAfford(w, PLAYER, o.cost);
+          return (
+            <button key={o.label} class={`ev-opt ${i === def.options.length - 1 ? 'quiet' : ''}`} disabled={!ok} onClick={() => game.chooseEvent(ev.id, i)}>
+              <strong>{o.label}</strong>
+              <small>{o.detail}</small>
+            </button>
+          );
+        })}
+      </div>
+      <div class="boon-timer">
+        <div style={{ width: `${left * 100}%` }} />
+      </div>
+    </section>
+  );
+}
+
 /** Spore-style evolution picks: choose how a family grows. Never blocks the game. */
 function BoonTray({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
   const offers = w.players[PLAYER].offers;
   const o = offers[0];
-  if (!o) return null;
+  if (!o || o.expires === 0) return null;
   const fam = w.families.get(o.familyId);
   if (!fam) return null;
   const left = Math.max(0, (o.expires - w.tick) / BOON_TIMEOUT);
