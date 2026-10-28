@@ -1,7 +1,9 @@
 import * as THREE from 'three';
-import { BUILDINGS, type Good } from '../sim/defs';
+import { BUILDINGS, DISCOVERIES, type Good } from '../sim/defs';
+import { NO_OWNER } from '../sim/territory';
 import type { Building, World } from '../sim/world';
 import type { BuildingsView } from './buildings';
+import type { SitesView } from './sites';
 
 export const ICON: Record<string, string> = {
   logs: '/assets/icons/logs.png',
@@ -19,6 +21,7 @@ export const ICON: Record<string, string> = {
   sawpit: '/assets/icons/sawpit.png',
   storehouse: '/assets/icons/storehouse.png',
   wagon: '/assets/icons/hut.png',
+  lookout: '/assets/icons/lookout.png',
 };
 
 interface Floater {
@@ -36,6 +39,7 @@ export class Overlay {
   private bubbles = new Map<number, { el: HTMLDivElement; key: string }>();
   private floaters: Floater[] = [];
   private pending = new Map<string, { pos: THREE.Vector3; good: Good; n: number; bonus: boolean; t: number }>();
+  private pins = new Map<number, HTMLDivElement>();
   private v = new THREE.Vector3();
   visible = true;
 
@@ -59,7 +63,7 @@ export class Overlay {
     }
   }
 
-  update(world: World, buildings: BuildingsView, camera: THREE.Camera, w: number, h: number, dt: number, distance: number): void {
+  update(world: World, buildings: BuildingsView, camera: THREE.Camera, w: number, h: number, dt: number, distance: number, sites?: SitesView): void {
     const project = (p: THREE.Vector3, lift: number) => {
       this.v.set(p.x, p.y + lift, p.z).project(camera);
       return { x: ((this.v.x + 1) / 2) * w, y: ((1 - this.v.y) / 2) * h, on: this.v.z < 1 && Math.abs(this.v.x) < 1.1 && Math.abs(this.v.y) < 1.1 };
@@ -97,6 +101,35 @@ export class Overlay {
         this.bubbles.delete(id);
       }
 
+    // Discovery pins: seen but unclaimed sites, labelled so the player knows what's out there.
+    if (sites) {
+      for (const site of world.sites) {
+        const show = this.visible && site.revealed & 1 && site.claimedBy === NO_OWNER;
+        let pin = this.pins.get(site.id);
+        if (!show) {
+          if (pin) {
+            pin.remove();
+            this.pins.delete(site.id);
+          }
+          continue;
+        }
+        if (!pin) {
+          const d = DISCOVERIES[site.kind];
+          pin = document.createElement('div');
+          pin.className = 'pin';
+          pin.innerHTML = `<span class="pin-icon">${d.icon}</span><span class="pin-name">${d.name}</span>`;
+          pin.title = `${d.name}: ${d.blurb} Extend your border over it to claim it.`;
+          this.root.appendChild(pin);
+          this.pins.set(site.id, pin);
+        }
+        const p = sites.position(world, site.id);
+        if (!p) continue;
+        const s = project(p, 2.4);
+        pin.style.display = s.on ? '' : 'none';
+        pin.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -100%) scale(${Math.max(0.75, scale)})`;
+      }
+    }
+
     // Spawn merged floaters.
     for (const [key, p] of this.pending) {
       p.t -= dt;
@@ -127,6 +160,7 @@ export class Overlay {
   clear(): void {
     this.root.innerHTML = '';
     this.bubbles.clear();
+    this.pins.clear();
     this.floaters = [];
     this.pending.clear();
   }

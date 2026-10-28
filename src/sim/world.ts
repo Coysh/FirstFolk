@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, GOODS, SKILLS, costTotal, type BuildingType, type Good, type NodeKind, type Skill, type Tool } from './defs';
+import { BUILDINGS, GOODS, SKILLS, costTotal, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
 import { generateMap, isWalkableTerrain, type MapData } from './mapgen';
 import { PathFinder } from './path';
 import { Rng } from './rng';
@@ -10,6 +10,7 @@ import { updateSettler, assignJobs } from './settlers';
 import { updatePopulation, createFamily } from './population';
 import { evaluateScenario, SCENARIOS, type Scenario, type ScenarioState } from './scenario';
 import { DIFFICULTY, type Difficulty, type Rules } from './rules';
+import { NO_OWNER, onBuildingComplete, updateExploration } from './territory';
 
 export type Stock = Record<Good, number>;
 export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0 });
@@ -58,6 +59,17 @@ export interface Building {
   tier: number;
 }
 
+export interface Discovery {
+  id: number;
+  kind: DiscoveryKind;
+  x: number;
+  y: number;
+  /** Bitmask of players who have seen it. */
+  revealed: number;
+  /** Owner who claimed it, or -1. */
+  claimedBy: number;
+}
+
 export type BuildingAlert = '' | 'noWorker' | 'noResource' | 'full' | 'noInput' | 'materials';
 
 export interface Family {
@@ -68,6 +80,8 @@ export interface Family {
   homeId: number;
   /** Best XP any member has reached per skill: the family's knowledge, inherited by children. */
   skills: Skills;
+  /** Ticks until the family can next have a child. */
+  birthCooldown: number;
 }
 
 export type Job =
@@ -111,6 +125,7 @@ export type SimEvent =
   | { type: 'buildingComplete'; id: number; buildingType: BuildingType }
   | { type: 'familyApproaching'; familyId: number; surname: string; size: number; skill: Skill }
   | { type: 'cameOfAge'; settlerId: number; name: string; surname: string }
+  | { type: 'born'; settlerId: number; name: string; surname: string }
   | { type: 'hungry' }
   | { type: 'fed' }
   | { type: 'objectiveComplete'; label: string }
@@ -119,6 +134,11 @@ export type SimEvent =
   | { type: 'unlocked'; buildingType: BuildingType }
   | { type: 'produced'; buildingId: number; good: Good; bonus: boolean }
   | { type: 'delivered'; buildingId: number; good: Good }
+  | { type: 'territoryGrew'; owner: number; tiles: number; x: number; y: number }
+  | { type: 'discovered'; siteId: number; kind: DiscoveryKind; owner: number }
+  | { type: 'claimed'; siteId: number; kind: DiscoveryKind; owner: number; text: string }
+  | { type: 'rumour'; siteId: number; kind: DiscoveryKind; owner: number; dir: string }
+  | { type: 'familySettled'; familyId: number; surname: string; buildingId: number }
   | { type: 'victory'; scenario: string };
 
 export interface PlayerState {
@@ -130,6 +150,10 @@ export interface PlayerState {
   produced: Stock;
   /** Buildings unlocked through trades. */
   unlocked: BuildingType[];
+  /** Discoveries claimed. */
+  claimed: number;
+  /** Tick after which a rumour reveals the next discovery (if none is in sight). */
+  rumourAt: number;
 }
 
 export interface WorldStats {
@@ -140,6 +164,10 @@ export interface WorldStats {
   arrivals: number[];
   lastEventTick: number;
   longestQuiet: number;
+  /** Gaps between "major" beats: discoveries, unlocks, tier-ups, chapters, arrivals. */
+  lastMajorTick: number;
+  longestMajorGap: number;
+  firstDiscoveryTick: number;
 }
 
 export interface WorldOptions {
@@ -186,7 +214,19 @@ export class World {
     arrivals: [],
     lastEventTick: 0,
     longestQuiet: 0,
+    lastMajorTick: 0,
+    longestMajorGap: 0,
+    firstDiscoveryTick: -1,
   };
+  /** Owner per tile (-1 = unclaimed). */
+  territory: Int8Array;
+  /** Per-tile bitmask of players who have explored it. */
+  explored: Uint8Array;
+  territoryVersion = 0;
+  fogVersion = 0;
+  sites: Discovery[] = [];
+  /** Runtime cache for territoryBox(); not saved. */
+  boxCache: { version: number; box: { x0: number; y0: number; x1: number; y1: number } }[] = [];
 
   readonly pathfinder: PathFinder;
 
@@ -200,10 +240,13 @@ export class World {
     this.rng = new Rng(opts.seed);
     this.nodeAt = new Int32Array(this.size * this.size);
     this.buildingAt = new Int32Array(this.size * this.size);
+    this.territory = new Int8Array(this.size * this.size).fill(NO_OWNER);
+    this.explored = new Uint8Array(this.size * this.size);
     this.pathfinder = new PathFinder(this.size, (i) => this.walkable(i));
 
     if (opts.blank) return;
-    for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y);
+    for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y, 0, n.max);
+    for (const site of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER });
     this.setupPlayer(0, this.map.starts[0]);
   }
 
@@ -243,6 +286,11 @@ export class World {
       this.stats.longestQuiet = Math.max(this.stats.longestQuiet, this.tick - this.stats.lastEventTick);
       this.stats.lastEventTick = this.tick;
     }
+    if (MAJOR_EVENTS.has(e.type) && (!('owner' in e) || e.owner === 0)) {
+      this.stats.longestMajorGap = Math.max(this.stats.longestMajorGap, this.tick - this.stats.lastMajorTick);
+      this.stats.lastMajorTick = this.tick;
+      if (e.type === 'discovered' && this.stats.firstDiscoveryTick < 0) this.stats.firstDiscoveryTick = this.tick;
+    }
   }
 
   /** Remove and return all events emitted since the last drain. */
@@ -254,8 +302,8 @@ export class World {
 
   // ---- entities ---------------------------------------------------------
 
-  addNode(kind: NodeKind, x: number, y: number, growth = 0): ResourceNode {
-    const max = kind === 'tree' ? BALANCE.treeLogs : kind === 'rock' ? BALANCE.rockStone : BALANCE.bushBerries;
+  addNode(kind: NodeKind, x: number, y: number, growth = 0, maxOverride?: number): ResourceNode {
+    const max = maxOverride ?? (kind === 'tree' ? BALANCE.treeLogs : kind === 'rock' ? BALANCE.rockStone : BALANCE.bushBerries);
     const node: ResourceNode = {
       id: this.newId(),
       kind,
@@ -290,7 +338,7 @@ export class World {
       y,
       done,
       work: done ? 1 : 0,
-      workNeeded: done ? 1 : def.buildTicks * BALANCE.buildRate,
+      workNeeded: done ? 1 : Math.round((def.buildTicks * BALANCE.buildRate * BALANCE.buildTimePct) / 100),
       delivered: emptyStock(),
       incoming: emptyStock(),
       stock: emptyStock(),
@@ -344,8 +392,9 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [] };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
+    onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
     const fam = createFamily(this, owner, wagon.id);
     wagon.familyId = fam.id;
@@ -423,6 +472,7 @@ export class World {
     this.pendingCommands.length = 0;
 
     if (this.tick % 10 === 0) this.updateNature();
+    if (this.tick % 10 === 5) updateExploration(this);
     if (this.tick % 5 === 0) {
       assignJobs(this);
       updateLogistics(this);
@@ -486,6 +536,8 @@ export class World {
     }
   }
 }
+
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['discovered', 'rumour', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 export const comeOfAgeTicks = () => Math.round(BALANCE.comeOfAgeYears * BALANCE.yearTicks);
 

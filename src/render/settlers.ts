@@ -3,7 +3,7 @@ import { SKILLS, type Good, type Skill, type Tool } from '../sim/defs';
 import { tierOf } from '../sim/trades';
 import { CREST_COLORS } from '../sim/population';
 import { hash2 } from '../sim/rng';
-import type { Settler, World } from '../sim/world';
+import { comeOfAgeTicks, type Settler, type World } from '../sim/world';
 import type { Effects } from './effects';
 import { goodGeometry } from './models';
 import { ModelBuilder, box, cone, cyl, sphere } from './modelBuilder';
@@ -194,7 +194,8 @@ export class SettlersView {
       a.px = x;
       a.pz = z;
 
-      const scale = s.child ? 0.82 : 1.15;
+      // Children grow visibly from toddler to near-adult size.
+      const scale = s.child ? 0.55 + 0.32 * Math.min(1, s.age / comeOfAgeTicks()) : 1.15;
       const seed = s.id * 1.37;
       const moving = s.anim === 'walk' && (mdx * mdx + mdz * mdz > 1e-7 || s.next >= 0);
 

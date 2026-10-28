@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import type { NodeKind } from './defs';
+import type { DiscoveryKind, NodeKind } from './defs';
 import { fbm, smoothstep } from './noise';
 import { Rng } from './rng';
 
@@ -25,8 +25,31 @@ export interface MapData {
   terrain: Uint8Array;
   waterLevel: number;
   starts: { x: number; y: number }[];
-  nodes: { kind: NodeKind; x: number; y: number }[];
+  /** `max` overrides the default yield (prize sites). */
+  nodes: { kind: NodeKind; x: number; y: number; max?: number }[];
+  sites: { kind: DiscoveryKind; x: number; y: number }[];
 }
+
+/**
+ * Discoveries per start, by distance: one just past the first border to pull the player
+ * outwards, then a trail of richer prizes across the valley. Mirrored for the rival start.
+ */
+const SITE_RINGS: { kind: DiscoveryKind; d: number }[] = [
+  { kind: 'cart', d: 15 },
+  { kind: 'ruins', d: 20 },
+  { kind: 'grove', d: 23 },
+  { kind: 'wanderers', d: 28 },
+  { kind: 'oakwood', d: 31 },
+  { kind: 'stones', d: 36 },
+  { kind: 'outcrop', d: 40 },
+  { kind: 'ruins', d: 46 },
+];
+/** Prize sites paint their own terrain and resources. */
+const PRIZE: Partial<Record<DiscoveryKind, { terrain: TerrainId; node: NodeKind; r: number; density: number; max: number }>> = {
+  grove: { terrain: 3, node: 'bush', r: 3.2, density: 0.55, max: 6 },
+  oakwood: { terrain: 4, node: 'tree', r: 3.6, density: 0.75, max: 3 },
+  outcrop: { terrain: 5, node: 'rock', r: 2.6, density: 0.6, max: 30 },
+};
 
 export const isWalkableTerrain = (t: number) => t !== Terrain.Water && t !== Terrain.Mountain;
 
@@ -148,6 +171,20 @@ export function generateMap(seed: number, size = BALANCE.mapSize): MapData {
     paint(s.x, s.y, START_CLEAR, Terrain.Grass);
   });
 
+  const rng = new Rng(seed ^ 0x5eed);
+  const sites = placeSites(N, starts, terrain, rng);
+  for (const site of sites) {
+    const p = PRIZE[site.kind];
+    if (p) paint(site.x, site.y, p.r, p.terrain);
+  }
+  const prizeAt = (x: number, y: number) => {
+    for (const site of sites) {
+      const p = PRIZE[site.kind];
+      if (p && (x - site.x) ** 2 + (y - site.y) ** 2 <= p.r * p.r) return p;
+    }
+    return undefined;
+  };
+
   const inCluster = (x: number, y: number, key: keyof typeof CLUSTERS) =>
     starts.some((s, i) => {
       const m = i === 0 ? 1 : -1;
@@ -155,13 +192,18 @@ export function generateMap(seed: number, size = BALANCE.mapSize): MapData {
       return (x - (s.x + c.dx * m)) ** 2 + (y - (s.y + c.dy * m)) ** 2 <= c.r * c.r;
     });
 
-  const rng = new Rng(seed ^ 0x5eed);
   const nodes: MapData['nodes'] = [];
   for (let y = 1; y < N - 1; y++) {
     for (let x = 1; x < N - 1; x++) {
       if (starts.some((s) => (x - s.x) ** 2 + (y - s.y) ** 2 <= (START_CLEAR + 1) ** 2)) continue;
       const t = terrain[y * N + x];
       const roll = rng.float();
+      if (sites.some((s) => s.x === x && s.y === y)) continue;
+      const prize = prizeAt(x, y);
+      if (prize && t === prize.terrain) {
+        if (roll < prize.density) nodes.push({ kind: prize.node, x, y, max: prize.max });
+        continue;
+      }
       if (t === Terrain.Forest && roll < 0.7) nodes.push({ kind: 'tree', x, y });
       else if (t === Terrain.Grass && roll < 0.03) nodes.push({ kind: 'tree', x, y });
       else if (t === Terrain.Meadow && roll < (inCluster(x, y, 'meadow') ? 0.45 : 0.06)) nodes.push({ kind: 'bush', x, y });
@@ -169,5 +211,45 @@ export function generateMap(seed: number, size = BALANCE.mapSize): MapData {
     }
   }
 
-  return { size: N, heights, terrain, waterLevel: Math.round(water / HEIGHT_STEP), starts, nodes };
+  return { size: N, heights, terrain, waterLevel: Math.round(water / HEIGHT_STEP), starts, nodes, sites };
+}
+
+function placeSites(N: number, starts: { x: number; y: number }[], terrain: Uint8Array, rng: Rng): MapData['sites'] {
+  const sites: MapData['sites'] = [];
+  const ok = (x: number, y: number) => {
+    if (x < 5 || y < 5 || x >= N - 5 || y >= N - 5) return false;
+    const t = terrain[y * N + x];
+    if (t === Terrain.Water || t === Terrain.Mountain || t === Terrain.Sand) return false;
+    // Keep clear of both starts and of other sites.
+    if (starts.some((s) => (x - s.x) ** 2 + (y - s.y) ** 2 < 12 * 12)) return false;
+    return !sites.some((s) => (x - s.x) ** 2 + (y - s.y) ** 2 < 9 * 9);
+  };
+  // Directions are integer unit-ish vectors (no trig in the sim): 16 compass points.
+  const DIRS = [
+    [100, 0], [92, 38], [71, 71], [38, 92], [0, 100], [-38, 92], [-71, 71], [-92, 38],
+    [-100, 0], [-92, -38], [-71, -71], [-38, -92], [0, -100], [38, -92], [71, -71], [92, -38],
+  ];
+  const s0 = starts[0];
+  for (const ring of SITE_RINGS) {
+    for (let tries = 0; tries < 48; tries++) {
+      const [dx, dy] = DIRS[rng.int(DIRS.length)];
+      const d = ring.d + rng.range(-2, 2);
+      const x = s0.x + Math.round((dx * d) / 100);
+      const y = s0.y + Math.round((dy * d) / 100);
+      // The rival's copy sits at the mirrored spot (nudged to the nearest good tile).
+      const mirror = nearestOk(N - x, N - y, ok);
+      if (!ok(x, y) || !mirror) continue;
+      sites.push({ kind: ring.kind, x, y });
+      if (ok(mirror.x, mirror.y)) sites.push({ kind: ring.kind, ...mirror });
+      break;
+    }
+  }
+  return sites;
+}
+
+function nearestOk(x: number, y: number, ok: (x: number, y: number) => boolean): { x: number; y: number } | null {
+  for (let r = 0; r <= 4; r++)
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r && ok(x + dx, y + dy)) return { x: x + dx, y: y + dy };
+  return null;
 }

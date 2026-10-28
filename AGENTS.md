@@ -16,7 +16,7 @@ The repo is `https://github.com/Coysh/FirstFolk.git` (`origin`, branch `main`). 
 
    `npm version <patch|minor> --no-git-tag-version` does the bump.
 3. Commit with a descriptive message that says what changed and why, starting with the version, e.g. `v0.3.0: frontier, fog and discoveries`.
-4. Tag it `vX.Y.Z` and push with `git push --follow-tags origin main`.
+4. Tag it with an annotated tag (`git tag -a vX.Y.Z -m "vX.Y.Z"`) and push with `git push --follow-tags origin main`.
 
 Never commit `.env`, API keys, `node_modules`, `dist` or `screenshots`. The `.gitignore` already covers them.
 

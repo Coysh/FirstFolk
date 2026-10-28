@@ -17,7 +17,14 @@ describe('pacing (headless playtests)', () => {
       expect(r.firstJourneymanSec).toBeLessThan(6 * 60);
       expect(r.chapters.Trades).toBeLessThan(16 * 60);
       expect(r.idleAdultPct).toBeLessThan(15);
-      expect(r.longestQuietSec).toBeLessThan(30);
+      expect(r.longestQuietSec).toBeLessThan(20);
+      // The frontier: something to head for from the first minute, a major beat at least every
+      // 90 s, and the border still moving in the last third of the game.
+      expect(r.firstDiscoverySec).toBeGreaterThanOrEqual(0);
+      expect(r.firstDiscoverySec).toBeLessThan(60);
+      expect(r.claimed).toBeGreaterThanOrEqual(3);
+      expect(r.longestMajorGapSec).toBeLessThan(90);
+      expect(r.territoryByMinute.at(-1)!).toBeGreaterThan(r.territoryByMinute[10]);
       expect(r.timeline.some((l) => l.includes('arrives'))).toBe(true);
       expect(r.timeline.some((l) => l.includes('sawpit unlocked'))).toBe(true);
     });

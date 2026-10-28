@@ -3,10 +3,10 @@ import * as THREE from 'three';
 import { audio, type Sfx } from './audio/audio';
 import { TICK_MS } from './sim/balance';
 import { canPlace } from './sim/commands';
-import { BUILDINGS, type BuildingType, type Tool } from './sim/defs';
+import { BUILDINGS, DISCOVERIES, type BuildingType, type Tool } from './sim/defs';
 import { serializeWorld } from './sim/save';
 import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
-import { TIER_NAMES, TRADES } from './sim/trades';
+import { TRADES, tradeTitle } from './sim/trades';
 import type { SimEvent, World } from './sim/world';
 import type { Overlay } from './render/overlay';
 import type { GameRenderer } from './render/scene';
@@ -117,7 +117,7 @@ export class Game {
     this.view.render(running ? this.acc / TICK_MS : 1, dt);
     this.updateSelectionRing();
     const canvas = this.view.renderer.domElement;
-    this.overlay.update(this.world, this.view.buildings, this.view.rig.camera, canvas.clientWidth, canvas.clientHeight, dt, this.view.rig.distance);
+    this.overlay.update(this.world, this.view.buildings, this.view.rig.camera, canvas.clientWidth, canvas.clientHeight, dt, this.view.rig.distance, this.view.sites);
     audio.update(dt, Math.min(1, this.view.rig.distance / 60));
 
     this.uiTimer -= dt;
@@ -173,12 +173,16 @@ export class Game {
         case 'cameOfAge':
           this.toast('/assets/icons/people.png', `${e.name} ${e.surname} has come of age and learned from the family`, 'info');
           break;
+        case 'born':
+          audio.play('arrive');
+          this.toast('/assets/icons/people.png', `${e.name} is born to the ${e.surname} family`, 'good');
+          break;
         case 'tierUp': {
           const s = this.world.settlers.get(e.settlerId);
           const fam = s && this.world.families.get(s.familyId);
           const trade = TRADES[e.skill];
           audio.play('tierUp');
-          this.toast(icon(this.world.buildings.get(e.buildingId)?.type ?? 'woodcutter'), `${s?.name} ${fam?.surname ?? ''} is now a ${TIER_NAMES[e.tier]} ${trade.titles[e.tier]}! ${trade.perks[e.tier]}`, 'big');
+          this.toast(icon(this.world.buildings.get(e.buildingId)?.type ?? 'woodcutter'), `${s?.name} ${fam?.surname ?? ''} is now a ${tradeTitle(e.skill, e.tier)}! ${trade.perks[e.tier]}`, 'big');
           break;
         }
         case 'unlocked':
@@ -190,6 +194,30 @@ export class Game {
           break;
         case 'fed':
           this.toast('/assets/icons/berries.png', 'Bellies are full again', 'good');
+          break;
+        case 'discovered':
+          if (e.owner !== PLAYER) break;
+          audio.play('objective');
+          this.toast('/assets/icons/scroll.png', `Spotted beyond the border: ${DISCOVERIES[e.kind].name}. Build a Lookout towards it to claim it!`, 'info');
+          break;
+        case 'claimed': {
+          const d = DISCOVERIES[e.kind];
+          if (e.owner !== PLAYER) {
+            this.toast('/assets/icons/scroll.png', `Your rival claimed the ${d.name}.`, 'warn');
+            break;
+          }
+          audio.play('tierUp');
+          this.banner.value = { title: `${d.icon} ${d.name} claimed!`, sub: e.text };
+          setTimeout(() => (this.banner.value = null), 4200);
+          break;
+        }
+        case 'rumour':
+          if (e.owner !== PLAYER) break;
+          audio.play('objective');
+          this.toast('/assets/icons/people.png', `A traveller tells of the ${DISCOVERIES[e.kind].name} to the ${e.dir}. Push your border that way!`, 'info');
+          break;
+        case 'familySettled':
+          this.toast('/assets/icons/hut.png', `The ${e.surname} family have a home at last`, 'good');
           break;
         case 'objectiveComplete':
           audio.play('objective');
@@ -297,6 +325,11 @@ export class Game {
 
   focusSelection(): void {
     const p = this.selectionPos();
+    if (p) this.view.rig.lookAt(p.x, p.z);
+  }
+
+  focusSite(id: number): void {
+    const p = this.view.sites.position(this.world, id);
     if (p) this.view.rig.lookAt(p.x, p.z);
   }
 

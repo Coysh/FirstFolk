@@ -82,7 +82,9 @@ describe('core loop', () => {
     const w = newWorld();
     const total0 = wagon(w).stock.logs;
     const site = place(w, 'woodcutter');
-    runSeconds(w, 12);
+    // Demolish once some materials have arrived but before it is finished.
+    while (site.delivered.logs === 0) w.step();
+    expect(site.done).toBe(false);
     w.enqueue({ type: 'demolish', owner: 0, id: site.id });
     runSeconds(w, 1);
     expect(w.buildings.has(site.id)).toBe(false);

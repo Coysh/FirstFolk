@@ -5,7 +5,7 @@ export const GOODS: readonly Good[] = ['logs', 'planks', 'stone', 'berries'];
 
 export type NodeKind = 'tree' | 'rock' | 'bush';
 
-export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'hut' | 'sawpit' | 'storehouse';
+export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'hut' | 'lookout' | 'sawpit' | 'storehouse';
 
 export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw';
 
@@ -64,6 +64,10 @@ export interface BuildingDef {
   buildable: boolean;
   /** Locked until a settler reaches this trade tier (see trades.ts). */
   requires?: { skill: Skill; tier: number };
+  /** Land claimed (radius in tiles) when finished; claimed land is final. */
+  claim?: number;
+  /** Fog lifted (radius in tiles) when finished. */
+  reveal?: number;
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
@@ -75,9 +79,11 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     cost: {},
     buildTicks: 1,
     size: 2,
-    housing: 4,
+    housing: 6,
     storage: true,
     buildable: false,
+    claim: 11,
+    reveal: 15,
   },
   woodcutter: {
     type: 'woodcutter',
@@ -134,6 +140,18 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     housing: 4,
     buildable: true,
   },
+  lookout: {
+    type: 'lookout',
+    name: 'Lookout',
+    icon: '🗼',
+    blurb: 'Pushes your border outwards and reveals the land beyond. Build near the edge to reach discoveries.',
+    cost: { logs: 4, stone: 2 },
+    buildTicks: secs(10),
+    size: 2,
+    buildable: true,
+    claim: 8,
+    reveal: 14,
+  },
   sawpit: {
     type: 'sawpit',
     name: 'Sawpit',
@@ -160,7 +178,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
 };
 
-export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'sawpit', 'storehouse'];
+export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'sawpit', 'storehouse'];
 
 export const GOOD_INFO: Record<Good, { name: string; icon: string }> = {
   logs: { name: 'Logs', icon: '🪵' },
@@ -180,3 +198,16 @@ export function outputGood(type: BuildingType): Good | undefined {
   const job = BUILDINGS[type].job;
   return job && job.kind !== 'plant' ? job.good : undefined;
 }
+
+/** Points of interest hidden in the fog. Whoever's border covers one first claims it. */
+export type DiscoveryKind = 'cart' | 'ruins' | 'wanderers' | 'grove' | 'oakwood' | 'outcrop' | 'stones';
+
+export const DISCOVERIES: Record<DiscoveryKind, { name: string; icon: string; blurb: string }> = {
+  cart: { name: 'Abandoned Cart', icon: '🛞', blurb: 'A broken-down cart, still loaded with supplies.' },
+  ruins: { name: 'Old Ruins', icon: '🏛️', blurb: 'Carvings left by an older folk. Studying them teaches everyone a craft.' },
+  wanderers: { name: 'Wanderers’ Camp', icon: '⛺', blurb: 'A skilled family camping in the wilds, looking for a place to belong.' },
+  grove: { name: 'Berry Grove', icon: '🫐', blurb: 'A sheltered meadow thick with laden bushes.' },
+  oakwood: { name: 'Old-Growth Oakwood', icon: '🌳', blurb: 'Ancient trees that each give three logs.' },
+  outcrop: { name: 'Rich Outcrop', icon: '🪨', blurb: 'Deep seams of stone that take an age to work out.' },
+  stones: { name: 'Standing Stones', icon: '🗿', blurb: 'A ring of old stones. Folk feel braver near them, and the land around becomes yours.' },
+};

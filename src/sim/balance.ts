@@ -12,16 +12,18 @@ export const BALANCE = {
   hungrySpeedPct: 70,
 
   newcomerCheckInterval: secs(5),
-  newcomerCooldown: secs(25),
+  newcomerCooldown: secs(12),
+  /** A family with two adults, room at home and food to spare has a child this often. */
+  birthInterval: secs(40),
 
-  treeFellTicks: secs(3.5),
+  treeFellTicks: secs(2.8),
   treeLogs: 1,
   stumpDecayTicks: secs(40),
   saplingGrowTicks: secs(75),
   plantTicks: secs(3),
 
   rockStone: 6,
-  mineTicks: secs(3.5),
+  mineTicks: secs(2.8),
 
   bushBerries: 4,
   pickTicks: secs(2),
@@ -29,14 +31,22 @@ export const BALANCE = {
 
   /** Work units per tick a builder contributes (hungry builders contribute less). */
   buildRate: 10,
+  /** Global construction-time multiplier (percent of each building's buildTicks). */
+  buildTimePct: 70,
 
   /** One year = 4 seasons of 75 s. Ages are tracked in ticks. */
   yearTicks: secs(300),
   comeOfAgeYears: 1.5,
 
   wanderRadius: 3,
-  /** Max Chebyshev distance from the wagon for new buildings (borders arrive in M3). */
-  claimRadius: 16,
+  /** Fog lifts this far around every settler. */
+  settlerSight: 3,
+  /** Discovery rewards. */
+  ruinsXp: 120,
+  wandererSkill: 220,
+  stonesClaim: 7,
+  /** With no discovery in sight, a rumour reveals the nearest one after this long. */
+  rumourDelay: secs(40),
 
   /** Share of the family's best skill XP a child inherits on coming of age. */
   inheritPct: 40,

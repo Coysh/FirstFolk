@@ -1,10 +1,10 @@
 import { BUILDINGS, type NodeKind } from './defs';
 import type { Difficulty } from './rules';
 import type { ScenarioState } from './scenario';
-import { World, type Building, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
+import { World, type Building, type Discovery, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
 
 /** Bump when the shape of saved state changes; older saves are refused rather than misread. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 4;
 
 const KINDS: NodeKind[] = ['tree', 'rock', 'bush'];
 
@@ -26,6 +26,26 @@ export interface SaveData {
   scenarioState: ScenarioState;
   stats: WorldStats;
   natureVersion: number;
+  /** Run-length encoded [value, count, value, count, …]. */
+  territory: number[];
+  explored: number[];
+  sites: Discovery[];
+}
+
+function rle(a: ArrayLike<number>): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < a.length; ) {
+    let j = i;
+    while (j < a.length && a[j] === a[i]) j++;
+    out.push(a[i], j - i);
+    i = j;
+  }
+  return out;
+}
+
+function unrle(r: number[], into: Int8Array | Uint8Array): void {
+  let k = 0;
+  for (let i = 0; i < r.length; i += 2) into.fill(r[i], k, (k += r[i + 1]));
 }
 
 /** Snapshot the complete simulation state. The terrain is regenerated from the seed on load. */
@@ -48,6 +68,9 @@ export function serializeWorld(w: World): SaveData {
     scenarioState: clone(w.scenarioState),
     stats: clone(w.stats),
     natureVersion: w.natureVersion,
+    territory: rle(w.territory),
+    explored: rle(w.explored),
+    sites: clone(w.sites),
   };
 }
 
@@ -73,6 +96,9 @@ export function deserializeWorld(d: SaveData): World {
   w.scenarioState = d.scenarioState;
   w.stats = d.stats;
   w.natureVersion = d.natureVersion;
+  unrle(d.territory, w.territory);
+  unrle(d.explored, w.explored);
+  w.sites = d.sites;
   return w;
 }
 

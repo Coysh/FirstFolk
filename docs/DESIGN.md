@@ -16,6 +16,33 @@ FirstFolk is a fast, single-player browser settlement builder. It combines Settl
 
 ---
 
+## 0. The Fun Pass (v0.2 onwards): what was boring, and the new pillars
+
+A playtest of the M1 build said it plainly: *after 10–15 minutes it gets boring, with too much waiting and not enough to do.* The code and the headless runs showed why:
+
+| Boredom source | Evidence | Fix (pillar) |
+|---|---|---|
+| **No decisions after the opening.** The loop was place a gatherer, place a hut, wait. The content ran out at the Sawpit and Storehouse (about 7 min). | The bot's timeline after 7 min was only "built hut" and "family arrives". | **Family Boons** (Spore-style picks), **Valley Events** with choices, **settlement tiers** |
+| **No world.** A fixed 33×33 build box sat on a 128² map, with nothing to find and no reason to look outward. | DESIGN.md's own known issue: "the build area fills up". | **The Frontier**: fog, a growing border, Lookouts, discoveries and rumours |
+| **Growth was pure waiting.** Migrants were the only growth: one empty hut at a time with a 25 s cooldown, and no births. Master took about 120 harvests. | On seed 7 population froze at 39 with permanent hunger, because the box's bushes ran dry. | **Births**, faster migrants, cheaper tiers, and discoveries as growth spurts |
+| **No rhythm or tension.** No seasons, rival or events. Hunger was just a toast. | Flat event mix in every run. | **Seasons**, **events**, **the rival race** |
+| **Families were invisible.** Inheritance happened silently, and the player never shaped a lineage. | No family decisions in the UI. | **Boons** owned by families and inherited, **marriage** merging lineages |
+
+**What we borrow, and why:**
+- Settlers II: the border you grow, which makes the map a visible scoreboard.
+- AoE II: scouting the unknown, and age-ups that transform the town.
+- Spore: "pick your evolution" choices that make each run's families yours.
+- SimCity: milestones that visibly level up the town, and events that keep it alive.
+
+**Fun contract** (enforced by `tests/pacing.test.ts` and reported by `npm run sim`):
+- Something to head for on the map within 60 s.
+- A major beat (discovery, rumour, unlock, tier-up, chapter, arrival or boon) at least every **90 s**.
+- No event drought over 20 s.
+- The border is still moving in the last third of the game.
+- Idle adults under 15%.
+
+---
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -334,3 +361,48 @@ Growth is deliberately generous for now. Seasons, winter food pressure and elder
 - Triangle count is high at full decor (about 850k). Balanced and Fast quality cut decor to 70% and 35%. This needs a real-phone check.
 - Headless screenshots use SwiftShader, so frame rate on real GPUs is unmeasured.
 - `localStorage` holds a single save slot.
+
+### v0.2.0 Fun Pass 1+2: kill the waiting, and the Frontier (2026-10-28)
+**Kill the waiting:**
+- **Births:** a family with 2 adults, room at home and food to spare has a child every 40 s. Children grow visibly from toddler size.
+- Migrants arrive every 12 s (was 25 s).
+- Building takes 30% less time.
+- Felling and quarrying are 20% faster.
+- Journeyman needs 160 XP (was 220) and Master 650 (was 1200).
+- The wagon houses 6.
+- Speed controls are now 1×, 2×, 3× and 5×.
+
+**The Frontier** (`src/sim/territory.ts`):
+- The fixed build box is gone. The wagon claims radius 11, and the new **Lookout** (4 logs and 2 stone) claims radius 8 and reveals 14.
+- You can build only inside your border.
+- **Fog of war:** settlers lift it as they walk, and lookouts lift it far.
+- **8 discoveries per side**, placed by mapgen and mirrored for the rival:
+  - **Abandoned Cart:** a goods cache.
+  - **Old Ruins:** every adult gains 120 XP in your weakest craft, which often triggers tier-ups and unlocks.
+  - **Wanderers' Camp:** a family of 4 with two Journeymen joins homeless and takes the next free hut first.
+  - **Berry Grove**, **Old-Growth Oakwood** (3 logs per tree) and **Rich Outcrop** (30 stone per rock).
+  - **Standing Stones:** a free land claim.
+- **Rumours:** when no discovery is in sight, after 40 s a traveller names the nearest one and its direction, and its spot is revealed. This came from playtesting. Seed 11 went 7 minutes without seeing anything, and rumours removed the drought.
+- **Presentation:**
+  - fog and borders are drawn in the terrain shader from one 128² data texture (`src/render/fow.ts`), and the border glows while placing,
+  - unclaimed discoveries have golden beacons visible across the valley, floating pins, and an "Out in the wild" panel (click to fly there),
+  - claims get a banner and sparkles.
+
+**Playtest results** (8 seeds, 25 min, bot):
+
+| Metric | Before | After |
+|---|---|---|
+| Discoveries claimed | n/a | 6–12 |
+| Longest major-beat gap | n/a | 56–88 s (avg 72 s) |
+| Idle adults | 1–11% | about 1.3% |
+| Population at 25 min | about 95 | about 95 |
+| Seed 7 stall | stalled at 39 (hungry) | fixed: 110 |
+| Sim cost | about 2.5 s per 20 min | 0.2–0.5 s per 25 min |
+
+The sim got faster because placement now scores candidates first and flood-fills only the best ones.
+
+**Still boring, and next:**
+- The scenario chapters finish by about 15 min, so there is no climax.
+- Every family is still interchangeable.
+
+Next come Family Boons and marriage, then seasons and settlement tiers.

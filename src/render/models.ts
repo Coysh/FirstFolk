@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { BuildingType, Good } from '../sim/defs';
+import type { BuildingType, DiscoveryKind, Good } from '../sim/defs';
 import { ModelBuilder, box, cone, cyl, dodeca, gableRoof, ico, sphere } from './modelBuilder';
 import { C } from './palette';
 
@@ -189,6 +189,27 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       b.add(cyl(0.11, 0.11, 0.26, 8), C.wood, { pos: [0.62, 0.13, 0.62] });
       break;
     }
+    case 'lookout': {
+      // A tall timber watchtower on a stone base, with a platform, roof and the family banner.
+      b.add(box(1.0, 0.16, 1.0), C.stoneDark, { pos: [0, 0.06, -0.1] });
+      for (const sx of [-0.36, 0.36])
+        for (const sz of [-0.46, 0.26]) b.add(box(0.09, 1.7, 0.09), C.timber, { pos: [sx, 0.9, sz], rot: [-sz * 0.08, 0, sx * 0.08] });
+      for (const y of [0.55, 1.05]) {
+        b.add(box(0.8, 0.05, 0.05), C.wood, { pos: [0, y, -0.46], rot: [0, 0, 0.5] });
+        b.add(box(0.8, 0.05, 0.05), C.wood, { pos: [0, y, 0.26], rot: [0, 0, -0.5] });
+      }
+      b.add(box(0.95, 0.07, 0.95), C.lightWood, { pos: [0, 1.7, -0.1] });
+      fence(b, -0.45, 0.45, 0.36, 4);
+      b.add(box(0.95, 0.16, 0.03), C.wood, { pos: [0, 1.82, 0.37] });
+      b.add(box(0.95, 0.16, 0.03), C.wood, { pos: [0, 1.82, -0.57] });
+      b.add(cone(0.78, 0.55, 4), C.thatch, { pos: [0, 2.25, -0.1], rot: [0, Math.PI / 4, 0] });
+      b.add(cyl(0.02, 0.02, 0.6, 5), C.wood, { pos: [0, 2.75, -0.1] });
+      b.add(box(0.03, 0.2, 0.32), opts.crest ?? 0xc0392b, { pos: [0, 2.9, 0.07] });
+      // ladder
+      for (let i = 0; i < 6; i++) b.add(box(0.28, 0.03, 0.03), C.lightWood, { pos: [0, 0.2 + i * 0.27, 0.42] });
+      for (const x of [-0.14, 0.14]) b.add(box(0.03, 1.6, 0.03), C.wood, { pos: [x, 0.85, 0.42] });
+      break;
+    }
     case 'hut': {
       b.add(cyl(0.68, 0.72, 0.1, 10), C.stoneDark, { pos: [0, 0.03, -0.05] });
       b.add(cyl(0.6, 0.62, 0.48, 10), C.wattle, { pos: [0, 0.32, -0.05] });
@@ -208,6 +229,52 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       b.add(cyl(0.1, 0.1, 0.22, 8), C.wood, { pos: [0.7, 0.11, -0.45] });
       break;
     }
+  }
+  return b.build();
+}
+
+/** Props marking discoveries in the wild, centred on their tile. */
+export function discoveryGeometry(kind: DiscoveryKind): THREE.BufferGeometry {
+  const b = new ModelBuilder();
+  switch (kind) {
+    case 'cart':
+      b.add(box(0.9, 0.12, 0.5), C.wood, { pos: [0, 0.3, 0], rot: [0, 0.3, 0.18] });
+      b.add(cyl(0.2, 0.2, 0.05, 9), C.darkTimber, { pos: [-0.3, 0.2, 0.3], rot: [Math.PI / 2, 0, 0.3] });
+      b.add(cyl(0.2, 0.2, 0.05, 9), C.darkTimber, { pos: [0.45, 0.05, -0.2], rot: [0.1, 0, Math.PI / 2] });
+      b.add(box(0.26, 0.22, 0.26), C.lightWood, { pos: [0.1, 0.47, 0], rot: [0, 0.6, 0] });
+      b.add(sphere(0.14), C.clothShade, { pos: [-0.25, 0.45, -0.05], scale: [1, 0.75, 1] });
+      b.add(cyl(0.05, 0.05, 0.4, 6), C.wood, { pos: [0.3, 0.42, 0.1], rot: [0, 0, Math.PI / 2] });
+      break;
+    case 'ruins':
+      b.add(box(1.2, 0.08, 0.9), C.stoneDark, { pos: [0, 0.03, 0] });
+      for (const [x, h] of [[-0.45, 0.9], [0.45, 0.65]]) b.add(box(0.2, h, 0.2), C.stone, { pos: [x, h / 2, -0.2] });
+      b.add(box(1.1, 0.16, 0.24), C.stone, { pos: [-0.05, 0.86, -0.2], rot: [0, 0, -0.18] });
+      b.add(box(0.3, 0.2, 0.2), C.stoneDark, { pos: [0.2, 0.1, 0.3], rot: [0, 0.5, 0.2] });
+      b.add(box(0.2, 0.14, 0.34), C.stone, { pos: [-0.3, 0.07, 0.35], rot: [0, -0.3, 0] });
+      b.add(ico(0.16, 0), C.moss, { pos: [-0.45, 0.95, -0.2], scale: [1.2, 0.4, 1.2] });
+      break;
+    case 'wanderers':
+      b.add(cone(0.45, 0.7, 4), C.cloth, { pos: [-0.2, 0.35, -0.1], rot: [0, Math.PI / 4, 0] });
+      b.add(cone(0.32, 0.55, 4), C.clothShade, { pos: [0.4, 0.27, -0.3], rot: [0, 0.3, 0] });
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        b.add(dodeca(0.05), C.stoneDark, { pos: [0.25 + Math.cos(a) * 0.15, 0.03, 0.35 + Math.sin(a) * 0.15] });
+      }
+      b.add(cone(0.08, 0.18, 5), C.ember, { pos: [0.25, 0.09, 0.35] });
+      break;
+    case 'stones':
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        const h = 0.6 + ((i * 37) % 5) * 0.08;
+        b.add(box(0.2, h, 0.13), i % 2 ? C.stone : C.stoneDark, { pos: [Math.cos(a) * 0.7, h / 2, Math.sin(a) * 0.7], rot: [0, -a, ((i % 3) - 1) * 0.08] });
+      }
+      b.add(box(0.5, 0.12, 0.3), C.stone, { pos: [0, 0.06, 0] });
+      break;
+    default:
+      // Resource prizes get a carved waymarker post.
+      b.add(cyl(0.06, 0.07, 0.9, 6), C.timber, { pos: [0, 0.45, 0] });
+      b.add(box(0.36, 0.18, 0.04), C.lightWood, { pos: [0.12, 0.72, 0], rot: [0, 0, -0.1] });
+      b.add(cone(0.08, 0.14, 4), C.thatch, { pos: [0, 0.97, 0] });
   }
   return b.build();
 }

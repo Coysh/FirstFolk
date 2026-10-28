@@ -1,7 +1,7 @@
-import { BALANCE } from './balance';
 import { BUILDINGS, GOODS, type BuildingType } from './defs';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
-import { TIER_NAMES, TRADES } from './trades';
+import { owns, territoryBox } from './territory';
+import { tradeTitle } from './trades';
 import type { World } from './world';
 
 /** Every player and AI action goes through a Command so games are replayable and the AI cannot cheat. */
@@ -22,7 +22,7 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
   if (!def.buildable) return { ok: false, reason: 'Cannot be built' };
   if (!world.isUnlocked(owner, type)) {
     const r = def.requires!;
-    return { ok: false, reason: `Needs a ${TIER_NAMES[r.tier]} ${TRADES[r.skill].titles[r.tier]}` };
+    return { ok: false, reason: `Needs a ${tradeTitle(r.skill, r.tier)}` };
   }
   const size = def.size;
   const ex = x;
@@ -30,10 +30,8 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
   if (!world.inBounds(x, y) || !world.inBounds(x + size - 1, ey)) return { ok: false, reason: 'Out of bounds' };
 
   const home = homeOf(world, owner);
-  if (home) {
-    const d = Math.max(Math.abs(x - home.x), Math.abs(y - home.y));
-    if (d > BALANCE.claimRadius) return { ok: false, reason: 'Too far from your settlement' };
-  }
+  for (let dy = 0; dy <= size; dy++)
+    for (let dx = 0; dx < size; dx++) if (!owns(world, owner, x + dx, y + dy)) return { ok: false, reason: 'Outside your border: build a Lookout near the edge' };
 
   let minH = Infinity;
   let maxH = -Infinity;
@@ -53,6 +51,8 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
       const node = world.nodes.get(world.nodeAt[i]);
       if (node && node.kind === 'rock') return { ok: false, reason: 'Rocks in the way' };
     }
+  for (const site of world.sites)
+    if (site.x >= x && site.x < x + size && site.y >= y && site.y <= y + size) return { ok: false, reason: 'Something old stands here' };
 
   const ei = world.idx(ex, ey);
   if (!world.walkable(ei)) return { ok: false, reason: 'Entrance blocked' };
@@ -71,12 +71,14 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
  * entrance (including the new one) can still be reached. Prevents walled-in pockets.
  */
 function entrancesStayReachable(world: World, owner: number, home: { x: number; y: number; type: BuildingType }, x: number, y: number, size: number): boolean {
-  const R = BALANCE.claimRadius + 6;
-  const ox = home.x - R;
-  const oy = home.y - R;
-  const W = 2 * R + 1;
-  const seen = new Uint8Array(W * W);
-  const inBox = (tx: number, ty: number) => tx >= ox && ty >= oy && tx < ox + W && ty < oy + W && world.inBounds(tx, ty);
+  // Search the player's land plus a margin, so paths may skirt just outside the border.
+  const box = territoryBox(world, owner);
+  const ox = Math.max(0, box.x0 - 6);
+  const oy = Math.max(0, box.y0 - 6);
+  const W = Math.min(world.size, box.x1 + 7) - ox;
+  const H = Math.min(world.size, box.y1 + 7) - oy;
+  const seen = new Uint8Array(W * H);
+  const inBox = (tx: number, ty: number) => tx >= ox && ty >= oy && tx < ox + W && ty < oy + H;
   const blockedNew = (tx: number, ty: number) => tx >= x && tx < x + size && ty >= y && ty < y + size;
   const start = world.entrance(home);
   const queue: number[] = [start.x, start.y];

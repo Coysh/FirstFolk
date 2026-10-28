@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { icon, PLAYER, type Game } from '../game';
 import { ICON } from '../render/overlay';
-import { BUILDINGS, BUILD_MENU, GOODS, GOOD_INFO, SKILLS, type BuildingType, type Good } from '../sim/defs';
+import { BUILDINGS, BUILD_MENU, DISCOVERIES, GOODS, GOOD_INFO, SKILLS, type BuildingType, type Good } from '../sim/defs';
+import { NO_OWNER, territoryBox } from '../sim/territory';
 import { CREST_COLORS } from '../sim/population';
-import { TIER_NAMES, TRADES, tierOf, tierProgress } from '../sim/trades';
+import { TIER_NAMES, TRADES, tierOf, tierProgress, tradeTitle } from '../sim/trades';
 import { settings } from '../settings';
 import type { Shell } from '../shell';
 import { ageYears, describeSettler, formatTime } from './describe';
@@ -19,6 +20,7 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
     <div class="hud">
       <TopBar game={game} />
       <Goals game={game} />
+      <Frontier game={game} />
       <Toasts game={game} />
       <InfoPanel game={game} />
       {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : <BuildBar game={game} />}
@@ -75,7 +77,7 @@ function TopBar({ game }: { game: Game }) {
           <button class={game.paused.value ? 'on' : ''} onClick={() => game.togglePause()} title="Pause (Space)" aria-label="Pause">
             ❚❚
           </button>
-          {[1, 2, 4].map((s) => (
+          {[1, 2, 3, 5].map((s) => (
             <button key={s} class={!game.paused.value && game.speed.value === s ? 'on' : ''} onClick={() => game.setSpeed(s)} aria-label={`Speed ${s}x`}>
               {s}×
             </button>
@@ -137,6 +139,34 @@ function Goals({ game }: { game: Game }) {
   );
 }
 
+/** Discoveries seen but not yet claimed, nearest first: the "where next?" list. */
+function Frontier({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const w = game.world;
+  const open = w.sites.filter((s) => s.revealed & 1 && s.claimedBy === NO_OWNER);
+  if (!open.length) return null;
+  const box = territoryBox(w, PLAYER);
+  const gap = (x: number, y: number) => {
+    let best = Infinity;
+    for (let ty = box.y0; ty <= box.y1; ty += 1)
+      for (let tx = box.x0; tx <= box.x1; tx += 1) if (w.territory[w.idx(tx, ty)] === PLAYER) best = Math.min(best, Math.max(Math.abs(tx - x), Math.abs(ty - y)));
+    return best;
+  };
+  const rows = open.map((s) => ({ s, d: gap(s.x, s.y) })).sort((a, b) => a.d - b.d).slice(0, 4);
+  return (
+    <section class="frontier panel" aria-label="Out in the wild">
+      <h3>Out in the wild</h3>
+      {rows.map(({ s, d }) => (
+        <button key={s.id} class="frontier-row" onClick={() => game.focusSite(s.id)} title={DISCOVERIES[s.kind].blurb}>
+          <span class="fr-icon">{DISCOVERIES[s.kind].icon}</span>
+          <span class="fr-name">{DISCOVERIES[s.kind].name}</span>
+          <span class="fr-dist">{d} tiles out</span>
+        </button>
+      ))}
+    </section>
+  );
+}
+
 function costChips(type: BuildingType) {
   return Object.entries(BUILDINGS[type].cost).map(([g, n]) => (
     <span class="cost" key={g}>
@@ -156,7 +186,7 @@ function BuildBar({ game }: { game: Game }) {
         const unlocked = w.isUnlocked(PLAYER, t);
         const affordable = Object.entries(def.cost).every(([g, n]) => w.stored(PLAYER, g as Good) >= (n ?? 0));
         const req = def.requires;
-        const reqText = req ? `Needs a ${TIER_NAMES[req.tier]} ${TRADES[req.skill].titles[req.tier]}` : '';
+        const reqText = req ? `Needs a ${tradeTitle(req.skill, req.tier)}` : '';
         return (
           <button
             key={t}
@@ -216,7 +246,7 @@ function SkillBars({ skills }: { skills: Record<string, number> }) {
         return (
           <div class="skill" key={k} title={`${xp} XP`}>
             <span class="sk-name">{TRADES[k].name}</span>
-            <span class="sk-tier">{xp > 0 ? `${TIER_NAMES[t]} ${TRADES[k].titles[t]}` : '—'}</span>
+            <span class="sk-tier">{xp > 0 ? tradeTitle(k, t) : '—'}</span>
             <div class="sk-bar">
               <div style={{ width: `${Math.round(tierProgress(xp) * 100)}%` }} class={`t${t}`} />
             </div>

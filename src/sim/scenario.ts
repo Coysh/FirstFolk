@@ -1,5 +1,5 @@
 import { BUILDINGS, GOOD_INFO, type BuildingType, type Good, type Skill } from './defs';
-import { TIER_NAMES, TIER_XP, TRADES } from './trades';
+import { TIER_XP, tradeTitle } from './trades';
 import type { World } from './world';
 
 export interface ObjectiveProgress {
@@ -58,12 +58,18 @@ export const objectives = {
       evaluate: (w, o) => ({ current: w.population(o), target: n }),
     };
   },
+  discoveries(n: number): Objective {
+    return {
+      id: `claim-${n}`,
+      label: n === 1 ? 'Claim a discovery' : `Claim ${n} discoveries`,
+      evaluate: (w, o) => ({ current: w.players[o].claimed, target: n }),
+    };
+  },
   /** Someone reaches `tier` in a trade. Progress shows the most experienced settler's XP. */
   trade(skill: Skill, tier: number): Objective {
-    const title = TRADES[skill].titles[tier];
     return {
       id: `trade-${skill}-${tier}`,
-      label: `Train a ${TIER_NAMES[tier]} ${title}`,
+      label: `Train a ${tradeTitle(skill, tier)}`,
       evaluate: (w, o) => {
         let best = 0;
         for (const s of w.settlers.values()) if (s.owner === o) best = Math.max(best, s.skills[skill]);
@@ -86,16 +92,19 @@ export const LANDFALL: Scenario = {
     with_(objectives.produced('logs', 25), 'Landfall', 'Children carry logs back to the wagon. Watch the pile grow!'),
     with_(objectives.building('quarry'), 'Landfall', 'Place a Quarry near the grey rocks. Huts need stone.'),
     with_(objectives.building('hut', 2), 'Landfall', 'Empty huts attract new families when there is food to spare.'),
+    with_(objectives.building('lookout'), 'Landfall', 'Build a Lookout near your border to push it outwards.'),
+    with_(objectives.discoveries(1), 'Landfall', 'See the golden light? Grow your border over it to claim what lies there.'),
     with_(objectives.population(12), 'Landfall', 'Keep berries stocked and huts free, and families will come.'),
     with_(objectives.trade('woodcraft', 1), 'Trades', 'Your woodcutter learns with every log. Keep them chopping.'),
     with_(objectives.building('sawpit'), 'Trades', 'A Carpenter can run a Sawpit: it turns logs into planks.'),
     with_(objectives.produced('planks', 12), 'Trades', 'Planks are carried to your stores like any other good.'),
+    with_(objectives.discoveries(3), 'Trades', 'Chain Lookouts across the valley. Each discovery is a big boost.'),
     with_(objectives.trade('stonework', 1), 'Trades', 'Keep your quarry busy to train a Mason.'),
     with_(objectives.building('storehouse'), 'Trades', 'A Storehouse far from the wagon saves your carriers long walks.'),
     with_(objectives.population(24), 'Trades', 'Grow your village to two dozen souls.'),
     with_(objectives.trade('woodcraft', 2), 'Renown', 'Masters are made by years of work, or born into a skilled family.'),
     with_(objectives.trade('stonework', 2), 'Renown', 'A busy quarry trains a Master Mason in time.'),
-    with_(objectives.produced('planks', 60), 'Renown', 'Keep the Sawpit fed: more woodcutters, more logs.'),
+    with_(objectives.discoveries(6), 'Renown', 'The richest prizes lie far out: oakwoods, outcrops, standing stones.'),
     with_(objectives.population(40), 'Renown', 'Forty folk: a true village.'),
   ],
 };

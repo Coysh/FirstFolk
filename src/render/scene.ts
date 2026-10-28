@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { BALANCE } from '../sim/balance';
 import { BUILDINGS, type BuildingType } from '../sim/defs';
 import type { SimEvent, World } from '../sim/world';
 import type { Quality } from '../settings';
@@ -7,12 +6,14 @@ import { BuildingsView } from './buildings';
 import { CameraRig } from './camera';
 import { buildDecor } from './decor';
 import { Effects } from './effects';
+import { FogOfWar } from './fow';
 import { Wildlife } from './life';
 import { buildingGeometry } from './models';
 import { Nature } from './nature';
 import { C } from './palette';
 import { Footpaths } from './paths';
 import { pickGround } from './picking';
+import { SitesView } from './sites';
 import { SettlersView } from './settlers';
 import { SKY, Sky } from './sky';
 import { HeightField, TerrainMesh, Water } from './terrain';
@@ -54,6 +55,8 @@ export class GameRenderer {
   private paths!: Footpaths;
   private sky!: Sky;
   private wildlife!: Wildlife;
+  private decor!: THREE.Group;
+  sites!: SitesView;
   private sun!: THREE.DirectionalLight;
   private ghostMesh!: THREE.Mesh;
   private ghostTiles!: THREE.Mesh;
@@ -63,7 +66,9 @@ export class GameRenderer {
   private ring!: THREE.Mesh;
   private hoverRing!: THREE.Mesh;
   private rangeRing!: THREE.Mesh;
-  private border!: THREE.LineLoop;
+  readonly fow: FogOfWar;
+  private borderGlow = 0;
+  private borderGoal = 0;
   private raycaster = new THREE.Raycaster();
   /** Slow orbit for the title screen. */
   cinematic = false;
@@ -77,6 +82,7 @@ export class GameRenderer {
   ) {
     this.hf = new HeightField(world.map);
     this.rig = new CameraRig(this.hf, world.size);
+    this.fow = new FogOfWar(world.size);
   }
 
   /** Build the scene step by step, reporting real progress for the loading screen. */
@@ -105,7 +111,8 @@ export class GameRenderer {
     this.scene.add(this.sun, this.sun.target);
 
     await progress(0.45, 'Planting forests and meadows');
-    this.scene.add(buildDecor(world.map, this.hf, this.quality === 'low' ? 0.35 : this.quality === 'balanced' ? 0.7 : 1));
+    this.decor = buildDecor(world.map, this.hf, this.quality === 'low' ? 0.35 : this.quality === 'balanced' ? 0.7 : 1);
+    this.scene.add(this.decor);
     this.effects = new Effects(this.hf);
     this.nature = new Nature(this.hf);
     this.nature.update(world, 0);
@@ -118,7 +125,8 @@ export class GameRenderer {
     const wagon = [...world.buildings.values()].find((b) => b.type === 'wagon');
     const home = wagon ? { x: wagon.x + 1, y: wagon.y + 1 } : { x: world.size / 2, y: world.size / 2 };
     this.wildlife = new Wildlife(world.map, this.hf, home);
-    this.scene.add(this.buildings.group, this.settlers.group, this.wildlife.group);
+    this.sites = new SitesView(this.hf);
+    this.scene.add(this.buildings.group, this.settlers.group, this.wildlife.group, this.sites.group);
     this.buildings.update(world, 0);
 
     await progress(0.75, 'Gathering the folk');
@@ -134,8 +142,11 @@ export class GameRenderer {
       r.visible = false;
       r.renderOrder = 2;
     }
-    this.border = this.buildBorder();
-    this.scene.add(this.ghostMesh, this.ghostTiles, this.ring, this.hoverRing, this.rangeRing, this.border);
+    this.scene.add(this.ghostMesh, this.ghostTiles, this.ring, this.hoverRing, this.rangeRing);
+    // Fog of war and borders on the land and everything growing on it.
+    this.fow.apply(this.terrain.mesh.material as THREE.Material, true);
+    for (const o of [this.water.mesh, this.nature.group, this.decor]) this.fow.applyAll(o);
+    this.fow.update(world);
     this.rig.lookAt(home.x, home.y + 2, true);
     this.resize();
 
@@ -152,27 +163,6 @@ export class GameRenderer {
     this.renderer.shadowMap.enabled = q !== 'low';
     if (this.sun) this.sun.castShadow = q !== 'low';
     this.resize();
-  }
-
-  /** Dashed outline of where the player may build (borders proper arrive in M3). */
-  private buildBorder(): THREE.LineLoop {
-    const wagon = [...this.world.buildings.values()].find((b) => b.type === 'wagon');
-    const R = BALANCE.claimRadius;
-    const cx = wagon ? wagon.x : this.world.size / 2;
-    const cy = wagon ? wagon.y : this.world.size / 2;
-    const x0 = cx - R;
-    const z0 = cy - R;
-    const x1 = cx + R + 2;
-    const z1 = cy + R + 2;
-    const pts: THREE.Vector3[] = [];
-    const add = (x: number, z: number) => pts.push(new THREE.Vector3(x, this.hf.at(x, z) + 0.08, z));
-    for (let x = x0; x < x1; x += 0.5) add(x, z0);
-    for (let z = z0; z < z1; z += 0.5) add(x1, z);
-    for (let x = x1; x > x0; x -= 0.5) add(x, z1);
-    for (let z = z1; z > z0; z -= 0.5) add(x0, z);
-    const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0xfff6d8, dashSize: 0.5, gapSize: 0.35, transparent: true, opacity: 0 }));
-    line.computeLineDistances();
-    return line;
   }
 
   resize(): void {
@@ -194,12 +184,19 @@ export class GameRenderer {
     for (const e of events) {
       if (e.type === 'treeFelled') this.effects.fellTree(e.x, e.y);
       else if (e.type === 'rockMined' && e.depleted) this.effects.emit('stone', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 14);
+      else if (e.type === 'claimed') {
+        const p = this.sites.position(this.world, e.siteId);
+        if (p) {
+          this.effects.emit('sparkle', p.x, p.y + 0.6, p.z, 40);
+          this.effects.emit('dust', p.x, p.y + 0.2, p.z, 16);
+        }
+      } else if (e.type === 'territoryGrew' && e.owner === 0) this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 1.5, e.y + 0.5, 24);
       else if (e.type === 'saplingPlanted') this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 6);
     }
   }
 
   setGhost(g: Ghost | null): void {
-    (this.border.material as THREE.LineDashedMaterial).opacity = g ? 0.85 : 0;
+    this.borderGoal = g ? 1 : 0;
     this.rangeRing.visible = false;
     if (!g) {
       this.ghostMesh.visible = false;
@@ -310,10 +307,15 @@ export class GameRenderer {
     fog.near = this.rig.distance * 1.5;
     fog.far = this.rig.distance * 3.4 + 35;
 
+    this.fow.update(this.world);
+    this.fow.uniforms.uFowStrength.value = this.cinematic ? 0.55 : 1;
+    this.borderGlow += (this.borderGoal - this.borderGlow) * Math.min(1, dt * 8);
+    this.fow.uniforms.uBorderGlow.value = this.borderGlow;
     this.sky.update(dt, this.rig.camera);
     this.water.update(this.time);
     this.nature.update(this.world, this.time);
     this.buildings.update(this.world, dt);
+    this.sites.update(this.world, this.time);
     this.settlers.update(this.world, alpha, this.time, dt);
     this.paths.update(dt);
     this.wildlife.update(this.time, dt);

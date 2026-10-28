@@ -5,7 +5,7 @@ import { BUILDINGS, type BuildingType, type Skill } from './defs';
  * transforms their workplace (model variant), their gear, and unlocks new buildings.
  * Everything here is data; the renderer maps `tier` to model variants and gear.
  */
-export const TIER_XP = [0, 220, 1200] as const;
+export const TIER_XP = [0, 160, 650] as const;
 export const TIER_NAMES = ['Novice', 'Journeyman', 'Master'] as const;
 
 export interface TradeDef {
@@ -51,6 +51,12 @@ export const TRADES: Record<Skill, TradeDef> = {
     perks: ['', 'Faster picking and bonus berries', 'Bushes give generously'],
   },
 };
+
+/** "Novice Woodcutter", "Journeyman Carpenter", "Master Carpenter" (no doubled "Master"). */
+export function tradeTitle(skill: Skill, tier: number): string {
+  const title = TRADES[skill].titles[tier];
+  return title.startsWith(TIER_NAMES[tier]) ? title : `${TIER_NAMES[tier]} ${title}`;
+}
 
 export function tierOf(xp: number): number {
   return xp >= TIER_XP[2] ? 2 : xp >= TIER_XP[1] ? 1 : 0;

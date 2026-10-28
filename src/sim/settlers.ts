@@ -2,6 +2,7 @@ import { BALANCE } from './balance';
 import { BUILDINGS, GOOD_INFO, type GatherJob, type Good, type NodeKind, type Skill } from './defs';
 import { TRADES, tierOf, unlocksFor } from './trades';
 import { Terrain } from './mapgen';
+import { onBuildingComplete } from './territory';
 import type { Building, ResourceNode, Settler, World } from './world';
 
 export const cheb = (ax: number, ay: number, bx: number, by: number) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -103,14 +104,19 @@ function nearestSkilled(candidates: Settler[], x: number, y: number, skill: Skil
 
 /** Work teaches: XP grows the settler and their family's knowledge, and tiers transform the workplace. */
 export function gainXp(world: World, s: Settler, skill: Skill, b: Building): void {
+  const after = grantXp(world, s, skill, BALANCE.xpPerHarvest, b.id);
+  if (after > b.tier) b.tier = after;
+}
+
+/** Add XP to a settler (and their family's knowledge); announces tier-ups and unlocks. Returns the new tier. */
+export function grantXp(world: World, s: Settler, skill: Skill, amount: number, buildingId = 0): number {
   const before = tierOf(s.skills[skill]);
-  s.skills[skill] += BALANCE.xpPerHarvest;
+  s.skills[skill] += amount;
   const fam = world.families.get(s.familyId);
   if (fam) fam.skills[skill] = Math.max(fam.skills[skill], s.skills[skill]);
   const after = tierOf(s.skills[skill]);
-  if (after > b.tier) b.tier = after;
   if (after > before) {
-    world.emit({ type: 'tierUp', settlerId: s.id, buildingId: b.id, skill, tier: after });
+    world.emit({ type: 'tierUp', settlerId: s.id, buildingId, skill, tier: after });
     const player = world.players[s.owner];
     for (const t of unlocksFor(skill, after)) {
       if (player.unlocked.includes(t)) continue;
@@ -118,6 +124,7 @@ export function gainXp(world: World, s: Settler, skill: Skill, b: Building): voi
       world.emit({ type: 'unlocked', buildingType: t });
     }
   }
+  return after;
 }
 
 function workTicks(world: World, s: Settler, base: number, skill: Skill): number {
@@ -265,6 +272,7 @@ function thinkBuild(world: World, s: Settler, job: Extract<Settler['job'], { kin
     site.alert = '';
     world.stats.completions.push({ type: site.type, tick: world.tick });
     world.emit({ type: 'buildingComplete', id: site.id, buildingType: site.type });
+    onBuildingComplete(world, site);
     return setIdle(s);
   }
   s.busy = 1;
