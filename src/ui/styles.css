@@ -843,6 +843,13 @@ button.danger.armed {
   text-align: left;
   cursor: pointer;
 }
+.ev-opt strong {
+  white-space: nowrap;
+  flex: none;
+}
+.ev-opt small {
+  text-align: right;
+}
 .ev-opt:hover:not(:disabled) {
   border-color: var(--gold);
   background: #fff3d6;
@@ -1990,7 +1997,7 @@ button.danger.armed {
 
 @media (max-width: 720px) {
   .race {
-    top: calc(142px + var(--safe-t));
+    top: calc(138px + var(--safe-t));
     bottom: auto;
     left: auto;
     right: 6px;
@@ -2008,7 +2015,9 @@ button.danger.armed {
   .race-row {
     justify-content: space-between;
   }
+  /* The top bar can wrap to three rows (goods, folk + market + alerts, speed), so start below it. */
   .goals {
+    top: calc(138px + var(--safe-t));
     width: calc(100vw - 146px);
   }
   .council {

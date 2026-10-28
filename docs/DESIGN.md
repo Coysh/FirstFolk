@@ -867,3 +867,8 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 
 - **Full batch** (60 duels, origins and omens): lengths 22–37 min with medians of 27–30, 2.1 lead changes, 20% comeback wins, idle adults 7–10%, and about 11 landmark flips per game. The tug-of-war over the Star-Stone and the middle of the valley is now constant.
 
+### v0.10.1 Teaching deeds, and the mobile top bar (2026-10-28)
+- The Hamlet chapter now teaches deeds with a "Call on a family deed" goal (`objectives.deeds`).
+- Mobile: the top bar wraps to three rows once Market and alerts appear, and the goals panel hid the speed controls. Goals and the race now start below the bar.
+- The Betrothal card keeps "Bless this match" on one line.
+

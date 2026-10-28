@@ -105,6 +105,14 @@ export const objectives = {
       evaluate: (w, o) => ({ current: Math.min(n, w.players[o].renown), target: n }),
     };
   },
+  /** Family deeds called on (see deeds.ts). */
+  deeds(n: number): Objective {
+    return {
+      id: `deeds-${n}`,
+      label: n === 1 ? 'Call on a family deed' : `Call on ${n} family deeds`,
+      evaluate: (w, o) => ({ current: w.players[o].deedsUsed, target: n }),
+    };
+  },
   /** Landmarks held at the same moment. */
   landmarks(n: number): Objective {
     return {
@@ -153,6 +161,7 @@ export const LANDFALL: Scenario = {
     with_(objectives.building('lookout'), 'Landfall', 'Build a Lookout near your border to push it outwards.'),
     with_(objectives.discoveries(1), 'Landfall', 'See the golden light? Grow your border over it to claim what lies there.'),
     with_(objectives.population(12), 'Landfall', 'Keep food stocked and huts free, and families will come.'),
+    with_(objectives.deeds(1), 'Hamlet', 'Your Great Houses (above the build bar) each lend a deed: click one, or press Z X C V.'),
     with_(objectives.landmarks(1), 'Hamlet', 'Landmarks (grove, oakwood, outcrop, stones) pay renown every minute you hold them.'),
     with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: planks build Watchtowers.'),
     with_(objectives.renown(300), 'Hamlet', 'Renown: landmarks, land, discoveries, Masters, deeds and Market Day all add to it.'),
