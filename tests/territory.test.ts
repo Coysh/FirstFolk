@@ -57,7 +57,7 @@ describe('territory and discoveries', () => {
   });
 
   it('a rumour reveals a discovery when none is in sight', () => {
-    const w = new World({ seed: 3 });
+    const w = new World({ scenario: 'peaceful', seed: 3 });
     for (const s of w.sites) s.revealed = 0;
     runSeconds(w, 50);
     expect(w.sites.some((s) => s.revealed & 1)).toBe(true);

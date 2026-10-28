@@ -250,6 +250,12 @@ function placeSites(N: number, starts: { x: number; y: number }[], terrain: Uint
       break;
     }
   }
+  // Two rich prizes in the heart of the valley, equidistant from both starts: the race's hotspot.
+  const mid = { x: Math.round((starts[0].x + starts[1].x) / 2), y: Math.round((starts[0].y + starts[1].y) / 2) };
+  for (const [kind, dx, dy] of [['outcrop', -7, 9], ['stones', 7, -9]] as const) {
+    const p = nearestOk(mid.x + dx, mid.y + dy, (x, y) => ok(x, y) || (x === mid.x + dx && y === mid.y + dy && terrain[y * N + x] !== Terrain.Water));
+    if (p) sites.push({ kind, ...p });
+  }
   return sites;
 }
 

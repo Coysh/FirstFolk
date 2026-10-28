@@ -129,8 +129,8 @@ export class Shell {
     this.menuReady.value = false;
   }
 
-  async newGame(seed: number, difficulty: Difficulty): Promise<void> {
-    await this.launch(async () => new World({ seed, difficulty }), true);
+  async newGame(seed: number, difficulty: Difficulty, rival = true): Promise<void> {
+    await this.launch(async () => new World({ seed, difficulty, scenario: rival ? 'landfall' : 'peaceful' }), true);
   }
 
   async continueGame(): Promise<void> {

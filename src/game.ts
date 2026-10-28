@@ -56,7 +56,7 @@ export class Game {
   readonly version = signal(0);
   readonly objectives = signal<ObjectiveStatus[]>([]);
   readonly toasts = signal<Toast[]>([]);
-  readonly victory = signal<string | null>(null);
+  readonly victory = signal<{ scenario: string; winner: number } | null>(null);
   readonly banner = signal<{ title: string; sub: string } | null>(null);
   /** True when the last placement interaction came from touch (shows a confirm button). */
   readonly touchPlacing = signal(false);
@@ -145,6 +145,8 @@ export class Game {
 
   private handleEvents(events: SimEvent[]): void {
     for (const e of events) {
+      // Only news about the rival that we choose to share gets through.
+      if ('owner' in e && e.owner !== PLAYER && e.type !== 'claimed' && e.type !== 'rankUp') continue;
       switch (e.type) {
         case 'buildingComplete': {
           const p = this.posOf(e.id);
@@ -245,8 +247,15 @@ export class Game {
           audio.play('warn');
           this.toast('/assets/icons/berries.png', 'Winter is coming. Stock up on food: build Foragers, and Fishers if you can.', 'warn');
           break;
+        case 'rivalSighted':
+          audio.play('warn');
+          this.toast('/assets/icons/lookout.png', 'Your scouts have sighted the rival settlement’s border! Race them for the valley’s prizes.', 'warn');
+          break;
         case 'rankUp':
-          if (e.owner !== PLAYER) break;
+          if (e.owner !== PLAYER) {
+            this.toast('/assets/icons/scroll.png', `Word arrives: the rival settlement is now a ${RANK_NAMES[e.rank]}.`, 'warn');
+            break;
+          }
           audio.play('tierUp');
           this.banner.value = {
             title: `Your camp is now a ${RANK_NAMES[e.rank]}!`,
@@ -276,7 +285,7 @@ export class Game {
           setTimeout(() => (this.banner.value = null), 4200);
           break;
         case 'victory':
-          this.victory.value = e.scenario;
+          this.victory.value = { scenario: e.scenario, winner: e.winner };
           this.save(false);
           break;
       }

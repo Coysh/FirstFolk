@@ -99,7 +99,8 @@ const randomSeed = () => Math.floor(Math.random() * 899999) + 100000;
 function NewGame({ shell, onClose }: { shell: Shell; onClose: () => void }) {
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [seed, setSeed] = useState(String(randomSeed()));
-  const start = () => void shell.newGame(Number(seed.replace(/\D/g, '')) || randomSeed(), difficulty);
+  const [rival, setRival] = useState(true);
+  const start = () => void shell.newGame(Number(seed.replace(/\D/g, '')) || randomSeed(), difficulty, rival);
   return (
     <Modal title="New Game" onClose={onClose}>
       <p class="muted">Your family arrives with a wagon of supplies in an unexplored valley.</p>
@@ -111,6 +112,17 @@ function NewGame({ shell, onClose }: { shell: Shell; onClose: () => void }) {
             <span>{DIFFICULTY_INFO[d].blurb}</span>
           </button>
         ))}
+      </div>
+      <div class="field-label">Rival</div>
+      <div class="choices">
+        <button class={`choice ${rival ? 'on' : ''}`} onClick={() => setRival(true)} aria-pressed={rival}>
+          <strong>Race a rival</strong>
+          <span>Another settlement across the valley races you for its prizes. First to renown wins.</span>
+        </button>
+        <button class={`choice ${!rival ? 'on' : ''}`} onClick={() => setRival(false)} aria-pressed={!rival}>
+          <strong>Peaceful</strong>
+          <span>The valley is yours alone. Build and explore at your own pace.</span>
+        </button>
       </div>
       <label class="field-label" for="seed">
         Valley seed

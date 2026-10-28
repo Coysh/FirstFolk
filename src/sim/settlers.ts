@@ -121,12 +121,12 @@ export function grantXp(world: World, s: Settler, skill: Skill, amount: number, 
   // A family's first Journeyman or Master in a craft is a moment to choose how it grows.
   if (fam && tierOf(fam.skills[skill]) > famBefore) offerBoon(world, fam, `${s.name} became a ${tradeTitle(skill, after)}`);
   if (after > before) {
-    world.emit({ type: 'tierUp', settlerId: s.id, buildingId, skill, tier: after });
+    world.emit({ type: 'tierUp', owner: s.owner, settlerId: s.id, buildingId, skill, tier: after });
     const player = world.players[s.owner];
     for (const t of unlocksFor(skill, after)) {
       if (player.unlocked.includes(t)) continue;
       player.unlocked.push(t);
-      world.emit({ type: 'unlocked', buildingType: t });
+      world.emit({ type: 'unlocked', owner: s.owner, buildingType: t });
     }
   }
   return after;
@@ -284,7 +284,7 @@ function thinkBuild(world: World, s: Settler, job: Extract<Settler['job'], { kin
     site.status = '';
     site.alert = '';
     world.stats.completions.push({ type: site.type, tick: world.tick });
-    world.emit({ type: 'buildingComplete', id: site.id, buildingType: site.type });
+    world.emit({ type: 'buildingComplete', owner: site.owner, id: site.id, buildingType: site.type });
     onBuildingComplete(world, site);
     return setIdle(s);
   }
@@ -312,7 +312,7 @@ function thinkHaul(world: World, s: Settler, job: Extract<Settler['job'], { kind
   if (to.done) to.stock[job.good]++;
   else to.delivered[job.good]++;
   to.incoming[job.good]--;
-  world.emit({ type: 'delivered', buildingId: to.id, good: job.good });
+  world.emit({ type: 'delivered', owner: to.owner, buildingId: to.id, good: job.good });
   s.carry = null;
   setIdle(s);
 }
@@ -425,7 +425,7 @@ function thinkWork(world: World, s: Settler, job: Extract<Settler['job'], { kind
       const bonus = rollBonus(world, s, def.skill);
       b.stock[def.good] += 1 + bonus;
       player.produced[def.good] += 1 + bonus;
-      world.emit({ type: 'produced', buildingId: b.id, good: def.good, bonus: bonus > 0 });
+      world.emit({ type: 'produced', owner: b.owner, buildingId: b.id, good: def.good, bonus: bonus > 0 });
       gainXp(world, s, def.skill, b);
       job.phase = 'seek';
       return;
@@ -474,7 +474,7 @@ function thinkWork(world: World, s: Settler, job: Extract<Settler['job'], { kind
       if (s.carry && store) {
         store.stock[s.carry]++;
         store.incoming[s.carry]--;
-        world.emit({ type: 'delivered', buildingId: store.id, good: s.carry });
+        world.emit({ type: 'delivered', owner: store.owner, buildingId: store.id, good: s.carry });
       }
       s.carry = null;
       job.nodeId = 0;
@@ -488,7 +488,7 @@ function thinkWork(world: World, s: Settler, job: Extract<Settler['job'], { kind
         const n = 1 + job.extra;
         b.stock[s.carry] += n;
         player.produced[s.carry] += n;
-        world.emit({ type: 'produced', buildingId: b.id, good: s.carry, bonus: job.extra > 0 });
+        world.emit({ type: 'produced', owner: b.owner, buildingId: b.id, good: s.carry, bonus: job.extra > 0 });
         gainXp(world, s, def.skill, b);
         job.extra = 0;
         s.carry = null;

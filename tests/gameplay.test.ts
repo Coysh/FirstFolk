@@ -97,7 +97,7 @@ describe('core loop', () => {
 
 describe('determinism', () => {
   function play(seed: number, minutes: number) {
-    const w = new World({ seed });
+    const w = new World({ seed, scenario: 'peaceful' });
     const bot = new OpeningBot();
     for (let i = 0; i < secs(minutes * 60); i++) {
       bot.update(w);
@@ -116,7 +116,7 @@ describe('determinism', () => {
 
   it('replaying the command log reproduces the game', () => {
     const a = play(9, 3);
-    const b = new World({ seed: 9 });
+    const b = new World({ scenario: 'peaceful', seed: 9 });
     const log = [...a.commandLog];
     while (b.tick < a.tick) {
       while (log.length && log[0].tick === b.tick) b.enqueue(log.shift()!.cmd);

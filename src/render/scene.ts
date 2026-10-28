@@ -183,7 +183,9 @@ export class GameRenderer {
   }
 
   handleEvents(events: SimEvent[]): void {
+    const seen = (x: number, y: number) => (this.world.explored[this.world.idx(x, y)] & 1) !== 0;
     for (const e of events) {
+      if ((e.type === 'treeFelled' || e.type === 'rockMined' || e.type === 'saplingPlanted') && !seen(e.x, e.y)) continue;
       if (e.type === 'treeFelled') this.effects.fellTree(e.x, e.y);
       else if (e.type === 'rockMined' && e.depleted) this.effects.emit('stone', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 14);
       else if (e.type === 'claimed') {

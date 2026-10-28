@@ -14,6 +14,7 @@ import { NO_OWNER, onBuildingComplete, updateExploration } from './territory';
 import { offerBoon, updateOffers, type BoonId, type Mod } from './boons';
 import { isWinter, updateSeasons, type Season } from './seasons';
 import { updateValleyEvents } from './events';
+import { OpeningBot } from './ai/openingBot';
 
 export type Stock = Record<Good, number>;
 export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 });
@@ -133,19 +134,19 @@ export type SimEvent =
   | { type: 'treeFelled'; x: number; y: number }
   | { type: 'rockMined'; x: number; y: number; depleted: boolean }
   | { type: 'saplingPlanted'; x: number; y: number }
-  | { type: 'buildingPlaced'; id: number; buildingType: BuildingType }
-  | { type: 'buildingComplete'; id: number; buildingType: BuildingType }
-  | { type: 'familyApproaching'; familyId: number; surname: string; size: number; skill: Skill }
-  | { type: 'cameOfAge'; settlerId: number; name: string; surname: string }
-  | { type: 'born'; settlerId: number; name: string; surname: string }
-  | { type: 'hungry' }
-  | { type: 'fed' }
-  | { type: 'objectiveComplete'; label: string }
-  | { type: 'chapterComplete'; chapter: string; next: string }
-  | { type: 'tierUp'; settlerId: number; buildingId: number; skill: Skill; tier: number }
-  | { type: 'unlocked'; buildingType: BuildingType }
-  | { type: 'produced'; buildingId: number; good: Good; bonus: boolean }
-  | { type: 'delivered'; buildingId: number; good: Good }
+  | { type: 'buildingPlaced'; owner: number; id: number; buildingType: BuildingType }
+  | { type: 'buildingComplete'; owner: number; id: number; buildingType: BuildingType }
+  | { type: 'familyApproaching'; owner: number; familyId: number; surname: string; size: number; skill: Skill }
+  | { type: 'cameOfAge'; owner: number; settlerId: number; name: string; surname: string }
+  | { type: 'born'; owner: number; settlerId: number; name: string; surname: string }
+  | { type: 'hungry'; owner: number }
+  | { type: 'fed'; owner: number }
+  | { type: 'objectiveComplete'; owner: number; label: string }
+  | { type: 'chapterComplete'; owner: number; chapter: string; next: string }
+  | { type: 'tierUp'; owner: number; settlerId: number; buildingId: number; skill: Skill; tier: number }
+  | { type: 'unlocked'; owner: number; buildingType: BuildingType }
+  | { type: 'produced'; owner: number; buildingId: number; good: Good; bonus: boolean }
+  | { type: 'delivered'; owner: number; buildingId: number; good: Good }
   | { type: 'territoryGrew'; owner: number; tiles: number; x: number; y: number }
   | { type: 'discovered'; siteId: number; kind: DiscoveryKind; owner: number }
   | { type: 'claimed'; siteId: number; kind: DiscoveryKind; owner: number; text: string }
@@ -158,8 +159,9 @@ export type SimEvent =
   | { type: 'rankUp'; owner: number; rank: number; unlocks: BuildingType[] }
   | { type: 'valleyEvent'; owner: number; eventId: number; def: string }
   | { type: 'eventResolved'; owner: number; def: string; choice: string; text: string }
-  | { type: 'familySettled'; familyId: number; surname: string; buildingId: number }
-  | { type: 'victory'; scenario: string };
+  | { type: 'familySettled'; owner: number; familyId: number; surname: string; buildingId: number }
+  | { type: 'rivalSighted'; x: number; y: number }
+  | { type: 'victory'; scenario: string; winner: number };
 
 export interface PlayerState {
   id: number;
@@ -185,6 +187,8 @@ export interface PlayerState {
   event: { id: number; def: string; expires: number } | null;
   nextEventAt: number;
   lastEvent: string;
+  /** Has this player's exploration reached another settlement's land yet? */
+  rivalSeen: boolean;
 }
 
 export interface BoonOffer {
@@ -264,6 +268,8 @@ export class World {
   territoryVersion = 0;
   fogVersion = 0;
   sites: Discovery[] = [];
+  /** AI players (the rival), driven through Commands exactly like a human. */
+  ais: OpeningBot[] = [];
   /** Runtime cache for territoryBox(); not saved. */
   boxCache: { version: number; box: { x0: number; y0: number; x1: number; y1: number } }[] = [];
 
@@ -287,6 +293,7 @@ export class World {
     for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y, 0, n.max);
     for (const site of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER });
     this.setupPlayer(0, this.map.starts[0]);
+    if (this.scenario.rival) this.addRival();
   }
 
   // ---- geometry helpers -------------------------------------------------
@@ -321,11 +328,12 @@ export class World {
   emit(e: SimEvent): void {
     this.events.push(e);
     if (this.events.length > 500) this.events.splice(0, this.events.length - 500);
-    if (e.type !== 'hungry' && e.type !== 'fed') {
+    const mine = !('owner' in e) || e.owner === 0;
+    if (e.type !== 'hungry' && e.type !== 'fed' && mine) {
       this.stats.longestQuiet = Math.max(this.stats.longestQuiet, this.tick - this.stats.lastEventTick);
       this.stats.lastEventTick = this.tick;
     }
-    if (MAJOR_EVENTS.has(e.type) && (!('owner' in e) || e.owner === 0)) {
+    if (MAJOR_EVENTS.has(e.type) && mine) {
       this.stats.longestMajorGap = Math.max(this.stats.longestMajorGap, this.tick - this.stats.lastMajorTick);
       this.stats.lastMajorTick = this.tick;
       if (e.type === 'discovered' && this.stats.firstDiscoveryTick < 0) this.stats.firstDiscoveryTick = this.tick;
@@ -433,7 +441,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '' };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -447,6 +455,12 @@ export class World {
     folk[1].spouseId = folk[0].id;
     // The very first choice: what kind of folk are the founders?
     offerBoon(this, fam, 'The founders set out');
+  }
+
+  /** Player 1 at the mirrored start, played by the bot at a difficulty-set pace. */
+  addRival(): void {
+    if (!this.players[1]) this.setupPlayer(1, this.map.starts[1]);
+    this.ais = [new OpeningBot(1, this.rules.rivalThink, this.tick)];
   }
 
   randomName(): string {
@@ -515,6 +529,7 @@ export class World {
   }
 
   step(): void {
+    for (const ai of this.ais) ai.update(this);
     for (const cmd of this.pendingCommands) {
       this.commandLog.push({ tick: this.tick, cmd });
       applyCommand(this, cmd);
@@ -559,7 +574,7 @@ export class World {
         // Inheritance: a new adult starts with part of the family's knowledge.
         const pct = BALANCE.inheritPct + (fam?.mods.teach ?? 0);
         if (fam) for (const k of SKILLS) s.skills[k] = Math.max(s.skills[k], Math.floor((fam.skills[k] * pct) / 100));
-        this.emit({ type: 'cameOfAge', settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
+        this.emit({ type: 'cameOfAge', owner: s.owner, settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
       }
     }
   }
@@ -597,7 +612,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 export const comeOfAgeTicks = () => Math.round(BALANCE.comeOfAgeYears * BALANCE.yearTicks);
 

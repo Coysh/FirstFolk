@@ -23,10 +23,10 @@ for (let g = 0; g < games; g++) {
     console.log('territory/min:', r.territoryByMinute.join(' '));
   }
   console.log(
-    `seed ${r.seed}: first logs ${r.firstLogsSec}s · chapters ${JSON.stringify(r.chapters)} · 1st journeyman ${r.firstJourneymanSec}s · idle ${r.idleAdultPct}% · quiet ${r.longestQuietSec}s · major gap ${r.longestMajorGapSec}s · 1st discovery ${r.firstDiscoverySec}s · claimed ${r.claimed} · land ${r.territoryByMinute.at(-1)} · pop ${r.populationByMinute.at(-1)} · ${Math.round(performance.now() - t0)}ms`,
+    `seed ${r.seed}: first logs ${r.firstLogsSec}s · chapters ${JSON.stringify(r.chapters)} · 1st journeyman ${r.firstJourneymanSec}s · idle ${r.idleAdultPct}% · quiet ${r.longestQuietSec}s · major gap ${r.longestMajorGapSec}s · 1st discovery ${r.firstDiscoverySec}s · claimed ${r.claimed} vs ${r.rivalClaimed} · rival rank ${r.rivalRank} · winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'} · land ${r.territoryByMinute.at(-1)} · pop ${r.populationByMinute.at(-1)} · ${Math.round(performance.now() - t0)}ms`,
   );
 }
 if (games > 1) {
   const avg = (f: (r: (typeof reports)[0]) => number) => (reports.reduce((s, r) => s + f(r), 0) / reports.length).toFixed(1);
-  console.log(`\navg idle ${avg((r) => r.idleAdultPct)}% · avg Trades chapter ${avg((r) => r.chapters.Trades ?? -1)}s · avg quiet ${avg((r) => r.longestQuietSec)}s · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg claimed ${avg((r) => r.claimed)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)}`);
+  console.log(`\navg idle ${avg((r) => r.idleAdultPct)}% · avg Trades chapter ${avg((r) => r.chapters.Trades ?? -1)}s · avg quiet ${avg((r) => r.longestQuietSec)}s · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg claimed ${avg((r) => r.claimed)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)} · player wins ${reports.filter((r) => r.winner === 0).length}/${reports.length}`);
 }

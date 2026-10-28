@@ -49,7 +49,7 @@ export class FogOfWar {
       const t = world.territory[i];
       d[o] = world.explored[i] & bit ? 255 : 0;
       d[o + 1] = t === player ? 255 : 0;
-      d[o + 2] = t >= 0 && t !== player ? 255 : 0;
+      d[o + 2] = t >= 0 && t !== player && world.explored[i] & bit ? 255 : 0;
       d[o + 3] = 255;
     }
     this.texture.needsUpdate = true;

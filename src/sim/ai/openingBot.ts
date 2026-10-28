@@ -21,7 +21,17 @@ export class OpeningBot {
     { at: 900, type: 'hut' },
   ];
 
-  constructor(private owner = 0) {}
+  /**
+   * @param thinkEvery ticks between strategic decisions (the rival's difficulty knob)
+   * @param fromTick skip opening moves already made (when restoring a save)
+   */
+  constructor(
+    private owner = 0,
+    private thinkEvery = 100,
+    fromTick = 0,
+  ) {
+    this.opening = this.opening.filter((o) => o.at > fromTick || fromTick === 0);
+  }
 
   update(world: World): void {
     if (world.tick % 10 !== 0) return;
@@ -38,7 +48,7 @@ export class OpeningBot {
     while (this.opening.length && this.opening[0].at <= world.tick) {
       this.place(world, this.opening.shift()!.type);
     }
-    if (this.opening.length || world.tick % 100 !== 0) return;
+    if (this.opening.length || world.tick % this.thinkEvery !== 0) return;
 
     const pop = world.population(this.owner);
     const sites = [...world.buildings.values()].filter((b) => b.owner === this.owner && !b.done).length;

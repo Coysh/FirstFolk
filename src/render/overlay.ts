@@ -75,7 +75,7 @@ export class Overlay {
     // Problem bubbles.
     const seen = new Set<number>();
     for (const b of world.buildings.values()) {
-      const content = this.visible ? bubbleFor(b) : null;
+      const content = this.visible && b.owner === 0 ? bubbleFor(b) : null;
       if (!content) continue;
       const c = buildings.centre(b.id);
       if (!c) continue;

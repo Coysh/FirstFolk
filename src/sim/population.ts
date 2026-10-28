@@ -74,7 +74,7 @@ function checkBirths(world: World, player: PlayerState): void {
     const n = room >= 2 && world.rng.int(100) < (fam.mods.twins ?? 0) ? 2 : 1;
     for (let k = 0; k < n; k++) {
       const baby = world.addSettler(player.id, fam.id, world.randomName(), 0, e.x, e.y);
-      world.emit({ type: 'born', settlerId: baby.id, name: baby.name, surname: fam.surname });
+      world.emit({ type: 'born', owner: player.id, settlerId: baby.id, name: baby.name, surname: fam.surname });
     }
     fam.birthCooldown = Math.round((BALANCE.birthInterval * (100 - (fam.mods.birth ?? 0))) / 100);
   }
@@ -94,11 +94,11 @@ function eat(world: World, player: PlayerState): void {
     best.stock[food]--;
     if (player.hungry) {
       player.hungry = false;
-      world.emit({ type: 'fed' });
+      world.emit({ type: 'fed', owner: player.id });
     }
   } else if (!player.hungry) {
     player.hungry = true;
-    world.emit({ type: 'hungry' });
+    world.emit({ type: 'hungry', owner: player.id });
   }
 }
 
@@ -133,7 +133,7 @@ function checkNewcomers(world: World, player: PlayerState): void {
     if (fam.owner === player.id && !world.buildings.has(fam.homeId)) {
       fam.homeId = hut.id;
       hut.familyId = fam.id;
-      world.emit({ type: 'familySettled', familyId: fam.id, surname: fam.surname, buildingId: hut.id });
+      world.emit({ type: 'familySettled', owner: player.id, familyId: fam.id, surname: fam.surname, buildingId: hut.id });
       return;
     }
   if (player.hungry) return;
@@ -223,6 +223,6 @@ export function spawnFamily(world: World, player: PlayerState, hut: Building | n
   else for (const id of drawBoons(world, fam, 1)) addBoon(fam, id);
   player.newcomerCooldown = BALANCE.newcomerCooldown;
   world.stats.arrivals.push(world.tick);
-  world.emit({ type: 'familyApproaching', familyId: fam.id, surname: fam.surname, size, skill: craft });
+  world.emit({ type: 'familyApproaching', owner: player.id, familyId: fam.id, surname: fam.surname, size, skill: craft });
   return fam;
 }

@@ -27,6 +27,8 @@ export interface Scenario {
   objectives: Objective[];
   /** 'none' = sandbox: objectives are shown as milestones but never end the game. */
   victory: 'all' | 'any' | 'none';
+  /** A rival settlement races you from the far side of the valley (first to finish wins). */
+  rival?: boolean;
 }
 
 export const SCENARIOS: Record<string, Scenario> = {};
@@ -105,8 +107,9 @@ const with_ = (o: Objective, chapter: string, hint: string): Objective => ({ ...
 export const LANDFALL: Scenario = {
   id: 'landfall',
   name: 'The First Valley',
-  description: 'Found a camp, explore the valley and raise it to a renowned town.',
+  description: 'Found a camp, explore the valley and raise it to a renowned town before your rival does.',
   victory: 'all',
+  rival: true,
   // Each chapter is an age-up: finishing Landfall makes the camp a Hamlet, and so on.
   objectives: [
     with_(objectives.building('woodcutter'), 'Landfall', 'Pick Woodcutter below, then place it beside the trees.'),
@@ -125,11 +128,11 @@ export const LANDFALL: Scenario = {
     with_(objectives.masters(1), 'Village', 'Boons like Quick Learners, and inherited skill, make Masters sooner.'),
     with_(objectives.building('longhouse'), 'Village', 'A Longhouse lets one family grow to eight.'),
     with_(objectives.winters(2), 'Village', 'Another winter: keep the larder full.'),
-    with_(objectives.discoveries(6), 'Village', 'The richest prizes lie far out: oakwoods, outcrops, standing stones.'),
+    with_(objectives.discoveries(5), 'Village', 'The richest prizes lie far out: oakwoods, outcrops, standing stones.'),
     with_(objectives.population(50), 'Village', 'Grow your village to fifty souls.'),
     with_(objectives.masters(4), 'Renown', 'Four Masters make a town famous.'),
     with_(objectives.winters(4), 'Renown', 'Endure four winters.'),
-    with_(objectives.discoveries(10), 'Renown', 'Claim the far corners of the valley.'),
+    with_(objectives.discoveries(7), 'Renown', 'Race your rival for the prizes in the middle of the valley.'),
     with_(objectives.population(90), 'Renown', 'Ninety folk: a true town.'),
   ],
 };
@@ -167,12 +170,12 @@ export function evaluateScenario(world: World): void {
       const p = o.evaluate(world, player.id);
       if (p.current >= p.target) {
         done[o.id] = true;
-        world.emit({ type: 'objectiveComplete', label: o.label });
+        world.emit({ type: 'objectiveComplete', owner: player.id, label: o.label });
         const chapter = o.chapter;
         const rest = world.scenario.objectives.filter((x) => x.chapter === chapter);
         if (chapter && rest.every((x) => done[x.id])) {
           const next = world.scenario.objectives.find((x) => !done[x.id] && x.chapter !== chapter)?.chapter;
-          world.emit({ type: 'chapterComplete', chapter, next: next ?? '' });
+          world.emit({ type: 'chapterComplete', owner: player.id, chapter, next: next ?? '' });
           const chapters = [...new Set(world.scenario.objectives.map((x) => x.chapter))];
           const rank = chapters.indexOf(chapter) + 1;
           if (rank > player.rank && rank < RANK_NAMES.length) rankUp(world, player.id, rank);
@@ -184,7 +187,7 @@ export function evaluateScenario(world: World): void {
     const won = world.scenario.victory === 'all' ? results.every(Boolean) : results.some(Boolean);
     if (won) {
       state.winner = player.id;
-      world.emit({ type: 'victory', scenario: world.scenario.name });
+      world.emit({ type: 'victory', scenario: world.scenario.name, winner: player.id });
     }
   }
 }
@@ -211,5 +214,15 @@ export function rankUp(world: World, owner: number, rank: number): void {
   if (fam) offerBoon(world, fam, `Your camp is now a ${RANK_NAMES[rank]}`);
 }
 
+/** The same valley without a rival: build and explore at your own pace. */
+export const PEACEFUL: Scenario = {
+  ...LANDFALL,
+  id: 'peaceful',
+  name: 'The First Valley (peaceful)',
+  description: 'Found a camp, explore the valley and raise it to a renowned town, with no rival.',
+  rival: false,
+};
+
 SCENARIOS[LANDFALL.id] = LANDFALL;
+SCENARIOS[PEACEFUL.id] = PEACEFUL;
 SCENARIOS[SANDBOX.id] = SANDBOX;

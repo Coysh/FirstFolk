@@ -860,6 +860,49 @@ button.danger.armed {
   font-size: 11.5px;
   text-align: right;
 }
+.race {
+  position: absolute;
+  top: calc(64px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(40, 26, 14, 0.72);
+  border: 1.5px solid var(--wood-light);
+  color: #fff4d2;
+  font: 800 11px var(--body);
+}
+.race-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.race-name {
+  width: 34px;
+}
+.race-rank {
+  width: 48px;
+  text-align: right;
+}
+.race-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+.race-track div {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s;
+}
+.race-row.me .race-track div {
+  background: var(--gold);
+}
+.race-row.them .race-track div {
+  background: #d9534f;
+}
 .frontier {
   position: absolute;
   right: 10px;
@@ -1018,7 +1061,7 @@ button.danger.armed {
 }
 .toasts {
   position: absolute;
-  top: calc(66px + var(--safe-t));
+  top: calc(112px + var(--safe-t));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1463,6 +1506,11 @@ button.danger.armed {
 
 /* ---------- mobile ---------- */
 @media (max-width: 720px) {
+  .race {
+    top: auto;
+    bottom: calc(118px + var(--safe-b));
+    width: 200px;
+  }
   .season-chip {
     font-size: 11px;
   }

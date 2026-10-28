@@ -36,7 +36,7 @@ describe('save / load', () => {
   });
 
   it('refuses incompatible versions', () => {
-    const data = serializeWorld(new World({ seed: 1 }));
+    const data = serializeWorld(new World({ scenario: 'peaceful', seed: 1 }));
     expect(() => deserializeWorld({ ...data, version: SAVE_VERSION + 1 })).toThrow(/not compatible/);
   });
 

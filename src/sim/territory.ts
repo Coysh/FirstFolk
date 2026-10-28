@@ -50,6 +50,11 @@ export function revealArea(world: World, owner: number, cx: number, cy: number, 
       if (world.explored[i] & bit) continue;
       world.explored[i] |= bit;
       changed = true;
+      const t = world.territory[i];
+      if (t !== NO_OWNER && t !== owner && !world.players[owner].rivalSeen) {
+        world.players[owner].rivalSeen = true;
+        if (owner === 0) world.emit({ type: 'rivalSighted', x, y });
+      }
     }
   if (!changed) return;
   world.fogVersion++;

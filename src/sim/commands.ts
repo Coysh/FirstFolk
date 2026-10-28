@@ -124,7 +124,7 @@ export function applyCommand(world: World, cmd: Command): void {
     case 'place': {
       if (!canPlace(world, cmd.owner, cmd.building, cmd.x, cmd.y).ok) return;
       const b = world.addBuilding(cmd.building, cmd.owner, cmd.x, cmd.y);
-      world.emit({ type: 'buildingPlaced', id: b.id, buildingType: b.type });
+      world.emit({ type: 'buildingPlaced', owner: b.owner, id: b.id, buildingType: b.type });
       return;
     }
     case 'chooseEvent':

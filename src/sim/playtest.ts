@@ -17,6 +17,9 @@ export interface PlaytestReport {
   longestMajorGapSec: number;
   firstDiscoverySec: number;
   claimed: number;
+  rivalClaimed: number;
+  rivalRank: number;
+  winner: number;
   /** Territory size (tiles) per minute: the frontier should keep moving. */
   territoryByMinute: number[];
   populationByMinute: number[];
@@ -36,6 +39,7 @@ export function playtest(seed: number, minutes: number): PlaytestReport {
   const populationByMinute: number[] = [];
   const territoryByMinute: number[] = [];
   let victoryTick = -1;
+  let winner = -1;
   const chapters: Record<string, number> = {};
   let firstJourneyman = -1;
   const total = minutes * 60 * TICK_HZ;
@@ -44,6 +48,7 @@ export function playtest(seed: number, minutes: number): PlaytestReport {
     world.step();
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
+      if ('owner' in e && e.owner !== 0 && e.type !== 'claimed' && e.type !== 'rankUp') continue;
       if (e.type === 'buildingComplete') timeline.push(`${t} built ${e.buildingType}`);
       else if (e.type === 'familyApproaching') timeline.push(`${t} the ${e.surname} family (${e.size}) arrives`);
       else if (e.type === 'objectiveComplete') timeline.push(`${t} ✓ ${e.label}`);
@@ -59,6 +64,9 @@ export function playtest(seed: number, minutes: number): PlaytestReport {
       else if (e.type === 'rankUp' && e.owner === 0) timeline.push(`${t} 🏰 RANK UP: ${['Camp', 'Hamlet', 'Village', 'Town'][e.rank]} (unlocks ${e.unlocks.join(', ') || 'nothing'})`);
       else if (e.type === 'valleyEvent' && e.owner === 0) timeline.push(`${t} 📜 event: ${e.def}`);
       else if (e.type === 'eventResolved' && e.owner === 0) timeline.push(`${t}    → ${e.choice}: ${e.text}`);
+      else if (e.type === 'rivalSighted') timeline.push(`${t} ⚔ rival border sighted`);
+      else if (e.type === 'claimed' && e.owner === 1) timeline.push(`${t} ✗ rival claimed ${e.kind}`);
+      else if (e.type === 'rankUp' && e.owner === 1) timeline.push(`${t} ✗ rival is now rank ${e.rank}`);
       else if (e.type === 'born') timeline.push(`${t} 👶 ${e.name} ${e.surname} is born`);
       else if (e.type === 'hungry') timeline.push(`${t} ! hungry`);
       else if (e.type === 'fed') timeline.push(`${t} fed again`);
@@ -70,8 +78,9 @@ export function playtest(seed: number, minutes: number): PlaytestReport {
         timeline.push(`${t} ⬆ ${world.settlers.get(e.settlerId)?.name} reaches tier ${e.tier} in ${e.skill}`);
       } else if (e.type === 'unlocked') timeline.push(`${t} 🔓 ${e.buildingType} unlocked`);
       else if (e.type === 'victory') {
-        timeline.push(`${t} ★ ${e.scenario} complete`);
+        timeline.push(`${t} ★ ${e.scenario} won by ${e.winner === 0 ? 'the player' : 'the RIVAL'}`);
         victoryTick = world.tick;
+        winner = e.winner;
       }
     }
     if (world.tick % (60 * TICK_HZ) === 0) {
@@ -94,6 +103,9 @@ export function playtest(seed: number, minutes: number): PlaytestReport {
     longestMajorGapSec: Math.max(st.longestMajorGap, world.tick - st.lastMajorTick) / TICK_HZ,
     firstDiscoverySec: st.firstDiscoveryTick / TICK_HZ,
     claimed: world.players[0].claimed,
+    rivalClaimed: world.players[1]?.claimed ?? 0,
+    rivalRank: world.players[1]?.rank ?? 0,
+    winner,
     territoryByMinute,
     populationByMinute,
     timeline,

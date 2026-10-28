@@ -10,7 +10,7 @@ const until = (w: World, f: () => boolean, max = 6000) => {
 
 describe('valley events', () => {
   it('the first event arrives after the opening', () => {
-    const w = new World({ seed: 3 });
+    const w = new World({ scenario: 'peaceful', seed: 3 });
     w.run(BALANCE.firstEvent - 20);
     expect(w.players[0].event).toBeNull();
     until(w, () => !!w.players[0].event, 50);
@@ -18,7 +18,7 @@ describe('valley events', () => {
   });
 
   it('a chosen option pays its cost and applies its effect', () => {
-    const w = new World({ seed: 3 });
+    const w = new World({ scenario: 'peaceful', seed: 3 });
     const p = w.players[0];
     p.event = { id: 999, def: 'trader', expires: w.tick + 100 };
     wagon(w).stock.logs = 20;
@@ -31,7 +31,7 @@ describe('valley events', () => {
   });
 
   it('an unaffordable choice falls back to the free option', () => {
-    const w = new World({ seed: 3 });
+    const w = new World({ scenario: 'peaceful', seed: 3 });
     w.players[0].event = { id: 5, def: 'trader', expires: w.tick + 100 };
     wagon(w).stock.logs = 2;
     resolveEvent(w, 0, 5, 0);
@@ -39,7 +39,7 @@ describe('valley events', () => {
   });
 
   it('ignored events resolve themselves', () => {
-    const w = new World({ seed: 3 });
+    const w = new World({ scenario: 'peaceful', seed: 3 });
     until(w, () => !!w.players[0].event);
     const id = w.players[0].event!.id;
     w.run(BALANCE.eventTimeout + 20);

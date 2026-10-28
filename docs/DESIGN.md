@@ -527,3 +527,32 @@ Previously queued offers could also expire unseen; that's fixed too. Plural surn
 | Longest major gap | 65–75 s on every seed (avg 70 s) |
 | Victory | 20–26 min |
 | Idle adults | about 5% |
+
+### v0.6.0 Fun Pass 6: the Rival (2026-10-28)
+**A rival settlement** starts at the mirrored site across the river.
+- It's played by the same bot as the headless tests, **inside the sim, through Commands, with its own fog**. It follows the same rules, gets no resources it didn't earn, and is restored deterministically from saves.
+- **The race:**
+  - land is first-come and final,
+  - discoveries go to whoever's border covers them first,
+  - **two rich prizes sit in the middle of the valley**, an outcrop and standing stones, equidistant from both starts,
+  - the first to complete every chapter wins.
+- **What you see:**
+  - a **race bar** (both settlements' goal progress and rank),
+  - an alert when your explorers first **sight the rival's border**, and news when the rival ranks up or claims a prize,
+  - the rival's border in red once explored,
+  - their buildings and folk hidden until your fog lifts over them,
+  - a defeat screen if they win.
+- **Difficulty is the rival's speed of thought, not its rules.** Normal rethinks every 16 s, Hardy every 8 s and Relaxed every 24 s. Measured against the scripted player over 16 seeds:
+
+  | Difficulty | Player wins |
+  |---|---|
+  | Hardy | 8/16 (an even match) |
+  | Normal | 11/16 (69%, inside the 55–70% target) |
+  | Relaxed | 14/16 |
+
+  Thinking *faster* was not monotonic: the bot over-builds. So these numbers come from measurement, not intuition.
+- **New Game** offers *Race a rival* (the default) or *Peaceful*, which is the same valley alone.
+
+**The playtest found a bug** that would have been confusing in play. Objective, chapter, unlock, hunger, arrival and tier-up events had no owner, so the **rival's progress would have appeared as your toasts**, and the chapter timings in the report were the rival's. Every per-player event now carries `owner`, and the UI and reports filter on it.
+
+**Balance:** Renown needed 10 discoveries, which was impossible when the 16 split evenly (6 of 8 games had no winner). It now needs 7, plus the 2 contested central prizes.

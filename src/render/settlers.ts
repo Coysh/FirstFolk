@@ -167,6 +167,7 @@ export class SettlersView {
     let nBadge = 0;
     for (const s of world.settlers.values()) {
       if (i >= MAX) break;
+      if (s.owner !== 0 && !(world.explored[world.idx(s.x, s.y)] & 1)) continue;
       const cur = this.simPos(world, s);
       const prev = this.prev.get(s.id) ?? cur;
       const x = prev.x + (cur.x - prev.x) * alpha;

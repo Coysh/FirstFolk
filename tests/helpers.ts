@@ -3,8 +3,9 @@ import { secs } from '../src/sim/balance';
 import type { BuildingType } from '../src/sim/defs';
 import { World } from '../src/sim/world';
 
+/** A single-player world (no rival) for focused unit tests. */
 export function newWorld(seed = 1) {
-  return new World({ seed });
+  return new World({ seed, scenario: 'peaceful' });
 }
 
 export function place(world: World, type: BuildingType) {

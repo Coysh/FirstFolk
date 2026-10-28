@@ -6,7 +6,7 @@ import { place, runSeconds, wagon } from './helpers';
 
 describe('family boons', () => {
   it('the founders are offered a first boon straight away', () => {
-    const w = new World({ seed: 2 });
+    const w = new World({ scenario: 'peaceful', seed: 2 });
     const offers = w.players[0].offers;
     expect(offers.length).toBe(1);
     expect(offers[0].choices.length).toBe(3);
@@ -14,7 +14,7 @@ describe('family boons', () => {
   });
 
   it('choosing a boon applies its effect to the family', () => {
-    const w = new World({ seed: 2 });
+    const w = new World({ scenario: 'peaceful', seed: 2 });
     const o = w.players[0].offers[0];
     w.enqueue({ type: 'chooseBoon', owner: 0, offerId: o.id, choice: 1 });
     w.step();
@@ -26,15 +26,15 @@ describe('family boons', () => {
   });
 
   it('unanswered offers resolve themselves so the game never waits', () => {
-    const w = new World({ seed: 2 });
+    const w = new World({ scenario: 'peaceful', seed: 2 });
     runSeconds(w, 65);
     const founders = [...w.families.values()][0];
     expect(founders.boons.length).toBeGreaterThanOrEqual(1);
   });
 
   it('draws are deterministic and skip boons the family already has', () => {
-    const a = new World({ seed: 9 });
-    const b = new World({ seed: 9 });
+    const a = new World({ scenario: 'peaceful', seed: 9 });
+    const b = new World({ scenario: 'peaceful', seed: 9 });
     expect(a.players[0].offers[0].choices).toEqual(b.players[0].offers[0].choices);
     const fam = [...a.families.values()][0];
     addBoon(fam, 'hardy');
@@ -42,7 +42,7 @@ describe('family boons', () => {
   });
 
   it('marriage founds a household with both families’ boons and best skills', () => {
-    const w = new World({ seed: 4 });
+    const w = new World({ scenario: 'peaceful', seed: 4 });
     const [founders] = [...w.families.values()];
     addBoon(founders, 'keenEyes');
     // Fast-forward: the eldest founder child comes of age, a wandering family arrives single.
@@ -73,7 +73,7 @@ describe('family boons', () => {
 
   it('boon choices replay deterministically', () => {
     const run = () => {
-      const w = new World({ seed: 6 });
+      const w = new World({ scenario: 'peaceful', seed: 6 });
       w.enqueue({ type: 'chooseBoon', owner: 0, offerId: w.players[0].offers[0].id, choice: 2 });
       runSeconds(w, 90);
       return hashWorld(w);

@@ -6,6 +6,7 @@ import { NO_OWNER, territoryBox } from '../sim/territory';
 import { BOONS, BOON_TIMEOUT, familyTitle } from '../sim/boons';
 import { BALANCE, TICK_HZ } from '../sim/balance';
 import { canAfford, eventDef } from '../sim/events';
+import { objectiveStatus } from '../sim/scenario';
 import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
 import type { Family, World } from '../sim/world';
 import { CREST_COLORS, plural } from '../sim/population';
@@ -27,6 +28,7 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
     <div class="hud">
       <TopBar game={game} />
       <Goals game={game} />
+      <RaceBar game={game} />
       <Frontier game={game} />
       <BoonTray game={game} />
       <EventCard game={game} />
@@ -192,6 +194,33 @@ function FamilyLine({ w, fam }: { w: World; fam: Family }) {
       )}
       {parents.length === 2 && <p class="muted small">A household joining the {parents[0]} and {parents[1]} lines.</p>}
     </div>
+  );
+}
+
+/** Both settlements' progress through the chapters: the race at a glance. */
+function RaceBar({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const w = game.world;
+  if (!w.players[1]) return null;
+  const total = w.scenario.objectives.length;
+  const row = (owner: number, label: string) => {
+    const st = objectiveStatus(w, owner);
+    const done = st.filter((o) => o.done).length;
+    return (
+      <div class={`race-row ${owner === PLAYER ? 'me' : 'them'}`} title={`${label}: ${done}/${total} goals`}>
+        <span class="race-name">{label}</span>
+        <div class="race-track">
+          <div style={{ width: `${(done / total) * 100}%` }} />
+        </div>
+        <span class="race-rank">{RANK_NAMES[w.players[owner].rank]}</span>
+      </div>
+    );
+  };
+  return (
+    <section class="race" aria-label="The race">
+      {row(PLAYER, 'You')}
+      {row(1, 'Rival')}
+    </section>
   );
 }
 
@@ -557,11 +586,23 @@ function Victory({ game }: { game: Game }) {
     <div class="modal-wrap">
       <div class="modal panel celebrate">
         <img class="modal-icon" src={ICON.hut} alt="" />
-        <h2>{v} complete!</h2>
-        <p>
-          In {formatTime(w.tick)} your folk turned a lone wagon into a village of {w.population(PLAYER)} across {w.families.size} families.
-        </p>
-        <p class="muted">Keep building as long as you like. Seasons, deeper trades and a rival village are on the way.</p>
+        {v.winner === PLAYER ? (
+          <>
+            <h2>{v.scenario}: you win!</h2>
+            <p>
+              In {formatTime(w.tick)} your folk turned a lone wagon into a town of {w.population(PLAYER)} across {[...w.families.values()].filter((f) => f.owner === PLAYER).length} families, and
+              won renown before your rival.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2>The rival town won renown first</h2>
+            <p>
+              After {formatTime(w.tick)}, the settlement across the valley completed every chapter before you. Your {w.population(PLAYER)} folk carry on. Try a bolder frontier next time.
+            </p>
+          </>
+        )}
+        <p class="muted">Keep building as long as you like.</p>
         <button class="primary big" onClick={() => (game.victory.value = null)}>
           Keep playing
         </button>

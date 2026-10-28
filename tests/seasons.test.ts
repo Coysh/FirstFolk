@@ -7,7 +7,7 @@ import { wagon } from './helpers';
 
 describe('seasons and settlement ranks', () => {
   it('the year runs spring → winter, and spring counts a winter survived', () => {
-    const w = new World({ seed: 1 });
+    const w = new World({ scenario: 'peaceful', seed: 1 });
     expect(seasonOf(0)).toBe(0);
     w.run(BALANCE.yearTicks * 0.75 + 1);
     expect(isWinter(w)).toBe(true);
@@ -17,7 +17,7 @@ describe('seasons and settlement ranks', () => {
   });
 
   it('berry bushes do not regrow in winter', () => {
-    const w = new World({ seed: 1 });
+    const w = new World({ scenario: 'peaceful', seed: 1 });
     w.run(BALANCE.yearTicks * 0.75 + 5);
     const bush = [...w.nodes.values()].find((n) => n.kind === 'bush')!;
     bush.amount = 0;
@@ -27,7 +27,7 @@ describe('seasons and settlement ranks', () => {
   });
 
   it('ranking up transforms the wagon, widens the border and unlocks buildings', () => {
-    const w = new World({ seed: 1 });
+    const w = new World({ scenario: 'peaceful', seed: 1 });
     const land = w.territory.filter((t) => t === 0).length;
     expect(w.isUnlocked(0, 'watchtower')).toBe(false);
     rankUp(w, 0, 1);

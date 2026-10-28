@@ -74,8 +74,15 @@ export class BuildingsView {
       }
     }
     for (const b of world.buildings.values()) {
+      // Other settlements stay hidden until your folk have explored their land.
+      const seen = b.owner === 0 || (world.explored[world.idx(b.x, b.y)] & 1) !== 0;
       let v = this.views.get(b.id);
+      if (!seen) {
+        if (v) v.group.visible = false;
+        continue;
+      }
       if (!v) v = this.create(b);
+      v.group.visible = true;
       this.updateView(world, b, v, dt);
     }
   }
