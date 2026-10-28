@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, GOOD_INFO, type GatherJob, type Good, type NodeKind, type Skill } from './defs';
+import { BUILDINGS, FOODS, GOOD_INFO, outputGood, type GatherJob, type Good, type NodeKind, type Skill } from './defs';
 import { addRenown } from './renown';
 import { TRADES, tierOf, unlocksFor } from './trades';
 import { playerMod } from './houses';
@@ -266,7 +266,8 @@ export const craftTier = (world: World, owner: number, skill: Skill) => tierOf(w
 function workTicks(world: World, s: Settler, base: number, skill: Skill): number {
   let t = (base * TRADES[skill].speed[craftTier(world, s.owner, skill)] * 100) / (100 + playerMod(world, s.owner, `speed.${skill}`) + legendBonus(world, s.owner, skill));
   const player = world.players[s.owner];
-  if (player.hungry) t *= 1.4;
+  // Hunger slows everyone but food gatherers, who eat as they pick: a famine can't cripple its own cure.
+  if (player.hungry && skill !== 'husbandry') t *= 1.4;
   // Deeds: a timber drive or a harvest home.
   if (skill === 'woodcraft' && player.buffs.timber > world.tick) t /= 3;
   if (skill === 'husbandry' && player.buffs.harvest > world.tick) t /= 2;
@@ -312,13 +313,21 @@ function recallWorker(world: World, owner: number, x: number, y: number): Settle
   return s;
 }
 
+/** Foragers and fishers on the job (see workTicks): hunger doesn't slow their walk either. */
+function gathersFood(world: World, s: Settler): boolean {
+  if (s.job.kind !== 'work') return false;
+  const b = world.buildings.get(s.job.buildingId);
+  const good = b && outputGood(b.type);
+  return !!good && FOODS.includes(good);
+}
+
 function stepMove(world: World, s: Settler): void {
   if (s.next < 0) {
     if (!s.path.length) return;
     beginStep(world, s, s.path.shift()!);
   }
   let speed = s.child ? BALANCE.childSpeed : BALANCE.adultSpeed;
-  if (world.players[s.owner].hungry) speed = Math.floor((speed * BALANCE.hungrySpeedPct) / 100);
+  if (world.players[s.owner].hungry && !gathersFood(world, s)) speed = Math.floor((speed * BALANCE.hungrySpeedPct) / 100);
   s.progress += speed;
   while (s.progress >= s.stepLen) {
     s.progress -= s.stepLen;

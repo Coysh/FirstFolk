@@ -142,6 +142,8 @@ export const BALANCE = {
 
   /** Winter: warning lead time, extra appetite, construction speed. */
   winterWarning: secs(25),
+  /** A guard on a post eats this much (percent) more than anyone else: every banner needs a spear, and a spear needs supper. */
+  guardAppetitePct: 200,
   winterAppetitePct: 25,
   winterBuildPct: 70,
 

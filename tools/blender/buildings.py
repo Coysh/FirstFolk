@@ -28,6 +28,10 @@ def cottage(m, rng, w, d, h, cx, cz, wall=None, roof=None, light=None, roof_h=0.
         m.add(extrude([(-w / 2, 0), (w / 2, 0), (0, apex)], 0.05), wall, pos=(cx, ye, cz + sz * d / 2), convex=False)
     kingpost_gable(m, w, apex, ye, cz + d / 2 + 0.02, wall)
     door(m, cx + door_x, cz + d / 2 + 0.01, door_w, door_h, fh)
+    # a hanging lantern by the door
+    lx = cx + door_x - door_w / 2 - 0.12
+    m.add(box(0.14, 0.025, 0.03), C.iron, pos=(lx + 0.04, fh + door_h + 0.02, cz + d / 2 + 0.06))
+    m.add(box(0.07, 0.09, 0.07), C.glow, pos=(lx, fh + door_h - 0.05, cz + d / 2 + 0.08), sway=sb.GLOW)
     if windows:
         for sx in (-1, 1):
             window(m, cx + sx * (w / 2 + 0.01), fh + h * 0.52, cz + d * 0.1, sx * PI / 2, 0.12, 0.13, True, box_flowers=(sx > 0))
@@ -70,6 +74,10 @@ def hut():
     m.add(prism(6, 0.1, 0.1, 0.035), C.stoneDark, pos=(0, 1.64, cz))
     m.anchor('smoke', (0, 1.7, cz))
     door(m, 0, cz + 0.555, 0.24, 0.34, 0.14)
+    # a lantern on a post by the door: the village lights up after dusk
+    pole(m, -0.3, 0, cz + 0.72, 0.5, 0.02)
+    m.add(box(0.1, 0.12, 0.1), C.glow, pos=(-0.3, 0.52, cz + 0.72), sway=sb.GLOW)
+    m.add(box(0.13, 0.03, 0.13), C.iron, pos=(-0.3, 0.6, cz + 0.72))
     for s in (-1, 1):
         a = s * 72 * PI / 180
         window(m, math.sin(a) * 0.55, 0.5, cz + math.cos(a) * 0.55, a, 0.11, 0.12, True)
@@ -159,7 +167,7 @@ def quarry(t):
     for i in range(6):
         m.add(box(0.025, 0.02, 0.8), C.darkTimber, pos=(-0.78 + i * 0.16, 0.895, -0.1), rot=(0.34, 0, 0))
     m.add(box(0.018, 0.12, 0.018), C.iron, pos=(-0.39, 0.66, 0.26))
-    m.add(box(0.08, 0.1, 0.08), C.glow, pos=(-0.39, 0.57, 0.26))
+    m.add(box(0.08, 0.1, 0.08), C.glow, pos=(-0.39, 0.57, 0.26), sway=sb.GLOW)
     # the wheelbarrow, loaded with stone
     m.add(box(0.26, 0.09, 0.3, top=(1.25, 1.2)), C.wood, pos=(0.12, 0.2, 0.52), rot=(0, 0.25, 0))
     m.add(prism(8, 0.1, 0.1, 0.035), C.darkTimber, pos=(0.1, 0.1, 0.7), rot=(0, 0.25, PI / 2))
@@ -231,7 +239,7 @@ def lookout():
         for sz in (-1, 1):
             m.add(box(0.07, 0.62, 0.07), C.timber, pos=(sx * 0.5, 2.18, cz + sz * 0.48))
     m.add(box(0.07, 0.12, 0.07), C.iron, pos=(0.5, 2.05, cz + 0.48))
-    m.add(box(0.08, 0.1, 0.08), C.glow, pos=(0.5, 1.98, cz + 0.48))
+    m.add(box(0.08, 0.1, 0.08), C.glow, pos=(0.5, 1.98, cz + 0.48), sway=sb.GLOW)
     # a steep, flared roof of thatch with a ridge finial and the family banner
     m.add(prism(4, 0.9, 0.62, 0.22, phase=0), C.thatch, pos=(0, 2.4, cz))
     m.add(prism(4, 0.66, 0.0, 0.62, phase=0), C.thatchLight, pos=(0, 2.7, cz))
@@ -275,7 +283,7 @@ def wagon():
     m.add(ico(), C.clothShade, pos=(0.3, 0.12, 0.68), scale=(0.15, 0.12, 0.13))
     barrel(m, 0.8, -0.5)
     pole(m, 0.92, 0, -0.3, 0.95)
-    m.add(box(0.09, 0.11, 0.09), C.glow, pos=(0.92, 0.9, -0.3))
+    m.add(box(0.09, 0.11, 0.09), C.glow, pos=(0.92, 0.9, -0.3), sway=sb.GLOW)
     m.add(box(0.12, 0.03, 0.12), C.iron, pos=(0.92, 0.97, -0.3))
     campfire(m, -0.45, 0.78)
     log(m, -0.2, 0.06, 1.0 - 0.1, 0.34, 0.06, 'x')

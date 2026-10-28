@@ -72,7 +72,7 @@ if (games > 1) {
       `\navg lead changes ${avg((r) => r.leadChanges)} · comebacks (winner was ≥100 behind) ${reports.filter((r) => r.winnerDeficit >= 100).length} · avg landmark flips ${avg((r) => r.holdingFlips)}` +
       `\nchallenges won P/R ${reports.reduce((n, r) => n + r.challenges[0], 0)}/${reports.reduce((n, r) => n + r.challenges[1], 0)} · by acclaim ${reports.filter((r) => r.acclaim).length}` +
       `\nbattles the player saw: avg ${avg((r) => r.battles)} · games with none ${reports.filter((r) => !r.battles).length}` +
-      `\navg idle ${avg((r) => r.idleAdultPct)}% · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg stock@20m ${avg((r) => r.stockAt[1] ?? 0)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)}`,
+      `\navg idle ${avg((r) => r.idleAdultPct)}% · avg hungry ${avg((r) => r.hungryPct)}% (worst ${Math.max(...reports.map((r) => r.hungryPct))}%) · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg stock@20m ${avg((r) => r.stockAt[1] ?? 0)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)}`,
   );
   const sources: Record<string, number> = {};
   for (const r of reports) for (const [k, v] of Object.entries(r.renownBy[0])) sources[k] = (sources[k] ?? 0) + (v ?? 0) / reports.length;

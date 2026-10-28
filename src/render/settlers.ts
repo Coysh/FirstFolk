@@ -10,6 +10,7 @@ import { goodGeometry } from './models';
 import { ModelBuilder, box, cone, cyl, sphere } from './modelBuilder';
 import { C, HAIRS, SKINS, TUNICS } from './palette';
 import type { HeightField } from './terrain';
+import { withSway } from './wind';
 
 const MAX = 1024;
 
@@ -79,6 +80,11 @@ export class SettlersView {
   private feather: THREE.InstancedMesh;
   /** Guards carry a round shield in their family's colour. */
   private shield: THREE.InstancedMesh;
+  /** A war banner: the first figure of every marching warband carries one (pole, and cloth tinted by side). */
+  private bannerPole: THREE.InstancedMesh;
+  private bannerCloth: THREE.InstancedMesh;
+  /** Everyone of yours hops and cheers until this time (a rank-up, a claimed landmark, victory). */
+  private cheerUntil = 0;
   /** Hooks for audio and footpaths. */
   onStrike: ((tool: Tool, x: number, y: number, z: number) => void) | null = null;
   onStep: ((x: number, z: number, amount: number) => void) | null = null;
@@ -141,6 +147,15 @@ export class SettlersView {
       spear: mk(toolGeometry('spear'), vmat, false),
     };
     this.shield = mk(new THREE.CylinderGeometry(0.1, 0.1, 0.025, 9).rotateZ(Math.PI / 2).translate(-0.14, 0.3, 0.03), mat(), true);
+    const pole = new ModelBuilder().add(box(0.018, 1.0, 0.018), C.wood, { pos: [0, 0.5, 0] }).build();
+    const cloth = new ModelBuilder().add(box(0.012, 0.2, 0.36), 0xffffff, { pos: [0, 0.9, -0.2] }).build();
+    const cp = cloth.getAttribute('position');
+    const cs = new Float32Array(cp.count);
+    // Flutter grows towards the free edge of the cloth (see withSway).
+    for (let k = 0; k < cp.count; k++) cs[k] = Math.min(1, Math.max(0, (-cp.getZ(k) - 0.02) / 0.36));
+    cloth.setAttribute('sway', new THREE.BufferAttribute(cs, 1));
+    this.bannerPole = mk(pole, vmat, false);
+    this.bannerCloth = mk(cloth, withSway(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8, side: THREE.DoubleSide })), true);
     this.apron = mk(new THREE.BoxGeometry(0.15, 0.2, 0.03).translate(0, HIP_Y + 0.1, art ? 0.118 : 0.085), mat(), true);
     this.badge = mk(new THREE.OctahedronGeometry(0.03).translate(0, 0.36, art ? 0.098 : 0.085), new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0x6b4a00, metalness: 0.6, roughness: 0.3 }), false);
     this.feather = mk((art ? new THREE.ConeGeometry(0.018, 0.16, 4).rotateZ(-0.7).translate(0.115, 0.6, -0.02) : new THREE.ConeGeometry(0.018, 0.16, 4).rotateZ(-0.5).translate(0.07, 0.62, 0)), new THREE.MeshStandardMaterial({ color: 0xfff6e0, flatShading: true }), false);
@@ -158,6 +173,20 @@ export class SettlersView {
     const bandId = this.reaverBand.get(s.id);
     const band = bandId === undefined ? world.warbands.find((w) => w.members.includes(s.id)) : world.warbands.find((w) => w.id === bandId);
     return !!band && band.phase === 'march' && world.buildings.get(band.targetId)?.owner === 0;
+  }
+
+  /** Everyone of yours hops for joy for a few seconds. */
+  cheer(time: number, seconds = 4): void {
+    this.cheerUntil = Math.max(this.cheerUntil, time + seconds);
+  }
+
+  /** The banner colour if this figure leads a marching warband (its first member), else -1. */
+  private bandBanner(world: World, s: Settler): number {
+    const bandId = this.reaverBand.get(s.id);
+    const band = bandId === undefined ? world.warbands.find((w) => w.members.includes(s.id)) : world.warbands.find((w) => w.id === bandId);
+    if (!band) return -1;
+    const first = bandId === undefined ? band.members[0] === s.id : s.id === -(band.id * 16);
+    return first ? (band.owner === 0 ? 0xffd75e : band.owner === 1 ? 0xff6b5e : 0x2b2b33) : -1;
   }
 
   /** Reavers have no settlers of their own: a figure per 10 strength, made up for each band. */
@@ -241,6 +270,7 @@ export class SettlersView {
     let nApron = 0;
     let nBadge = 0;
     let nShield = 0;
+    let nBanner = 0;
     for (const s of this.figures(world)) {
       if (i >= MAX) break;
       const cur = this.simPos(world, s);
@@ -349,6 +379,19 @@ export class SettlersView {
         armL = -1.15;
         armR = -1.15;
       }
+      if (time < this.cheerUntil && s.owner === 0 && !away) {
+        // A celebration: hop, arms thrown up, the hood tip flying.
+        const w = time * 9 + seed * 3;
+        const hop = Math.max(0, Math.sin(w));
+        bob += hop * 0.11;
+        armL = -2.6 + Math.sin(w * 0.5) * 0.35;
+        armR = -2.6 - Math.sin(w * 0.5) * 0.35;
+        legSwing = hop * 0.35;
+        lean = 0;
+        nod = -0.14;
+        headSway = Math.sin(w * 0.5) * 0.08;
+        hoodTrail = hop * 0.4;
+      }
 
       // --- matrices -----------------------------------------------------
       this.q.setFromAxisAngle(this.yAxis, a.yaw);
@@ -390,6 +433,13 @@ export class SettlersView {
         const fam = world.families.get(s.familyId);
         this.shield.setMatrixAt(nShield, this.base);
         this.shield.setColorAt(nShield++, this.col.setHex(fam ? CREST_COLORS[fam.color] : 0x888888));
+        const flagColour = away ? this.bandBanner(world, s) : -1;
+        if (flagColour >= 0) {
+          this.m.copy(this.base).multiply(this.t.makeTranslation(-0.17, 0, 0.04));
+          this.bannerPole.setMatrixAt(nBanner, this.m);
+          this.bannerCloth.setMatrixAt(nBanner, this.m);
+          this.bannerCloth.setColorAt(nBanner++, this.col.setHex(flagColour));
+        }
       }
       if (moving) this.onStep?.(x, z, dt * (s.carry ? 2.2 : 1.4));
 
@@ -443,6 +493,11 @@ export class SettlersView {
     this.apron.count = nApron;
     this.apron.instanceMatrix.needsUpdate = true;
     if (this.apron.instanceColor) this.apron.instanceColor.needsUpdate = true;
+    this.bannerPole.count = nBanner;
+    this.bannerCloth.count = nBanner;
+    this.bannerPole.instanceMatrix.needsUpdate = true;
+    this.bannerCloth.instanceMatrix.needsUpdate = true;
+    if (this.bannerCloth.instanceColor) this.bannerCloth.instanceColor.needsUpdate = true;
     this.shield.count = nShield;
     this.shield.instanceMatrix.needsUpdate = true;
     if (this.shield.instanceColor) this.shield.instanceColor.needsUpdate = true;

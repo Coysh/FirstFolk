@@ -84,7 +84,7 @@ export class OpeningBot {
     if (this.useDeed(world, target)) return;
     if (this.raid(world)) return;
     if (this.trade(world)) return;
-    const hungry = world.food(this.owner) < 12;
+    const hungry = world.larder(this.owner) < 12;
     const home: BuildingType = world.isUnlocked(this.owner, 'longhouse') && this.affordable(world, 'longhouse') ? 'longhouse' : 'hut';
     const tower: BuildingType = world.isUnlocked(this.owner, 'watchtower') && this.affordable(world, 'watchtower') ? 'watchtower' : 'lookout';
     const towerSites = [...world.buildings.values()].filter((b) => b.owner === this.owner && BUILDINGS[b.type].claim && !b.done).length;
@@ -207,7 +207,7 @@ export class OpeningBot {
           at = world.stored(this.owner, 'logs') < 80 ? { x: 0, y: 0 } : null;
           break;
         case 'harvest':
-          at = world.food(this.owner) < pop ? { x: 0, y: 0 } : null;
+          at = world.larder(this.owner) < pop ? { x: 0, y: 0 } : null;
           break;
         case 'warhorn':
           at = hallOf(world, this.owner) && !world.players[this.owner].warhorn && world.tick >= BALANCE.raidsFrom ? { x: 0, y: 0 } : null;

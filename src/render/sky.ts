@@ -11,6 +11,8 @@ export const SKY = {
 export class Sky {
   readonly group = new THREE.Group();
   private dome: THREE.Mesh;
+  private top = new THREE.Color().copy(SKY.top);
+  private horizon = new THREE.Color().copy(SKY.horizon);
   private clouds: { mesh: THREE.Mesh; speed: number }[] = [];
 
   constructor(private mapSize: number) {
@@ -19,8 +21,8 @@ export class Sky {
       depthWrite: false,
       fog: false,
       uniforms: {
-        uTop: { value: SKY.top },
-        uHorizon: { value: SKY.horizon },
+        uTop: { value: this.top },
+        uHorizon: { value: this.horizon },
         uSun: { value: SKY.sunDir },
       },
       vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
@@ -57,6 +59,12 @@ export class Sky {
       this.group.add(mesh);
       this.clouds.push({ mesh, speed: 0.6 + rnd() * 0.6 });
     }
+  }
+
+  /** The sky's colours for the time of day (the dome follows these; fog is set by the caller). */
+  setColors(top: THREE.Color, horizon: THREE.Color): void {
+    this.top.copy(top);
+    this.horizon.copy(horizon);
   }
 
   update(dt: number, camera: THREE.Camera): void {

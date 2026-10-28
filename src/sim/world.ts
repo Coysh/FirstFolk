@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, FOODS, GOODS, costTotal, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
+import { BUILDINGS, FOODS, GOODS, costTotal, outputGood, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
 import { generateMap, isWalkableTerrain, type MapData } from './mapgen';
 import { PathFinder } from './path';
 import { Rng } from './rng';
@@ -603,6 +603,33 @@ export class World {
     let n = 0;
     for (const g of FOODS) n += this.stored(owner, g);
     return n;
+  }
+
+  /** One food good at the gatherers' huts, waiting for carriers (not reserved for a haul). */
+  waiting(owner: number, good: Good): number {
+    let n = 0;
+    for (const b of this.buildings.values()) {
+      if (b.owner !== owner || !b.done || BUILDINGS[b.type].storage || outputGood(b.type) !== good) continue;
+      n += Math.max(0, b.stock[good] - b.reserved[good]);
+    }
+    return n;
+  }
+
+  /**
+   * Food the town can actually eat: what is in the stores plus what gatherers have piled up at their
+   * huts. A starving town must never sit beside a full basket just because the carriers are busy.
+   */
+  larder(owner: number): number {
+    let n = this.food(owner);
+    for (const g of FOODS) n += this.waiting(owner, g);
+    return n;
+  }
+
+  /** Mouths to feed: everyone, with guards on a post counting extra (see BALANCE.guardAppetitePct). */
+  eaters(owner: number): number {
+    let n = 0;
+    for (const s of this.settlers.values()) if (s.owner === owner) n += s.job.kind === 'guard' ? 1 + BALANCE.guardAppetitePct / 100 : 1;
+    return Math.round(n);
   }
 
   population(owner: number): number {

@@ -15,6 +15,8 @@ export interface Settings {
   muted: boolean;
   quality: Quality;
   hints: boolean;
+  /** A slow day and night: windows and fires glow after dusk. */
+  dayNight: boolean;
 }
 
 const SETTINGS_KEY = 'firstfolk.settings.v1';
@@ -28,6 +30,7 @@ const defaults: Settings = {
   muted: false,
   quality: matchMedia('(pointer: coarse)').matches ? 'balanced' : 'high',
   hints: true,
+  dayNight: true,
 };
 
 function read<T>(key: string): T | null {

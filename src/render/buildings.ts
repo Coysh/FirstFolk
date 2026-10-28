@@ -7,7 +7,8 @@ import type { Effects } from './effects';
 import { buildingGeometry, goodGeometry, scaffoldGeometry } from './models';
 import { ModelBuilder, box } from './modelBuilder';
 import type { HeightField } from './terrain';
-import { withSway } from './wind';
+import { artParts } from './art';
+import { nightLevel, windTime, withSway } from './wind';
 
 interface View {
   group: THREE.Group;
@@ -23,6 +24,8 @@ interface View {
   clipMat: THREE.MeshStandardMaterial | null;
   clip: THREE.Plane | null;
   hammerTimer: number;
+  /** Animated Blender parts (windmill sails), shown once the building stands. */
+  parts: { mesh: THREE.Mesh; mode: string }[];
 }
 
 /** Where stock piles sit, in building-local coordinates. */
@@ -40,12 +43,30 @@ export class BuildingsView {
   private geoCache = new Map<string, THREE.BufferGeometry>();
   readonly material = withSway(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 }));
   private scaffoldGeo = scaffoldGeometry();
+  /** Warm pools of light on the ground by every lived-in building after dusk: one instanced draw call. */
+  private pools: THREE.InstancedMesh;
   private plinthGeo = new ModelBuilder().add(box(1.84, 1.0, 1.84), 0x8f7f5c, { pos: [0, -0.52, 0] }).build();
   private goodGeo = Object.fromEntries(GOODS.map((g) => [g, goodGeometry(g)])) as Record<Good, THREE.BufferGeometry>;
   /** Called when a construction finishes or a workplace transforms (for sounds / floaters). */
   onComplete: ((id: number, pos: THREE.Vector3) => void) | null = null;
 
-  constructor(private hf: HeightField, private effects: Effects) {}
+  constructor(private hf: HeightField, private effects: Effects) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d')!;
+    const grad = g.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.45, 'rgba(255,255,255,0.45)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), color: 0xff9d4a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    this.pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), mat, 512);
+    this.pools.count = 0;
+    this.pools.frustumCulled = false;
+    this.pools.renderOrder = 1;
+    this.group.add(this.pools);
+  }
 
   geometry(type: Building['type'], crest?: number, tier = 0): THREE.BufferGeometry {
     const key = `${type}:${crest ?? ''}:${tier}`;
@@ -74,6 +95,7 @@ export class BuildingsView {
         this.views.delete(id);
       }
     }
+    this.updatePools(world);
     for (const b of world.buildings.values()) {
       // Other settlements stay hidden until your folk have explored their land.
       const seen = b.owner === 0 || (world.explored[world.idx(b.x, b.y)] & 1) !== 0;
@@ -86,6 +108,34 @@ export class BuildingsView {
       v.group.visible = true;
       this.updateView(world, b, v, dt);
     }
+  }
+
+  /** After dusk, lived-in buildings (a family at home, a worker at the bench, a manned post) throw light on the ground. */
+  private updatePools(world: World): void {
+    const night = nightLevel.value;
+    const mat = this.pools.material as THREE.MeshBasicMaterial;
+    mat.opacity = Math.min(0.75, night * 0.9);
+    if (night < 0.04) {
+      this.pools.count = 0;
+      return;
+    }
+    const m = new THREE.Matrix4();
+    let n = 0;
+    for (const b of world.buildings.values()) {
+      if (n >= 512 || !b.done || (b.owner !== 0 && !(world.explored[world.idx(b.x, b.y)] & 1))) continue;
+      const def = BUILDINGS[b.type];
+      const lit = b.type === 'wagon' || (isHome(b.type) ? b.familyId !== 0 : def.job ? b.workerId !== 0 : !!def.garrison || def.size === 3);
+      if (!lit) continue;
+      const v = this.views.get(b.id);
+      if (!v) continue;
+      const r = def.size === 3 ? 2.1 : 1.45;
+      const x = v.group.position.x;
+      const z = v.group.position.z + def.size * 0.3;
+      m.makeScale(r, 1, r).setPosition(x, this.hf.at(x, z) + 0.06, z);
+      this.pools.setMatrixAt(n++, m);
+    }
+    this.pools.count = n;
+    this.pools.instanceMatrix.needsUpdate = true;
   }
 
   private create(b: Building): View {
@@ -114,7 +164,15 @@ export class BuildingsView {
       clipMat.side = THREE.DoubleSide;
       model.material = clipMat;
     }
-    const v: View = { group, model, scaffold, piles, pileKey: '', modelKey: '', wasDone: b.done, bounce: 0, smokeTimer: Math.random(), clipMat, clip, hammerTimer: 0 };
+    const parts = artParts(b.type).map((p) => {
+      const mesh = new THREE.Mesh(p.geo, this.material);
+      mesh.position.copy(p.pivot);
+      mesh.castShadow = true;
+      mesh.visible = b.done;
+      group.add(mesh);
+      return { mesh, mode: p.mode };
+    });
+    const v: View = { group, model, scaffold, piles, pileKey: '', modelKey: '', wasDone: b.done, bounce: 0, smokeTimer: Math.random(), clipMat, clip, hammerTimer: 0, parts };
     group.userData.buildingId = b.id;
     this.views.set(b.id, v);
     return v;
@@ -153,6 +211,12 @@ export class BuildingsView {
       this.effects.emit('dust', p.x, p.y + 0.1, p.z, 22);
       this.effects.emit('sparkle', p.x, p.y + 0.9, p.z, 16);
       this.onComplete?.(b.id, p);
+    }
+
+    for (const part of v.parts) {
+      part.mesh.visible = b.done;
+      // Sails turn with the breeze (a slow swell on top of a steady turn), each building out of step.
+      if (part.mode === 'spinz') part.mesh.rotation.z = -(windTime.value * 0.9 + Math.sin(windTime.value * 0.4 + p.x) * 0.5 + p.x);
     }
 
     const progress = b.done ? 1 : b.work / b.workNeeded;

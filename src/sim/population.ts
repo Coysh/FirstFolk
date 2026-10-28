@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, FOODS, SKILLS, type BuildingType, type Good, type Skill } from './defs';
+import { BUILDINGS, FOODS, SKILLS, outputGood, type BuildingType, type Good, type Skill } from './defs';
 import { playerMod } from './houses';
 import { craftXp, walkTo } from './settlers';
 import { hasOmen } from './omens';
@@ -33,7 +33,7 @@ export function updatePopulation(world: World): void {
   for (const player of world.players) {
     // Hearth-keepers eat less: appetite is summed per settler in percent.
     let appetite = 0;
-    for (const s of world.settlers.values()) if (s.owner === player.id) appetite += 100;
+    for (const s of world.settlers.values()) if (s.owner === player.id) appetite += s.job.kind === 'guard' ? 100 + BALANCE.guardAppetitePct : 100;
     // Winter cold: everyone eats a quarter more.
     player.mealAccum += Math.floor((appetite * (world.winterBites(player.id) ? 100 + BALANCE.winterAppetitePct * (hasOmen(world, 'longWinters') ? 2 : 1) : 100)) / 10000);
     while (player.mealAccum >= world.rules.mealInterval) {
@@ -52,7 +52,7 @@ export function updatePopulation(world: World): void {
  * Growth then comes from your own lineages, not just from waiting for migrants.
  */
 function checkBirths(world: World, player: PlayerState): void {
-  const fed = !player.hungry && world.food(player.id) >= world.rules.newcomerMinFood;
+  const fed = !player.hungry && world.larder(player.id) >= world.rules.newcomerMinFood;
   for (const fam of world.families.values()) {
     if (fam.owner !== player.id) continue;
     if (fam.birthCooldown > 0) {
@@ -82,19 +82,26 @@ function checkBirths(world: World, player: PlayerState): void {
 }
 
 function eat(world: World, player: PlayerState): void {
-  // Eat whichever food is most plentiful, from the fullest store.
+  // Eat whichever food is most plentiful, from the fullest pile: a store, or a gatherer's own basket
+  // (so a full producer waiting for carriers is eaten from, and starts gathering again).
   let best: Building | undefined;
   let food: Good = 'berries';
-  for (const g of FOODS)
-    for (const b of world.storages(player.id))
+  for (const b of world.buildings.values()) {
+    if (b.owner !== player.id || !b.done) continue;
+    const store = !!BUILDINGS[b.type].storage;
+    const own = outputGood(b.type);
+    for (const g of FOODS) {
+      if (!store && own !== g) continue;
       if (b.stock[g] - b.reserved[g] > 0 && (!best || b.stock[g] > best.stock[food])) {
         best = b;
         food = g;
       }
+    }
+  }
   if (best) {
     best.stock[food]--;
     // Hysteresis: folk stay hungry until there's a real buffer again, so hunger can't flap meal by meal.
-    if (player.hungry && world.food(player.id) >= Math.max(4, Math.floor(world.population(player.id) / 8))) {
+    if (player.hungry && world.larder(player.id) >= Math.max(4, Math.floor(world.population(player.id) / 8))) {
       player.hungry = false;
       world.emit({ type: 'fed', owner: player.id });
     }
@@ -153,7 +160,7 @@ function checkNewcomers(world: World, player: PlayerState): void {
     }
   if (player.hungry) return;
   if (marry(world, player, hut)) return;
-  if (world.food(player.id) < world.rules.newcomerMinFood) return;
+  if (world.larder(player.id) < world.rules.newcomerMinFood) return;
   spawnFamily(world, player, hut);
 }
 

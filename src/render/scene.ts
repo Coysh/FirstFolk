@@ -19,7 +19,8 @@ import { SitesView } from './sites';
 import { SettlersView } from './settlers';
 import { SKY, Sky } from './sky';
 import { HeightField, TerrainMesh, Water } from './terrain';
-import { windTime } from './wind';
+import { nightLevel, windTime } from './wind';
+import { settings } from '../settings';
 
 export interface Ghost {
   type: BuildingType;
@@ -27,6 +28,12 @@ export interface Ghost {
   y: number;
   ok: boolean;
 }
+
+/** Seconds for one day and night at any game speed (it's mood, not a clock). */
+const DAY_SECONDS = 240;
+const TMP = new THREE.Color();
+const SKY_TOP = new THREE.Color();
+const SKY_HORIZON = new THREE.Color();
 
 export type Progress = (fraction: number, label: string) => Promise<void>;
 
@@ -60,6 +67,9 @@ export class GameRenderer {
   private decor!: THREE.Group;
   sites!: SitesView;
   private sun!: THREE.DirectionalLight;
+  private hemi!: THREE.HemisphereLight;
+  /** 1 in full daylight, 0 in deep night: eased towards the sun's height. */
+  private dayAmt = 1;
   private ghostMesh!: THREE.Mesh;
   private ghostTiles!: THREE.Mesh;
   private ghostType: BuildingType | null = null;
@@ -105,7 +115,8 @@ export class GameRenderer {
     await progress(0.3, 'Painting the sky');
     this.sky = new Sky(world.size);
     this.scene.add(this.sky.group);
-    this.scene.add(new THREE.HemisphereLight(0xdcecff, 0x7a6644, 1.35));
+    this.hemi = new THREE.HemisphereLight(0xdcecff, 0x7a6644, 1.35);
+    this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xffe3bd, 2.9);
     this.sun.castShadow = this.quality !== 'low';
     const sm = this.quality === 'high' ? 2048 : 1024;
@@ -192,6 +203,7 @@ export class GameRenderer {
       if (e.type === 'treeFelled') this.effects.fellTree(e.x, e.y);
       else if (e.type === 'rockMined' && e.depleted) this.effects.emit('stone', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 14);
       else if (e.type === 'claimed') {
+        if (e.owner === 0) this.settlers.cheer(this.time, 3);
         const p = this.sites.position(this.world, e.siteId);
         if (p) {
           this.effects.emit('sparkle', p.x, p.y + 0.6, p.z, 40);
@@ -199,6 +211,7 @@ export class GameRenderer {
         }
       } else if (e.type === 'territoryGrew' && e.owner === 0) this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 1.5, e.y + 0.5, 24);
       else if (e.type === 'rankUp' && e.owner === 0) {
+        this.settlers.cheer(this.time, 5);
         const wagon = [...this.world.buildings.values()].find((b) => b.owner === 0 && b.type === 'wagon');
         if (wagon) this.effects.emit('sparkle', wagon.x + 1, this.hf.at(wagon.x + 1, wagon.y + 1) + 1.5, wagon.y + 1, 60);
       } else if (e.type === 'deed' && seen(Math.max(0, e.x), Math.max(0, e.y)) && e.deed !== 'timber' && e.deed !== 'harvest' && e.deed !== 'warhorn') {
@@ -209,7 +222,9 @@ export class GameRenderer {
         const y = this.hf.at(e.x + 0.5, e.y + 0.5);
         this.effects.emit('sparkle', e.x + 0.5, y + 3, e.y + 0.5, 120);
         this.effects.emit('dust', e.x + 0.5, y + 0.3, e.y + 0.5, 50);
-      } else if (e.type === 'holdingChanged') {
+      } else if (e.type === 'victory' && e.winner === 0) this.settlers.cheer(this.time, 10);
+      else if (e.type === 'holdingChanged') {
+        if (e.owner === 0) this.settlers.cheer(this.time, 2.5);
         const p = this.sites.position(this.world, e.siteId);
         if (p && seen(Math.floor(p.x), Math.floor(p.z))) this.effects.emit('sparkle', p.x, p.y + 1.5, p.z, 50);
       } else if (e.type === 'razed' && seen(e.x, e.y)) {
@@ -288,6 +303,33 @@ export class GameRenderer {
     if (!t) return;
     this.rangeRing.position.set(t.x, this.hf.at(t.x, t.z) + 0.15, t.z);
     this.rangeRing.scale.setScalar(t.r);
+  }
+
+  /**
+   * A slow day: bright for about half of it, with a warm dusk, a dim blue night and a dawn. Windows and
+   * fires glow as it darkens (nightLevel). The title screen idles at dusk, and Settings can turn it off.
+   */
+  private updateDayNight(dt: number): void {
+    let goal = 1;
+    if (this.cinematic) goal = 0.3;
+    else if (settings.value.dayNight) {
+      const h = Math.sin((this.time / DAY_SECONDS + 0.2) * Math.PI * 2);
+      goal = THREE.MathUtils.smoothstep(h, -0.75, -0.15);
+    }
+    this.dayAmt += (goal - this.dayAmt) * Math.min(1, dt * 2);
+    const d = this.dayAmt;
+    const warm = 1 - Math.abs(2 * d - 1);
+    const mix = (night: number, day: number, dusk: number, out: THREE.Color) => out.setHex(night).lerp(TMP.setHex(day), d).lerp(TMP.setHex(dusk), warm * 0.55);
+    mix(0x1d2f66, 0x7fb6e0, 0x6a6fb0, SKY_TOP);
+    mix(0x3d4d80, 0xf4e3c3, 0xf3a36a, SKY_HORIZON);
+    this.sky.setColors(SKY_TOP, SKY_HORIZON);
+    (this.scene.fog as THREE.Fog).color.copy(SKY_HORIZON);
+    this.hemi.intensity = THREE.MathUtils.lerp(1.05, 1.35, d);
+    this.hemi.color.setHex(0x93a8ee).lerp(TMP.setHex(0xdcecff), d);
+    this.hemi.groundColor.setHex(0x3c4262).lerp(TMP.setHex(0x7a6644), d);
+    this.sun.intensity = THREE.MathUtils.lerp(0.95, 2.9, d);
+    this.sun.color.setHex(0xaabdff).lerp(TMP.setHex(0xffe3bd), d).lerp(TMP.setHex(0xff9a55), warm * 0.5);
+    nightLevel.value = 1 - d;
   }
 
   /** What the camera hears: how much water and how much village is around its focus (0..1). */
@@ -385,6 +427,7 @@ export class GameRenderer {
   render(alpha: number, dt: number): void {
     this.time += dt;
     windTime.value = this.time;
+    this.updateDayNight(dt);
     if (this.cinematic) this.rig.rotate(dt * 0.05, true);
     this.rig.update(dt);
     const t = this.rig.target;

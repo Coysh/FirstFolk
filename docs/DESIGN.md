@@ -506,7 +506,7 @@ Every model used to be built in code from boxes, cones and cylinders. They were 
 - **Fallback and A/B:** a model missing from the GLBs falls back to its code model, so replacement is one model at a time. **`?art=classic`** turns the Blender art off for an exact in-game comparison. Tiers above the highest modelled reuse the best one.
 
 ### Budgets (enforced by `tests/art.test.ts`)
-- **Triangles:** at most 2,000 per building (the biggest is 1,632) and 420 per settler (it is 388).
+- **Triangles:** at most 2,000 per building in v0.20 (raised to 2,600 in v0.21 for the Great Works, see §0f) and 420 per settler (it is 388).
 - **File size:** `buildings.glb` under 400 KB and `settler.glb` under 40 KB.
 - **Shape:** everything stays on its 2×2 footprint with the door on +z and its base on y = 0, and the settler parts keep the joint heights the procedural animation uses.
 - **Draw calls:** **+1** for the whole game (the settlers' hair), and none per building.
@@ -527,11 +527,60 @@ The extra 100k triangles are about 12%, almost all of it settlers (388 against a
 - **Door on +z,** and nothing outside ±1.3.
 
 ### Next, in priority order
-The old code models now stand out next to the new ones, so each of these is one more `buildings.py` function:
-1. **The rest of the town:** sawpit, forester, fisher, watchtower, stockade, muster hall, longhouse.
-2. **Great Works:** Stone Circle, Mead Hall and Granary.
-3. **Discoveries and landmarks in the wild,** and the reaver and guard variants of the settler.
-4. **Trees and rocks** are already cheap instanced code models and can stay.
+Everything in the build menu, every Great Work and every wild discovery is now Blender art (§0f). What is left:
+1. **Settler variants:** reavers and guards with their own silhouettes (today they reuse the villager with a shield and a spear).
+2. **Trees, rocks and bushes** are cheap instanced code models and can stay; a second tree species would add variety.
+3. **A burned-post model** (today a razed post is just flame and smoke).
+
+---
+
+## 0f. The Alive Pass (v0.21+): the rest of the art, a day and night, and a famine bug
+
+The brief: bring every remaining building, landmark and Great Work up to the same storybook style, judge it at gameplay zoom, make the settlement feel alive, and keep looking for what makes the game more fun, not just prettier.
+
+### Art: everything is Blender now
+- **Eleven more buildings:** sawpit, forester, fisher, watchtower, stockade, Mustering Hall, longhouse, outpost, and the three Great Works (Stone Circle, Mead Hall, Great Granary). That makes **every building in the menu**.
+- **Thirteen wild props** (`landmarks.glb`): cart, ruins, wanderers' camp, standing stones, star-stone, barrow, hermit's hut, hoard, spring, shrine, berry grove, oakwood and outcrop.
+- **Silhouettes first:** a stone-and-timber watchtower with a jettied top and a big banner; a palisade ring with a gate and braziers; a long hall with dragon-head gables and crossed horns; a lintelled stone circle round a lit altar; a Mead Hall with a carved porch and a feasting yard; a granary on staddle stones with a windmill.
+- **Roofs got texture.** Big hall roofs read as a single plane from the strategy camera, so every gabled thatch now has courses (darker bands) along each slope.
+- **Judged in the real renderer:** `node tools/showcase.mjs --set town|war|works|wild [--night 1]` places every model on dry land at gameplay zoom. Blender previews alone missed problems (for example the first night was nearly black).
+
+### Alive
+| What | How |
+|---|---|
+| **Day and night** | A 4-minute day with a warm dusk, a moonlit blue night and a dawn (`scene.ts`, `updateDayNight`). Sun, hemisphere light, sky and fog ease together. Night keeps about 75% of the hemisphere light, so nothing is ever hard to read. Settings has a switch. The title screen idles at dusk |
+| **Lights** | A vertex weight marks glowing parts (windows, lanterns, flames). They are a little self-lit by day and blaze at night; flame tips flicker. **Warm pools of light** (one instanced draw call) spread on the ground around every lived-in building (a family at home, a worker at the bench, a manned post, the wagon) |
+| **Windmill** | The Great Granary's sails are a separate part (`granary#spinz`) turning in the breeze. This is a general mechanism: any model can have animated parts |
+| **Cheering** | Rank-ups, claimed landmarks and victory make your folk hop with their arms up, the hood tips flying |
+| **War banners** | The first figure of every marching warband carries a banner (gold for you, red for the rival, black for reavers), so a march reads from the strategy camera |
+| **Hut lanterns, lit windows, door lamps** | Every cottage has a hanging lantern by its door |
+
+### Gameplay: a famine nobody could see
+A headless playtest showed a flat curve: population stuck at 58 from minute 12 to minute 22 on one seed, with "! hungry" the whole time and six foragers built to no effect. Digging in, **the stall was a real rule bug**, not the bot:
+- **Food in a gatherer's basket didn't count as food.** `food()` and `eat()` looked only at storehouses. When every adult had a job (a dozen were on garrison duty) no one was free to carry, so 100+ berries and fish sat at the huts while the town starved. Hunger then blocked births and newcomers, and slowed the very foragers who could fix it.
+- **The fix:**
+  - `world.larder()` counts food waiting at gatherers, and `eat()` draws from the fullest pile, whether a store or a basket (which also frees a producer stuck at its output cap).
+  - Births, newcomers and hunger recovery use the larder.
+  - **Gatherers eat on the job:** hunger no longer slows food gatherers' work or walking, so a famine can't cripple its own cure.
+  - The HUD food counters show what the town can eat, with a tooltip splitting stores from baskets, and a new amber **"Food low"** chip appears about 90 seconds before hunger.
+- **A new metric:** `hungryPct`, the share of the game the player was hungry, is in the sim report. **Before: 25.8% on average (worst 58%). After: about 14–20% (worst 35–52%)**, with the same population.
+- **Why a second change was needed.** The famine had been accidentally braking tower spam: with food fixed, one style (Expander) rose to 66–69% in the strategy matrix on fresh seed blocks. So there is now a deliberate brake that fits the fiction: **a spear needs supper. Guards on a post eat triple** (`BALANCE.guardAppetitePct`, `world.eaters()`). A town of towers needs a bigger larder, and the How to Play says so.
+- **Measured** (strategy matrix, 12 seeds × both sides, origins, three seed blocks, 5 styles):
+
+  | | Balanced | Expander | Builder | Raider | Warden |
+  |---|---|---|---|---|---|
+  | Old code (avg of 3 blocks) | 61% | 51% | 37% | 50% | 51% |
+  | **v0.21 (avg of 3 blocks)** | **53%** | **54%** | **36%** | **55%** | **51%** |
+
+  Median length 33–34 min, 2.2–2.5 lead changes a game, about 28% comebacks. The old code's Balanced was at 60% and 67% on two blocks; one block now has Raider at 64%, but it is 50–51% on the others.
+- **Tried and rejected:** a bot that sizes its food by mouths and a heavier guard tax (4×). Both reset Expander to 60–72%, because a bot that feeds its garrisons well keeps its expansion edge. The simpler tax plus a plain bot gives the best spread.
+- **Open:** the Builder style (never raids, claims fewer landmarks) sits at about 36% in every configuration, old and new. It is the weakest persona and the one nearest to how this game's player likes to play, so it is the first thing to look at next.
+
+### Performance
+Late game (about 175 settlers, 91 buildings, headless software GL): 228 draw calls, 984k triangles, 292 ms a frame. The v0.20 run on a similar late game was 242 calls and 958k triangles. Night pools, banners and the windmill add three instanced draw calls and a mesh per granary.
+
+### Budgets (tests/art.test.ts)
+Buildings at most 2,600 triangles, wild props at most 1,200, the settler at most 420; `buildings.glb` under 500 KB (it is 371 KB), `landmarks.glb` under 150 KB (72 KB), `settler.glb` under 40 KB (11 KB). Great Works stay inside 3×3, the granary's sails turn about their own axle, and cloth and light weights stay small.
 
 ---
 
@@ -767,7 +816,7 @@ tests/        Vitest: determinism, mapgen, pathing, placement, gameplay loop, pa
 - InstancedMesh for trees, rocks, bushes and settler body parts (the Blender settler is eight instanced parts: body, head, hair, hood, two arms and two legs).
 - Building and settler models made in **Blender** (`tools/blender`, §0e) and loaded from `public/models/*.glb`, with the older code-built models as a fallback for anything not yet replaced. Variants per trade tier.
 - Procedural settler animation: walk, chop, mine, pick, hammer and carry.
-- Particle juice, and shadows from a camera-following directional light.
+- Particle juice, and shadows from a camera-following directional light. A slow day and night (§0f) eases the sun, sky and fog; Blender-painted glow weights light windows and fires after dusk.
 - Picking ray-marches the heightmap instead of raycasting meshes.
 
 **Controls:**
@@ -1414,3 +1463,14 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **Test:** `tests/art.test.ts` guards triangle budgets, file size, footprint, joint conventions, crest recolouring and the sway weights. It already caught a quarry whose boulders sank below the ground.
 - **Measured:** see §0e. Late game is +2 draw calls and +12% triangles, and frame time is within 1%.
 - **No gameplay change:** `src/sim/` is untouched and `SAVE_VERSION` is unchanged.
+
+### v0.21.0 The Alive Pass: the rest of the art, a day and night, and a famine bug (2026-10-28)
+- **Art:** eleven more buildings and thirteen wild props from Blender, so every building, Great Work and discovery is covered. `landmarks.glb` is a third file. Roofs got thatch courses.
+- **Animated parts:** `<model>#spinz` parts turn about a pivot empty (the Granary's windmill). `withSway` now also carries night glow and flame flicker (`_SWAY` 2 and up).
+- **Day and night:** a 4-minute cycle (sun, hemisphere, sky, fog, `nightLevel`), a Settings switch, and warm light pools by lived-in buildings.
+- **Life:** folk cheer at rank-ups, claimed landmarks and victory; warbands carry banners; cottages get door lanterns.
+- **Sim fix:** food waiting at gatherers now counts (`larder()`), is eaten, and keeps births and newcomers going. Gatherers aren't slowed by hunger. Guards eat triple.
+- **UI:** food counters show what the town can eat, and a "Food low" chip warns before hunger. How to Play mentions guards' appetite.
+- **Harness:** `hungryPct` in the report and the sim summary; `tools/showcase.mjs` gallery with `--night`.
+- **Tests:** `tests/larder.test.ts` (the famine bug), and `tests/art.test.ts` covers every model.
+- **No save-format change.**

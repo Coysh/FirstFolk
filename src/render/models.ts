@@ -456,6 +456,8 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
 
 /** Props marking discoveries in the wild, centred on their tile. */
 export function discoveryGeometry(kind: DiscoveryKind): THREE.BufferGeometry {
+  const art = artGeometry(`discovery_${kind}`);
+  if (art) return art;
   const b = new ModelBuilder();
   switch (kind) {
     case 'cart':

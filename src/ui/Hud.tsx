@@ -59,7 +59,7 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
 }
 
 /** A resource plaque that bumps when its value rises. */
-function Res({ good, value, warn }: { good: Good; value: number; warn?: boolean }) {
+function Res({ good, value, warn, waiting = 0 }: { good: Good; value: number; warn?: boolean; waiting?: number }) {
   const prev = useRef(value);
   const [bump, setBump] = useState(0);
   useEffect(() => {
@@ -67,7 +67,7 @@ function Res({ good, value, warn }: { good: Good; value: number; warn?: boolean 
     prev.current = value;
   }, [value]);
   return (
-    <span class={`res-plaque ${warn ? 'warn' : ''}`} title={GOOD_INFO[good].name}>
+    <span class={`res-plaque ${warn ? 'warn' : ''}`} title={waiting ? `${GOOD_INFO[good].name}: ${value - waiting} in stores, ${waiting} waiting at gatherers` : GOOD_INFO[good].name}>
       <img src={ICON[good]} alt={GOOD_INFO[good].name} />
       <b key={bump} class={bump ? 'bump' : ''}>
         {value}
@@ -82,6 +82,8 @@ function TopBar({ game }: { game: Game }) {
   const pop = w.population(PLAYER);
   const housing = w.housing(PLAYER);
   const hungry = w.players[PLAYER].hungry;
+  // Everyone eats about once every 85 s, guards three times as much: under one meal each is about 90 s of food.
+  const lowLarder = !hungry && w.larder(PLAYER) < w.eaters(PLAYER);
   const children = [...w.settlers.values()].filter((s) => s.owner === PLAYER && s.child).length;
   const idle = [...w.settlers.values()].filter((s) => s.owner === PLAYER && !s.child && s.job.kind === 'idle').length;
   const showPlanks = w.players[PLAYER].produced.planks > 0 || w.isUnlocked(PLAYER, 'sawpit');
@@ -90,7 +92,7 @@ function TopBar({ game }: { game: Game }) {
     <header class="topbar">
       <div class="res">
         {GOODS.filter((g) => (g !== 'planks' || showPlanks) && (g !== 'fish' || showFish)).map((g) => (
-          <Res key={g} good={g} value={w.stored(PLAYER, g)} warn={(g === 'berries' || g === 'fish') && hungry} />
+          <Res key={g} good={g} value={FOODS.includes(g) ? w.stored(PLAYER, g) + w.waiting(PLAYER, g) : w.stored(PLAYER, g)} waiting={FOODS.includes(g) ? w.waiting(PLAYER, g) : 0} warn={FOODS.includes(g) && (hungry || lowLarder)} />
         ))}
         <span class={`res-plaque ${pop >= housing ? 'full' : ''}`} title={`${pop} settlers (${children} children) · homes for ${housing}`}>
           <img src={ICON.people} alt="Population" />
@@ -114,6 +116,7 @@ function TopBar({ game }: { game: Game }) {
           </button>
         )}
         {hungry && <span class="hungry pulse">Hungry!</span>}
+        {lowLarder && <span class="hungry pulse soon" title="Food is running low: build a Forager or a Fisher before folk go hungry">Food low</span>}
         {idle >= 3 && (
           <span class="idle-chip" title={`${idle} adults have nothing to do. Build workplaces (or more homes for families to grow).`}>
             💤 {idle} idle

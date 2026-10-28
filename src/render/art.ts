@@ -14,6 +14,16 @@ const NEUTRAL_CREST = 0xf4ecd6;
 
 const geos = new Map<string, THREE.BufferGeometry>();
 const anchors = new Map<string, THREE.Vector3>();
+const partsOf = new Map<string, ArtPart[]>();
+
+/** An animated piece of a model, authored as `<model>#<mode>` with a `<model>#<mode>@pivot` empty. */
+export interface ArtPart {
+  /** `spinz`: turns about the z axis through the pivot (windmill sails). */
+  mode: string;
+  /** Centred on the pivot, so rotating the mesh turns it about its own axle. */
+  geo: THREE.BufferGeometry;
+  pivot: THREE.Vector3;
+}
 let pending: Promise<void> | null = null;
 
 export const artWanted = (): boolean => typeof location === 'undefined' || !/[?&]art=classic\b/.test(location.search);
@@ -54,22 +64,38 @@ function bake(mesh: THREE.Mesh): THREE.BufferGeometry {
 /** Register every mesh node (by name) and every `model@anchor` empty of a parsed glTF scene. */
 export function indexScene(root: THREE.Object3D): void {
   root.updateMatrixWorld(true);
+  const meshes: THREE.Mesh[] = [];
   root.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh) geos.set(o.name, bake(o as THREE.Mesh));
+    if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
     else if (o.name.includes('@')) anchors.set(o.name, new THREE.Vector3().setFromMatrixPosition(o.matrixWorld));
   });
+  for (const mesh of meshes) {
+    const g = bake(mesh);
+    const [base, mode] = mesh.name.split('#');
+    const pivot = mode && anchors.get(`${mesh.name}@pivot`);
+    if (mode && pivot) {
+      g.translate(-pivot.x, -pivot.y, -pivot.z);
+      g.computeBoundingBox();
+      g.computeBoundingSphere();
+      (partsOf.get(base) ?? partsOf.set(base, []).get(base)!).push({ mode, geo: g, pivot });
+    } else geos.set(mesh.name, g);
+  }
 }
+
+/** The animated parts of a model (the Great Granary's windmill sails), if it has any. */
+export const artParts = (key: string): readonly ArtPart[] => partsOf.get(key) ?? [];
 
 export function loadArt(base = '/'): Promise<void> {
   pending ??= (async () => {
     if (!artWanted()) return;
     try {
       const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-      for (const file of ['buildings', 'settler']) indexScene((await loader.loadAsync(`${base}models/${file}.glb`)).scene);
+      for (const file of ['buildings', 'landmarks', 'settler']) indexScene((await loader.loadAsync(`${base}models/${file}.glb`)).scene);
     } catch (e) {
       console.warn('FirstFolk: Blender art failed to load, using code models', e);
       geos.clear();
       anchors.clear();
+      partsOf.clear();
     }
   })();
   return pending;

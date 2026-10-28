@@ -3,26 +3,42 @@ import * as THREE from 'three';
 /** Shared time uniform for all wind-swayed materials. */
 export const windTime = { value: 0 };
 
+/** 0 by day, 1 at night: windows, lanterns and fires glow with it (see withSway). */
+export const nightLevel = { value: 0 };
+
 /**
- * Patch a standard material so flags and pennants flutter. The per-vertex `sway` attribute
- * (0 at the pole, 1 at the free edge; painted in Blender) scales the motion, so only cloth moves.
+ * Patch a standard material for the Blender art's per-vertex `sway` weight.
+ *   0..1   cloth: flutters in the wind (0 at the pole, 1 at the free edge).
+ *   2..3   light: glows (a window, a lantern, a flame), the fraction making a flame tip dance.
+ * Glow is a little self-lit by day and a lot at night (`nightLevel`).
  */
 export function withSway(mat: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uWindTime = windTime;
+    shader.uniforms.uNight = nightLevel;
     shader.vertexShader =
-      'uniform float uWindTime;\nattribute float sway;\n' +
+      'uniform float uWindTime;\nattribute float sway;\nvarying float vGlow;\n' +
       shader.vertexShader.replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
+        float swGlow = step(1.5, sway);
+        float swAmt = sway - swGlow * 2.0;
+        vGlow = swGlow;
         float swPh = modelMatrix[3].x * 0.37 + modelMatrix[3].z * 0.29;
-        float swT = uWindTime * 4.4 + swPh + position.x * 6.0;
-        transformed.z += sin(swT) * sway * 0.055;
-        transformed.y += cos(swT * 0.9) * sway * 0.02;
-        transformed.x += sin(uWindTime * 2.1 + swPh) * sway * 0.025;`,
+        float swT = uWindTime * mix(4.4, 12.0, swGlow) + swPh + position.x * 6.0;
+        transformed.z += sin(swT) * swAmt * mix(0.055, 0.015, swGlow);
+        transformed.y += cos(swT * 0.9) * swAmt * mix(0.02, 0.035, swGlow);
+        transformed.x += sin(uWindTime * 2.1 + swPh) * swAmt * 0.025;`,
+      );
+    shader.fragmentShader =
+      'uniform float uNight;\nvarying float vGlow;\n' +
+      shader.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance += diffuseColor.rgb * vGlow * (0.15 + 1.7 * uNight);`,
       );
   };
-  mat.customProgramCacheKey = () => 'sway';
+  mat.customProgramCacheKey = () => 'sway-glow';
   return mat;
 }
 

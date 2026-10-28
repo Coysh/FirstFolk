@@ -24,6 +24,9 @@ import bpy
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 MARKER = 0xFF00FF
+# `_SWAY` is 0..1 for cloth that flutters, and GLOW + (0..1) for things that glow at night (the
+# fraction makes flame tips flicker): see withSway in src/render/wind.ts.
+GLOW = 2.0
 
 
 def _load_palette():
@@ -237,6 +240,17 @@ class Model:
     def anchor(self, name, pos):
         self.anchors[name] = pos
 
+    def merge(self, other, rot_y=0.0, pos=(0, 0, 0)):
+        """Append another model's geometry, turned about y and moved (to build x-ridged roofs, say)."""
+        R = _rotmat(0, rot_y, 0)
+        base = len(self.v)
+        for x, y, z in other.v:
+            self.v.append((R[0][0] * x + R[0][2] * z + pos[0], y + pos[1], R[2][0] * x + R[2][2] * z + pos[2]))
+        for f in other.f:
+            self.f.append(tuple(i + base for i in f))
+        self.fc.extend(other.fc)
+        self.sw.extend(other.sw)
+
     def tris(self):
         return sum(len(f) - 2 for f in self.f)
 
@@ -331,6 +345,12 @@ def wheel(m, x, y, z, r=0.22):
     m.add(prism(6, 0.05, 0.05, 0.1), C.iron, pos=(x, y, z), rot=(math.pi / 2, 0, 0))
 
 
+def flame(m, x, y, z, h=0.2, r=0.07):
+    """A flickering flame: an ember cone round a yellow one. It glows at night and its tip dances."""
+    m.add(prism(5, r, 0, h), C.ember, pos=(x, y + h / 2, z), sway=lambda p: GLOW + min(1.0, max(0.0, (p[1] - y) / h)))
+    m.add(prism(4, r * 0.55, 0, h * 0.65, phase=0), 0xFFD166, pos=(x, y + h * 0.33, z), sway=lambda p: GLOW + min(1.0, max(0.0, (p[1] - y) / h)))
+
+
 def campfire(m, x, z):
     """A ring of stones, crossed logs, a flame, a tripod and a hanging pot."""
     for i in range(7):
@@ -338,8 +358,7 @@ def campfire(m, x, z):
         m.add(ico(), C.stoneDark, pos=(x + math.cos(a) * 0.17, 0.035, z + math.sin(a) * 0.17), scale=(0.055, 0.045, 0.055), rot=(0, a, 0))
     log(m, x, 0.06, z, 0.3, 0.025, 'x', C.darkTimber)
     log(m, x, 0.065, z, 0.3, 0.025, 'z', C.darkTimber)
-    m.add(prism(5, 0.075, 0, 0.2), C.ember, pos=(x, 0.15, z))
-    m.add(prism(4, 0.04, 0, 0.13, phase=0), 0xFFD166, pos=(x, 0.14, z))
+    flame(m, x, 0.05, z, 0.2, 0.075)
     for k in range(3):
         a = k * 2 * math.pi / 3 + 0.5
         m.add(prism(4, 0.014, 0.012, 0.5), C.wood, pos=(x + math.sin(a) * 0.1, 0.26, z + math.cos(a) * 0.1), rot=(-math.cos(a) * 0.4, 0, math.sin(a) * 0.4))
@@ -385,8 +404,9 @@ def window(m, x, y, z, rot_y=0.0, w=0.13, h=0.14, shutter=True, box_flowers=Fals
     def at(lx, ly, lz):
         return (x + lx * cs + lz * sn, y + ly, z - lx * sn + lz * cs)
 
+    w, h = w * 1.2, h * 1.15
     m.add(box(w + 0.06, h + 0.06, 0.03), C.timber, pos=at(0, 0, 0.0), rot=(0, rot_y, 0))
-    m.add(box(w, h, 0.04), C.glow, pos=at(0, 0, 0.005), rot=(0, rot_y, 0))
+    m.add(box(w, h, 0.04), C.glow, pos=at(0, 0, 0.005), rot=(0, rot_y, 0), sway=GLOW)
     m.add(box(0.02, h, 0.045), C.timber, pos=at(0, 0, 0.012), rot=(0, rot_y, 0))
     m.add(box(w, 0.02, 0.045), C.timber, pos=at(0, 0, 0.012), rot=(0, rot_y, 0))
     if shutter:
@@ -429,6 +449,12 @@ def thatch_roof(m, w, d, h, y, cx, cz, color, ridge=None, light=None, overhang=0
         c = light if (light is not None and sx > 0) else color
         m.add(box(L + 0.02, thick, ln), c, pos=(cx + mx - sx * nx * thick / 2, y + my - ny * thick / 2, cz), rot=(0, 0, -sx * th))
     m.add(prism(6, 0.075, 0.075, ln + 0.06), ridge or C.thatchDark, pos=(cx, y + h + 0.01, cz), rot=(math.pi / 2, 0, 0))
+    # courses of thatch: darker bands along each slope, so a big roof reads as layered straw, not one plane
+    courses = max(2, int(L / 0.3))
+    for sx in (-1, 1):
+        for k in range(1, courses):
+            t = k / courses
+            m.add(box(0.05, 0.02, ln * 0.98), ridge or C.thatchDark, pos=(cx + sx * hx * (1 - t) + sx * nx * 0.01, y + h * t + ny * 0.01, cz), rot=(0, 0, -sx * th))
     if fringe:
         n = max(5, int(ln / 0.15))
         for sx in (-1, 1):

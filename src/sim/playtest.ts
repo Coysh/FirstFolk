@@ -50,6 +50,8 @@ export interface PlaytestReport {
   populationByMinute: number[];
   /** Frontier buildings (towers and outposts) finished by [player, rival]: is spam paying? */
   towers: number[];
+  /** Share of the game the player's town was hungry (births, newcomers and work all slow while it is). */
+  hungryPct: number;
   /** Each side's bot style. */
   styles: string[];
   /** Raids launched and won by [player, rival], raids each side drove off. */
@@ -109,10 +111,12 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const chapters: Record<string, number> = {};
   let firstJourneyman = -1;
   const total = minutes * 60 * TICK_HZ;
+  let hungryTicks = 0;
   for (let i = 0; i < total; i++) {
     if (victoryTick >= 0 && world.tick > victoryTick + 60 * TICK_HZ) break;
     bot.update(world);
     world.step();
+    if (world.players[0].hungry) hungryTicks++;
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
       const n = newsFor(world, e, 0);
@@ -225,6 +229,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     territoryByMinute,
     populationByMinute,
     towers,
+    hungryPct: Math.round((1000 * hungryTicks) / Math.max(1, world.tick)) / 10,
     styles: world.players.map((p) => p.style),
     raids,
     raidsWon: world.players.map((p) => p.raidsWon),

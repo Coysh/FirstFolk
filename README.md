@@ -11,6 +11,7 @@ npm test             # Vitest: sim determinism, mapgen, pathing, placement, game
 npm run sim -- --seed 1 --minutes 46 [--games 16] [--think 160]   # headless playtests; --think 160 is a fair AI-vs-AI duel (length, lead changes, comebacks, landmark flips, renown sources)
 npm run build        # typecheck + production build + secret scan of dist/
 node tools/screenshot.mjs --screen title|game --seed 3 --seconds 240 [--mobile]   # headless screenshot (needs the dev server); also --focus hut, --art classic (A/B), --perf
+node tools/showcase.mjs --set town|war|works|wild [--night 1] [--zoom 24]   # gallery of every model at gameplay zoom (needs the dev server)
 Blender -b -P tools/blender/build.py   # rebuild public/models/*.glb (or run build.py through the Blender MCP)
 npx tsx tools/assets/generate.ts [--force id…]   # regenerate art with the OpenAI Images API (needs OPENAI_API_KEY)
 ```
