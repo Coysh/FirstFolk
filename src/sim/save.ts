@@ -4,7 +4,7 @@ import type { ScenarioState } from './scenario';
 import { World, type Building, type Discovery, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
 
 /** Bump when the shape of saved state changes; older saves are refused rather than misread. */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 const KINDS: NodeKind[] = ['tree', 'rock', 'bush', 'fish'];
 

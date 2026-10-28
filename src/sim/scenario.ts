@@ -1,4 +1,6 @@
-import { BUILDINGS, GOOD_INFO, type BuildingType, type Good, type Skill } from './defs';
+import { BUILDINGS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Skill } from './defs';
+import { offerBoon } from './boons';
+import { claimArea } from './territory';
 import { TIER_XP, tradeTitle } from './trades';
 import type { World } from './world';
 
@@ -58,6 +60,25 @@ export const objectives = {
       evaluate: (w, o) => ({ current: w.population(o), target: n }),
     };
   },
+  winters(n: number): Objective {
+    return {
+      id: `winters-${n}`,
+      label: n === 1 ? 'Survive a winter' : `Survive ${n} winters`,
+      evaluate: (w, o) => ({ current: w.players[o].winters, target: n }),
+    };
+  },
+  /** Settlers who are Masters of at least one craft. */
+  masters(n: number): Objective {
+    return {
+      id: `masters-${n}`,
+      label: n === 1 ? 'Train a Master of any craft' : `Have ${n} Masters`,
+      evaluate: (w, o) => {
+        let c = 0;
+        for (const s of w.settlers.values()) if (s.owner === o && SKILLS.some((k) => s.skills[k] >= TIER_XP[2])) c++;
+        return { current: c, target: n };
+      },
+    };
+  },
   discoveries(n: number): Objective {
     return {
       id: `claim-${n}`,
@@ -84,28 +105,32 @@ const with_ = (o: Objective, chapter: string, hint: string): Objective => ({ ...
 export const LANDFALL: Scenario = {
   id: 'landfall',
   name: 'The First Valley',
-  description: 'Unpack the wagon, found a settlement and raise its first tradesfolk.',
+  description: 'Found a camp, explore the valley and raise it to a renowned town.',
   victory: 'all',
+  // Each chapter is an age-up: finishing Landfall makes the camp a Hamlet, and so on.
   objectives: [
     with_(objectives.building('woodcutter'), 'Landfall', 'Pick Woodcutter below, then place it beside the trees.'),
     with_(objectives.building('forager'), 'Landfall', 'Foragers feed everyone. Place one near the blue berry bushes.'),
-    with_(objectives.produced('logs', 25), 'Landfall', 'Children carry logs back to the wagon. Watch the pile grow!'),
     with_(objectives.building('quarry'), 'Landfall', 'Place a Quarry near the grey rocks. Huts need stone.'),
     with_(objectives.building('hut', 2), 'Landfall', 'Empty huts attract new families when there is food to spare.'),
     with_(objectives.building('lookout'), 'Landfall', 'Build a Lookout near your border to push it outwards.'),
     with_(objectives.discoveries(1), 'Landfall', 'See the golden light? Grow your border over it to claim what lies there.'),
-    with_(objectives.population(12), 'Landfall', 'Keep berries stocked and huts free, and families will come.'),
-    with_(objectives.trade('woodcraft', 1), 'Trades', 'Your woodcutter learns with every log. Keep them chopping.'),
-    with_(objectives.building('sawpit'), 'Trades', 'A Carpenter can run a Sawpit: it turns logs into planks.'),
-    with_(objectives.produced('planks', 12), 'Trades', 'Planks are carried to your stores like any other good.'),
-    with_(objectives.discoveries(3), 'Trades', 'Chain Lookouts across the valley. Each discovery is a big boost.'),
-    with_(objectives.trade('stonework', 1), 'Trades', 'Keep your quarry busy to train a Mason.'),
-    with_(objectives.building('storehouse'), 'Trades', 'A Storehouse far from the wagon saves your carriers long walks.'),
-    with_(objectives.population(24), 'Trades', 'Grow your village to two dozen souls.'),
-    with_(objectives.trade('woodcraft', 2), 'Renown', 'Masters are made by years of work, or born into a skilled family.'),
-    with_(objectives.trade('stonework', 2), 'Renown', 'A busy quarry trains a Master Mason in time.'),
-    with_(objectives.discoveries(6), 'Renown', 'The richest prizes lie far out: oakwoods, outcrops, standing stones.'),
-    with_(objectives.population(40), 'Renown', 'Forty folk: a true village.'),
+    with_(objectives.population(12), 'Landfall', 'Keep food stocked and huts free, and families will come.'),
+    with_(objectives.trade('woodcraft', 1), 'Hamlet', 'Your woodcutter learns with every log. Keep them chopping.'),
+    with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: it turns logs into planks.'),
+    with_(objectives.winters(1), 'Hamlet', 'Winter: bushes sleep and folk eat more. Stockpile food; Fishers work all year.'),
+    with_(objectives.building('watchtower'), 'Hamlet', 'Watchtowers claim far more land than Lookouts.'),
+    with_(objectives.discoveries(3), 'Hamlet', 'Chain towers across the valley. Each discovery is a big boost.'),
+    with_(objectives.population(25), 'Hamlet', 'Marriages found new households; free huts let families grow.'),
+    with_(objectives.masters(1), 'Village', 'Boons like Quick Learners, and inherited skill, make Masters sooner.'),
+    with_(objectives.building('longhouse'), 'Village', 'A Longhouse lets one family grow to eight.'),
+    with_(objectives.winters(2), 'Village', 'Another winter: keep the larder full.'),
+    with_(objectives.discoveries(6), 'Village', 'The richest prizes lie far out: oakwoods, outcrops, standing stones.'),
+    with_(objectives.population(50), 'Village', 'Grow your village to fifty souls.'),
+    with_(objectives.masters(4), 'Renown', 'Four Masters make a town famous.'),
+    with_(objectives.winters(4), 'Renown', 'Endure four winters.'),
+    with_(objectives.discoveries(10), 'Renown', 'Claim the far corners of the valley.'),
+    with_(objectives.population(90), 'Renown', 'Ninety folk: a true town.'),
   ],
 };
 
@@ -148,6 +173,9 @@ export function evaluateScenario(world: World): void {
         if (chapter && rest.every((x) => done[x.id])) {
           const next = world.scenario.objectives.find((x) => !done[x.id] && x.chapter !== chapter)?.chapter;
           world.emit({ type: 'chapterComplete', chapter, next: next ?? '' });
+          const chapters = [...new Set(world.scenario.objectives.map((x) => x.chapter))];
+          const rank = chapters.indexOf(chapter) + 1;
+          if (rank > player.rank && rank < RANK_NAMES.length) rankUp(world, player.id, rank);
         }
       }
     }
@@ -159,6 +187,28 @@ export function evaluateScenario(world: World): void {
       world.emit({ type: 'victory', scenario: world.scenario.name });
     }
   }
+}
+
+/**
+ * The settlement levels up: the founders' wagon becomes a hall (model tier), the home
+ * claim widens, new buildings unlock and a family is granted a boon.
+ */
+export function rankUp(world: World, owner: number, rank: number): void {
+  const player = world.players[owner];
+  player.rank = rank;
+  const wagon = [...world.buildings.values()].find((b) => b.owner === owner && b.type === 'wagon');
+  const unlocks = (Object.keys(BUILDINGS) as BuildingType[]).filter((t) => BUILDINGS[t].rank === rank);
+  world.emit({ type: 'rankUp', owner, rank, unlocks });
+  if (!wagon) return;
+  wagon.tier = rank;
+  claimArea(world, owner, wagon.x + 1, wagon.y + 1, (BUILDINGS.wagon.claim ?? 0) + rank * 4);
+  // The household with the most folk is honoured with a boon.
+  const counts = new Map<number, number>();
+  for (const s of world.settlers.values()) if (s.owner === owner) counts.set(s.familyId, (counts.get(s.familyId) ?? 0) + 1);
+  let best = 0;
+  for (const [id, n] of counts) if (n > (counts.get(best) ?? 0)) best = id;
+  const fam = world.families.get(best);
+  if (fam) offerBoon(world, fam, `Your camp is now a ${RANK_NAMES[rank]}`);
 }
 
 SCENARIOS[LANDFALL.id] = LANDFALL;

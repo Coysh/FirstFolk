@@ -13,6 +13,7 @@ import { Nature } from './nature';
 import { C } from './palette';
 import { Footpaths } from './paths';
 import { pickGround } from './picking';
+import { isWinter } from '../sim/seasons';
 import { SitesView } from './sites';
 import { SettlersView } from './settlers';
 import { SKY, Sky } from './sky';
@@ -69,6 +70,7 @@ export class GameRenderer {
   readonly fow: FogOfWar;
   private borderGlow = 0;
   private borderGoal = 0;
+  private snowAcc = 0;
   private raycaster = new THREE.Raycaster();
   /** Slow orbit for the title screen. */
   cinematic = false;
@@ -191,7 +193,10 @@ export class GameRenderer {
           this.effects.emit('dust', p.x, p.y + 0.2, p.z, 16);
         }
       } else if (e.type === 'territoryGrew' && e.owner === 0) this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 1.5, e.y + 0.5, 24);
-      else if (e.type === 'saplingPlanted') this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 6);
+      else if (e.type === 'rankUp' && e.owner === 0) {
+        const wagon = [...this.world.buildings.values()].find((b) => b.owner === 0 && b.type === 'wagon');
+        if (wagon) this.effects.emit('sparkle', wagon.x + 1, this.hf.at(wagon.x + 1, wagon.y + 1) + 1.5, wagon.y + 1, 60);
+      } else if (e.type === 'saplingPlanted') this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 6);
     }
   }
 
@@ -309,6 +314,16 @@ export class GameRenderer {
 
     this.fow.update(this.world);
     this.fow.uniforms.uFowStrength.value = this.cinematic ? 0.55 : 1;
+    // Frost creeps in with winter and thaws with spring.
+    const snowGoal = isWinter(this.world) ? 1 : 0;
+    const snow = this.fow.uniforms.uSnow;
+    snow.value += (snowGoal - snow.value) * Math.min(1, dt * 0.35);
+    if (snowGoal && !this.cinematic) {
+      this.snowAcc += dt * Math.min(60, 10 + this.rig.distance);
+      const n = Math.floor(this.snowAcc);
+      this.snowAcc -= n;
+      if (n) this.effects.snowfall(t.x, t.z, 6 + this.rig.distance * 0.5, t.y + 5, n);
+    }
     this.borderGlow += (this.borderGoal - this.borderGlow) * Math.min(1, dt * 8);
     this.fow.uniforms.uBorderGlow.value = this.borderGlow;
     this.sky.update(dt, this.rig.camera);

@@ -761,6 +761,32 @@ button.danger.armed {
 }
 
 /* ---------- toasts & banner ---------- */
+.season-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 800 13px var(--body);
+}
+.season-chip span {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(40, 26, 14, 0.72);
+  color: #fff4d2;
+  border: 1.5px solid var(--wood-light);
+}
+.season-chip .winter {
+  background: rgba(60, 90, 130, 0.85);
+  border-color: #cfe3ff;
+}
+.season-chip .warn {
+  background: var(--warn);
+  border-color: #ffd2c8;
+}
+.season-chip .rank {
+  background: linear-gradient(#f6d27a, #d9a43a);
+  color: var(--wood-dark);
+  border-color: var(--wood);
+}
 .frontier {
   position: absolute;
   right: 10px;
@@ -1364,6 +1390,12 @@ button.danger.armed {
 
 /* ---------- mobile ---------- */
 @media (max-width: 720px) {
+  .season-chip {
+    font-size: 11px;
+  }
+  .season-chip .season:not(.warn) {
+    display: none;
+  }
   .hud:has(.boon-tray) .frontier {
     display: none;
   }

@@ -1,6 +1,7 @@
 import { BUILDINGS, type BuildingType, type Good, type NodeKind } from '../defs';
 import type { World } from '../world';
 import { NO_OWNER } from '../territory';
+import { isHome } from '../population';
 import { bestSite } from './placement';
 
 /**
@@ -32,7 +33,7 @@ export class OpeningBot {
     const pop = world.population(this.owner);
     const sites = [...world.buildings.values()].filter((b) => b.owner === this.owner && !b.done).length;
     if (sites >= 2) return;
-    const emptyHuts = [...world.buildings.values()].filter((b) => b.owner === this.owner && b.type === 'hut' && b.familyId === 0).length;
+    const emptyHuts = [...world.buildings.values()].filter((b) => b.owner === this.owner && isHome(b.type) && b.familyId === 0).length;
     const count = (t: BuildingType) => world.countBuildings(this.owner, t, true);
 
     const LOW: Partial<Record<BuildingType, [Good, number]>> = { quarry: ['stone', 12], woodcutter: ['logs', 20] };
@@ -44,17 +45,20 @@ export class OpeningBot {
         world.enqueue({ type: 'demolish', owner: this.owner, id: b.id });
         return;
       }
-    const lookoutSites = [...world.buildings.values()].filter((b) => b.owner === this.owner && b.type === 'lookout' && !b.done).length;
     const target = this.frontierTarget(world);
 
-    if (emptyHuts === 0 && pop >= world.housing(this.owner) - 2 && this.affordable(world, 'hut')) this.place(world, 'hut');
+    const home: BuildingType = world.isUnlocked(this.owner, 'longhouse') && this.affordable(world, 'longhouse') ? 'longhouse' : 'hut';
+    const tower: BuildingType = world.isUnlocked(this.owner, 'watchtower') && this.affordable(world, 'watchtower') ? 'watchtower' : 'lookout';
+    const lookoutSites = [...world.buildings.values()].filter((b) => b.owner === this.owner && BUILDINGS[b.type].claim && !b.done).length;
+    if (emptyHuts === 0 && pop >= world.housing(this.owner) - 2 && this.affordable(world, home)) this.place(world, home);
     else if (world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0) this.place(world, 'sawpit');
+    else if (world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0 && this.affordable(world, 'watchtower')) this.place(world, 'watchtower', target ?? undefined);
     else if (world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0 && this.affordable(world, 'storehouse')) this.place(world, 'storehouse');
     else if (world.food(this.owner) < 12 && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 10) && bestSite(world, this.owner, 'fisher')) this.place(world, 'fisher');
     else if (world.food(this.owner) < 12 && count('forager') < Math.ceil(pop / 6)) this.place(world, 'forager');
     // Push the border: towards a seen discovery, or for room once the land fills up.
     else if (lookoutSites === 0 && this.affordable(world, 'lookout') && (target || count('lookout') < pop / 8 || starving('quarry') || starving('woodcutter')))
-      this.place(world, 'lookout', target ?? undefined, starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined);
+      this.place(world, tower, target ?? undefined, starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined);
     else if (starving('woodcutter') && count('forester') < count('woodcutter') / 2) this.place(world, 'forester');
     else if (count('woodcutter') < Math.ceil(pop / 7)) this.place(world, 'woodcutter');
     else if (emptyHuts === 0 && this.affordable(world, 'hut')) this.place(world, 'hut');

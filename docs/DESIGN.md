@@ -450,3 +450,45 @@ Next come Family Boons and marriage, then seasons and settlement tiers.
 | Longest major gap | 63–151 s |
 
 **Still boring:** the late game (20 min+) has long gaps once the map is claimed, because there is no rival, no rhythm and no climax. Seasons, settlement tiers and events are next.
+
+### v0.4.0 Fun Pass 4: seasons and settlement ranks (2026-10-28)
+**Seasons** (`src/sim/seasons.ts`): the year runs 5 min, with 75 s seasons.
+- **Winter:**
+  - berry bushes sleep,
+  - folk eat 25% more,
+  - building is 30% slower,
+  - fish keep swimming.
+- Players get a 25 s warning ("Winter is coming"). Spring counts a **winter survived**.
+- The land frosts over through the fog shader's `uSnow` uniform, and snow falls around the camera.
+- The top bar shows the season, with a red countdown at the end of autumn.
+
+**Settlement ranks**, an AoE-style age-up and a SimCity milestone: **the scenario's chapters are the age-ups**.
+- Finishing *Landfall* makes the camp a **Hamlet**, which unlocks the **Watchtower** (planks and stone; claims 12, reveals 20).
+- *Hamlet* leads to **Village**, which unlocks the **Longhouse** (a family grows to 8).
+- *Village* leads to **Town**. *Renown* is victory.
+- Each rank-up:
+  - turns the founders' wagon into a **hall** that grows with every rank: a hall, then a stone footing, then a tower and banners,
+  - claims more land around it,
+  - grants the largest family a boon card,
+  - plays a banner and fanfare.
+
+**Scenario rewrite** (*The First Valley*):
+
+| Chapter | Leads to | Goals |
+|---|---|---|
+| Landfall | Hamlet | the gather basics, a Lookout, a discovery, 12 folk |
+| Hamlet | Village | a Journeyman Carpenter, a Sawpit, a winter, a Watchtower, 3 discoveries, 25 folk |
+| Village | Town | a Master, a Longhouse, 2 winters, 6 discoveries, 50 folk |
+| Renown | victory | 4 Masters, 4 winters, 10 discoveries, 90 folk |
+
+The plank-count chores are gone.
+
+**Tuning from playtests:** the first ranking had winters as the only real gates, so the bot reached Town at 10:00 and won at 15:38. The targets were raised so achievement gates the pace, and the bot now wins at **20–25 min** (8 seeds). A human should take 30–40 min.
+
+| Metric | Value |
+|---|---|
+| Longest major gap | ≤75 s on every seed |
+| Idle adults | about 1% |
+| Winter hunger | short hungry spells mid-game: tension without collapse |
+
+**Still boring:** without a rival the valley is all yours, and the bot claims 16 of 16 discoveries. There's no one to race and nothing unexpected happens. Valley events and the rival are next.

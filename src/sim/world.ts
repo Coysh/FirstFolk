@@ -12,6 +12,7 @@ import { evaluateScenario, SCENARIOS, type Scenario, type ScenarioState } from '
 import { DIFFICULTY, type Difficulty, type Rules } from './rules';
 import { NO_OWNER, onBuildingComplete, updateExploration } from './territory';
 import { offerBoon, updateOffers, type BoonId, type Mod } from './boons';
+import { isWinter, updateSeasons, type Season } from './seasons';
 
 export type Stock = Record<Good, number>;
 export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 });
@@ -151,6 +152,9 @@ export type SimEvent =
   | { type: 'boonOffered'; owner: number; offerId: number; familyId: number; surname: string; reason: string }
   | { type: 'boonChosen'; owner: number; familyId: number; surname: string; boon: BoonId }
   | { type: 'married'; owner: number; a: number; b: number; familyId: number; surname: string; buildingId: number }
+  | { type: 'season'; season: Season }
+  | { type: 'winterComing' }
+  | { type: 'rankUp'; owner: number; rank: number; unlocks: BuildingType[] }
   | { type: 'familySettled'; familyId: number; surname: string; buildingId: number }
   | { type: 'victory'; scenario: string };
 
@@ -169,6 +173,10 @@ export interface PlayerState {
   rumourAt: number;
   /** Boon choices waiting for the player. */
   offers: BoonOffer[];
+  /** Winters survived. */
+  winters: number;
+  /** Settlement rank: 0 Camp, 1 Hamlet, 2 Village, 3 Town. */
+  rank: number;
 }
 
 export interface BoonOffer {
@@ -417,7 +425,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [] };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], winters: 0, rank: 0 };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -505,6 +513,7 @@ export class World {
     }
     this.pendingCommands.length = 0;
 
+    updateSeasons(this);
     if (this.tick % 10 === 0) this.updateNature();
     if (this.tick % 10 === 5) {
       updateExploration(this);
@@ -547,10 +556,14 @@ export class World {
   }
 
   isUnlocked(owner: number, type: BuildingType): boolean {
-    return !BUILDINGS[type].requires || this.players[owner].unlocked.includes(type);
+    const def = BUILDINGS[type];
+    if (def.rank && this.players[owner].rank < def.rank) return false;
+    return !def.requires || this.players[owner].unlocked.includes(type);
   }
 
   private updateNature(): void {
+    // Berry bushes sleep through winter; fish keep swimming.
+    const winter = isWinter(this);
     for (const node of this.nodes.values()) {
       if (node.kind === 'tree') {
         if (node.growth > 0) {
@@ -563,7 +576,7 @@ export class World {
           node.stump = Math.max(0, node.stump - 10);
           if (node.stump === 0) this.removeNode(node);
         }
-      } else if ((node.kind === 'bush' || node.kind === 'fish') && node.amount < node.max) {
+      } else if ((node.kind === 'fish' || (node.kind === 'bush' && !winter)) && node.amount < node.max) {
         node.regrow -= 10;
         if (node.regrow <= 0) {
           node.amount++;
@@ -575,7 +588,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['discovered', 'rumour', 'boonOffered', 'married', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 export const comeOfAgeTicks = () => Math.round(BALANCE.comeOfAgeYears * BALANCE.yearTicks);
 

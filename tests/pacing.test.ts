@@ -11,11 +11,11 @@ describe('pacing (headless playtests)', () => {
       const r = playtest(seed, 16);
       expect(r.firstLogsSec).toBeGreaterThan(0);
       expect(r.firstLogsSec).toBeLessThan(30);
-      // Chapter 1 (Landfall) inside 8 minutes, first Journeyman inside 6, chapter 2 (Trades) inside 16.
-      expect(r.chapters.Landfall).toBeLessThan(8 * 60);
+      // Age-ups: Hamlet inside 6 minutes, Village inside 16; first Journeyman inside 4.
+      expect(r.chapters.Landfall).toBeLessThan(6 * 60);
       expect(r.firstJourneymanSec).toBeGreaterThan(0);
-      expect(r.firstJourneymanSec).toBeLessThan(6 * 60);
-      expect(r.chapters.Trades).toBeLessThan(16 * 60);
+      expect(r.firstJourneymanSec).toBeLessThan(4 * 60);
+      expect(r.chapters.Hamlet).toBeLessThan(16 * 60);
       expect(r.idleAdultPct).toBeLessThan(15);
       expect(r.longestQuietSec).toBeLessThan(20);
       // The frontier: something to head for from the first minute, a major beat at least every
@@ -27,6 +27,8 @@ describe('pacing (headless playtests)', () => {
       expect(r.territoryByMinute.at(-1)!).toBeGreaterThan(r.territoryByMinute[10]);
       expect(r.timeline.some((l) => l.includes('arrives'))).toBe(true);
       expect(r.timeline.some((l) => l.includes('sawpit unlocked'))).toBe(true);
+      expect(r.timeline.some((l) => l.includes('RANK UP: Hamlet'))).toBe(true);
+      expect(r.timeline.some((l) => l.includes('boon choice'))).toBe(true);
     });
   }
 });

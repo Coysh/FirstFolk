@@ -4,7 +4,7 @@ import type { HeightField } from './terrain';
 
 const MAX_PARTICLES = 1500;
 
-export type ParticleKind = 'chips' | 'stone' | 'leaves' | 'dust' | 'smoke' | 'ember' | 'sparkle' | 'soil';
+export type ParticleKind = 'chips' | 'stone' | 'leaves' | 'dust' | 'smoke' | 'ember' | 'sparkle' | 'soil' | 'snow';
 
 interface Particle {
   x: number;
@@ -31,6 +31,7 @@ const KIND: Record<ParticleKind, { colors: number[]; size: [number, number]; spe
   ember: { colors: [0xffb347, 0xff7a1a], size: [0.025, 0.04], speed: 0.15, up: 0.7, gravity: -0.1, life: [0.4, 0.9], drag: 0.5, grow: -0.6 },
   sparkle: { colors: [0xfff2a8, 0xffffff, 0xffd86b], size: [0.04, 0.07], speed: 1.0, up: 1.8, gravity: 2, life: [0.6, 1.1], drag: 1, grow: -0.5 },
   soil: { colors: [0x6b4f33, 0x8a6a45], size: [0.03, 0.05], speed: 0.9, up: 1.4, gravity: 7, life: [0.4, 0.7], drag: 0.5, grow: 0 },
+  snow: { colors: [0xffffff, 0xeef4ff], size: [0.03, 0.05], speed: 0.25, up: -0.6, gravity: 0.15, life: [5, 7], drag: 0.1, grow: 0 },
 };
 
 interface FallingTree {
@@ -86,6 +87,11 @@ export class Effects {
         color: new THREE.Color(k.colors[Math.floor(this.rand() * k.colors.length)]),
       });
     }
+  }
+
+  /** Gentle snowfall over an area (call each frame with a small count). */
+  snowfall(cx: number, cz: number, radius: number, top: number, n: number): void {
+    for (let i = 0; i < n; i++) this.emit('snow', cx + (this.rand() - 0.5) * radius * 2, top, cz + (this.rand() - 0.5) * radius * 2, 1);
   }
 
   fellTree(tx: number, ty: number): void {

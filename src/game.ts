@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { audio, type Sfx } from './audio/audio';
 import { TICK_MS } from './sim/balance';
 import { canPlace } from './sim/commands';
-import { BUILDINGS, DISCOVERIES, type BuildingType, type Tool } from './sim/defs';
+import { BUILDINGS, DISCOVERIES, RANK_NAMES, type BuildingType, type Tool } from './sim/defs';
 import { serializeWorld } from './sim/save';
 import { BOONS } from './sim/boons';
 import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
@@ -233,6 +233,25 @@ export class Game {
           this.toast('/assets/icons/hut.png', `${a?.name} and ${b?.name} marry and found a new ${e.surname} household, with the gifts of both families`, 'good');
           break;
         }
+        case 'season':
+          if (e.season === 3) {
+            audio.play('warn');
+            this.toast('/assets/icons/berries.png', 'Winter has come. Berries sleep and folk eat more, but Fishers still work.', 'warn');
+          } else if (e.season === 0) this.toast('/assets/icons/forester.png', `Spring! Another winter survived (${this.world.players[PLAYER].winters}). The bushes wake.`, 'good');
+          break;
+        case 'winterComing':
+          audio.play('warn');
+          this.toast('/assets/icons/berries.png', 'Winter is coming. Stock up on food: build Foragers, and Fishers if you can.', 'warn');
+          break;
+        case 'rankUp':
+          if (e.owner !== PLAYER) break;
+          audio.play('tierUp');
+          this.banner.value = {
+            title: `Your camp is now a ${RANK_NAMES[e.rank]}!`,
+            sub: e.unlocks.length ? `New: ${e.unlocks.map((t) => BUILDINGS[t].name).join(', ')} · the border grows · a family earns a boon` : 'The border grows · a family earns a boon',
+          };
+          setTimeout(() => (this.banner.value = null), 5200);
+          break;
         case 'familySettled':
           this.toast('/assets/icons/hut.png', `The ${e.surname} family have a home at last`, 'good');
           break;

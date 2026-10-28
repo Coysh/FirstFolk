@@ -7,7 +7,7 @@ export const FOODS: readonly Good[] = ['berries', 'fish'];
 
 export type NodeKind = 'tree' | 'rock' | 'bush' | 'fish';
 
-export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'lookout' | 'sawpit' | 'storehouse';
+export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'sawpit' | 'storehouse';
 
 export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw';
 
@@ -66,6 +66,8 @@ export interface BuildingDef {
   buildable: boolean;
   /** Locked until a settler reaches this trade tier (see trades.ts). */
   requires?: { skill: Skill; tier: number };
+  /** Locked until the settlement reaches this rank (1 Hamlet, 2 Village, 3 Town). */
+  rank?: number;
   /** Land claimed (radius in tiles) when finished; claimed land is final. */
   claim?: number;
   /** Fog lifted (radius in tiles) when finished. */
@@ -167,6 +169,31 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     claim: 8,
     reveal: 14,
   },
+  watchtower: {
+    type: 'watchtower',
+    name: 'Watchtower',
+    icon: '🏰',
+    blurb: 'A tall stone-footed tower that claims far more land and sees across the valley. Needs a Hamlet.',
+    cost: { planks: 4, stone: 4 },
+    buildTicks: secs(14),
+    size: 2,
+    buildable: true,
+    rank: 1,
+    claim: 12,
+    reveal: 20,
+  },
+  longhouse: {
+    type: 'longhouse',
+    name: 'Longhouse',
+    icon: '🏠',
+    blurb: 'A great timber hall where one family can grow to eight. Needs a Village.',
+    cost: { planks: 6, stone: 4, logs: 4 },
+    buildTicks: secs(16),
+    size: 2,
+    housing: 8,
+    buildable: true,
+    rank: 2,
+  },
   sawpit: {
     type: 'sawpit',
     name: 'Sawpit',
@@ -193,7 +220,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
 };
 
-export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse'];
+export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse', 'watchtower', 'longhouse'];
 
 export const GOOD_INFO: Record<Good, { name: string; icon: string }> = {
   logs: { name: 'Logs', icon: '🪵' },
@@ -202,6 +229,9 @@ export const GOOD_INFO: Record<Good, { name: string; icon: string }> = {
   berries: { name: 'Berries', icon: '🫐' },
   fish: { name: 'Fish', icon: '🐟' },
 };
+
+/** Settlement ranks, earned by completing the scenario's chapters (AoE-style age-ups). */
+export const RANK_NAMES = ['Camp', 'Hamlet', 'Village', 'Town'] as const;
 
 export function costTotal(cost: Partial<Record<Good, number>>): number {
   let n = 0;

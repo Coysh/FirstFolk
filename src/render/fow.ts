@@ -21,6 +21,8 @@ export class FogOfWar {
     uRivalColor: { value: new THREE.Color(0xd9534f) },
     /** Fades the fog in (0 = everything visible, used by the title screen). */
     uFowStrength: { value: 1 },
+    /** 0..1: winter frost on the land and everything growing on it. */
+    uSnow: { value: 0 },
   };
   private data: Uint8Array;
   private fogVersion = -1;
@@ -94,6 +96,7 @@ export class FogOfWar {
         uniform float uFowSize;
         uniform float uBorderGlow;
         uniform float uFowStrength;
+        uniform float uSnow;
         uniform vec3 uBorderColor;
         uniform vec3 uRivalColor;\n` +
         shader.fragmentShader.replace(
@@ -113,6 +116,8 @@ export class FogOfWar {
             gl_FragColor.rgb = mix(gl_FragColor.rgb, uRivalColor, redge * 0.7);`
                 : ''
             }
+            float lum = dot(gl_FragColor.rgb, vec3(0.3, 0.55, 0.15));
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.86, 0.9, 0.98) * (0.55 + 0.6 * lum), uSnow * 0.62);
             float hidden = (1.0 - smoothstep(0.15, 0.85, fow.r)) * uFowStrength;
             vec3 dim = gl_FragColor.rgb * vec3(0.24, 0.27, 0.34) + vec3(0.02, 0.025, 0.04);
             gl_FragColor.rgb = mix(gl_FragColor.rgb, dim, hidden);

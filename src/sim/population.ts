@@ -1,6 +1,7 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, FOODS, SKILLS, type Good, type Skill } from './defs';
+import { BUILDINGS, FOODS, SKILLS, type BuildingType, type Good, type Skill } from './defs';
 import { addBoon, drawBoons, offerBoon } from './boons';
+import { isWinter } from './seasons';
 import { walkTo } from './settlers';
 import { emptySkills, type Building, type Family, type PlayerState, type Settler, type World } from './world';
 
@@ -11,6 +12,9 @@ export const SURNAMES = [
 
 /** Crest colours, shown on hats, banners and flags. */
 export const CREST_COLORS = [0xc0392b, 0x2e86c1, 0xd4ac0d, 0x8e44ad, 0x16a085, 0xd35400, 0x34495e, 0xe84393, 0x27ae60, 0x7f5539];
+
+/** Family homes (the wagon houses the founders but is never handed to newcomers). */
+export const isHome = (t: BuildingType) => !!BUILDINGS[t].housing && t !== 'wagon';
 
 export function createFamily(world: World, owner: number, homeId: number, inherit?: string): Family {
   const used = new Set([...world.families.values()].map((f) => f.surname));
@@ -26,7 +30,8 @@ export function updatePopulation(world: World): void {
     // Hearth-keepers eat less: appetite is summed per settler in percent.
     let appetite = 0;
     for (const s of world.settlers.values()) if (s.owner === player.id) appetite += 100 - (world.families.get(s.familyId)?.mods.appetite ?? 0);
-    player.mealAccum += Math.floor(appetite / 100);
+    // Winter cold: everyone eats a quarter more.
+    player.mealAccum += Math.floor((appetite * (isWinter(world) ? 100 + BALANCE.winterAppetitePct : 100)) / 10000);
     while (player.mealAccum >= world.rules.mealInterval) {
       player.mealAccum -= world.rules.mealInterval;
       eat(world, player);
@@ -115,7 +120,7 @@ function checkNewcomers(world: World, player: PlayerState): void {
   }
   let hut: Building | undefined;
   for (const b of world.buildings.values())
-    if (b.owner === player.id && b.done && b.type === 'hut' && b.familyId === 0) {
+    if (b.owner === player.id && b.done && isHome(b.type) && b.familyId === 0) {
       hut = b;
       break;
     }

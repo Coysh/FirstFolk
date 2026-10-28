@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { icon, PLAYER, type Game } from '../game';
 import { ICON } from '../render/overlay';
-import { BUILDINGS, BUILD_MENU, DISCOVERIES, GOODS, GOOD_INFO, SKILLS, type BuildingType, type Good } from '../sim/defs';
+import { BUILDINGS, BUILD_MENU, DISCOVERIES, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
 import { BOONS, BOON_TIMEOUT, familyTitle } from '../sim/boons';
-import { BALANCE } from '../sim/balance';
+import { BALANCE, TICK_HZ } from '../sim/balance';
+import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
 import type { Family, World } from '../sim/world';
 import { CREST_COLORS } from '../sim/population';
 import { TIER_NAMES, TRADES, tierOf, tierProgress, tradeTitle } from '../sim/trades';
@@ -12,6 +13,8 @@ import { settings } from '../settings';
 import type { Shell } from '../shell';
 import { ageYears, describeSettler, formatTime } from './describe';
 import { HowTo, SettingsPanel } from './Screens';
+import { HOTKEYS } from '../input/input';
+import { lockLabel } from '../sim/commands';
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
@@ -77,6 +80,7 @@ function TopBar({ game }: { game: Game }) {
         {hungry && <span class="hungry pulse">Hungry!</span>}
       </div>
       <div class="speed">
+        <SeasonChip game={game} />
         <span class="clock">{formatTime(w.tick)}</span>
         <div class="seg">
           <button class={game.paused.value ? 'on' : ''} onClick={() => game.togglePause()} title="Pause (Space)" aria-label="Pause">
@@ -93,6 +97,27 @@ function TopBar({ game }: { game: Game }) {
         </button>
       </div>
     </header>
+  );
+}
+
+const SEASON_ICONS = ['🌱', '☀️', '🍂', '❄️'];
+
+/** Season and settlement rank, with a countdown when winter approaches. */
+function SeasonChip({ game }: { game: Game }) {
+  const w = game.world;
+  const season = seasonOf(w.tick);
+  const left = Math.ceil(ticksToNextSeason(w.tick) / TICK_HZ);
+  const warn = season === 2 && left <= 40;
+  const rank = w.players[PLAYER].rank;
+  return (
+    <div class="season-chip">
+      <span class={`rank r${rank}`} title="Settlement rank: complete each chapter to rise">
+        {RANK_NAMES[rank]}
+      </span>
+      <span class={`season ${season === 3 ? 'winter' : ''} ${warn ? 'warn pulse' : ''}`} title={season === 3 ? 'Winter: berries sleep, folk eat more, building is slower' : `${SEASON_NAMES[season]}: ${left}s left`}>
+        {SEASON_ICONS[season]} {warn ? `Winter in ${left}s` : SEASON_NAMES[season]}
+      </span>
+    </div>
   );
 }
 
@@ -250,20 +275,20 @@ function BuildBar({ game }: { game: Game }) {
         const def = BUILDINGS[t];
         const unlocked = w.isUnlocked(PLAYER, t);
         const affordable = Object.entries(def.cost).every(([g, n]) => w.stored(PLAYER, g as Good) >= (n ?? 0));
-        const req = def.requires;
-        const reqText = req ? `Needs a ${tradeTitle(req.skill, req.tier)}` : '';
+        const lock = unlocked ? '' : lockLabel(w, PLAYER, t);
+        const reqText = `Needs a ${lock}`;
         return (
           <button
             key={t}
             class={`card ${affordable ? '' : 'short'} ${unlocked ? '' : 'locked'}`}
             onClick={() => unlocked && game.startPlacing(t)}
             aria-disabled={!unlocked}
-            title={unlocked ? `${def.name} (${i + 1}): ${def.blurb}` : `${def.name}: ${reqText}`}
+            title={unlocked ? `${def.name} (${HOTKEYS[i]}): ${def.blurb}` : `${def.name}: ${reqText}`}
           >
-            <span class="hotkey">{i + 1}</span>
+            <span class="hotkey">{HOTKEYS[i]}</span>
             <img class="card-icon" src={icon(t)} alt="" />
             <span class="card-name">{def.name}</span>
-            <span class="card-cost">{unlocked ? costChips(t) : <span class="lock">🔒 {req ? TRADES[req.skill].titles[req.tier] : ''}</span>}</span>
+            <span class="card-cost">{unlocked ? costChips(t) : <span class="lock">🔒 {lock.replace(/^Journeyman /, '')}</span>}</span>
           </button>
         );
       })}

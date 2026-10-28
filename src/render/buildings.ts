@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BUILDINGS, GOODS, costTotal, type Good } from '../sim/defs';
-import { CREST_COLORS } from '../sim/population';
+import { CREST_COLORS, isHome } from '../sim/population';
 import type { Building, World } from '../sim/world';
 import type { Effects } from './effects';
 import { buildingGeometry, goodGeometry, scaffoldGeometry } from './models';
@@ -118,7 +118,7 @@ export class BuildingsView {
 
     // Model variant: hut crest banner, workplace trade tier.
     let crest: number | undefined;
-    if (b.type === 'hut' && b.familyId) {
+    if (isHome(b.type) && b.familyId) {
       const fam = world.families.get(b.familyId);
       if (fam) crest = CREST_COLORS[fam.color];
     }
@@ -199,7 +199,7 @@ export class BuildingsView {
     // Ambient life: chimney smoke from homes, campfire at the wagon, dust from busy workshops.
     v.smokeTimer -= dt;
     if (v.smokeTimer <= 0 && b.done) {
-      if (b.type === 'hut' && b.familyId) {
+      if (isHome(b.type) && b.familyId) {
         this.effects.emit('smoke', p.x, p.y + 1.45, p.z - 0.05, 1);
         v.smokeTimer = 0.45;
       } else if (b.type === 'wagon') {

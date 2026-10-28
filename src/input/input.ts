@@ -1,4 +1,7 @@
 import { BUILD_MENU } from '../sim/defs';
+
+/** Build hotkeys in shelf order. */
+export const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'];
 import type { Game } from '../game';
 
 interface PointerInfo {
@@ -152,8 +155,8 @@ export class Input {
     else if (k === ' ') {
       e.preventDefault();
       this.game.togglePause();
-    } else if (k >= '1' && k <= String(BUILD_MENU.length)) {
-      const type = BUILD_MENU[Number(k) - 1];
+    } else if (HOTKEYS.includes(k) && HOTKEYS.indexOf(k) < BUILD_MENU.length) {
+      const type = BUILD_MENU[HOTKEYS.indexOf(k)];
       if (this.game.world.isUnlocked(0, type)) this.game.startPlacing(type);
     }
     else if (k === 'f') this.game.focusSelection();

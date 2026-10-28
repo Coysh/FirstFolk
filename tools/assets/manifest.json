@@ -23,6 +23,8 @@
     { "id": "parchment", "kind": "texture", "out": "ui/parchment.jpg", "width": 512, "gen": "1024x1024", "prompt": "Seamless tileable texture of soft cream parchment paper with very subtle fibres and faint warm mottling, evenly lit, flat, no stains near edges, no text." },
     { "id": "icon-fish", "kind": "icon", "out": "icons/fish.png", "size": 128, "prompt": "Two fresh silvery-blue river fish (trout) lying crossed, with pink speckles, glistening scales and a sprig of green reed." },
     { "id": "icon-fisher", "kind": "icon", "out": "icons/fisher.png", "size": 128, "prompt": "A small reed-thatched fisher's hut on short stilts at a riverbank, a wooden drying rack with three fish hanging, and a coiled net." },
+    { "id": "icon-watchtower", "kind": "icon", "out": "icons/watchtower.png", "size": 128, "prompt": "A sturdy square watchtower: a dressed-stone lower storey, a whitewashed timber-framed upper storey with a railed walkway, a steep dark thatched pyramid roof and a long blue banner flying from the top." },
+    { "id": "icon-longhouse", "kind": "icon", "out": "icons/longhouse.png", "size": 128, "prompt": "A long Anglo-Saxon timber longhouse seen from a three-quarter angle: dark vertical plank walls, a huge golden thatched roof sweeping almost to the ground, carved crossed gable ends and a small wooden door with a coloured family banner beside it." },
     { "id": "icon-lookout", "kind": "icon", "out": "icons/lookout.png", "size": 128, "prompt": "A tall wooden lookout watchtower on a low stone base: four timber legs with cross-bracing, a ladder, a railed platform with a small pointed thatch roof, and a red pennant flying from the top." }
   ]
 }

@@ -2,6 +2,7 @@ import { BALANCE } from './balance';
 import { BUILDINGS, GOOD_INFO, type GatherJob, type Good, type NodeKind, type Skill } from './defs';
 import { TRADES, tierOf, tradeTitle, unlocksFor } from './trades';
 import { offerBoon } from './boons';
+import { isWinter } from './seasons';
 import { Terrain } from './mapgen';
 import { onBuildingComplete } from './territory';
 import type { Building, ResourceNode, Settler, World } from './world';
@@ -274,6 +275,7 @@ function thinkBuild(world: World, s: Settler, job: Extract<Settler['job'], { kin
   const fam = world.families.get(s.familyId);
   let rate = world.players[s.owner].hungry && !fam?.mods.hardy ? Math.floor(BALANCE.buildRate * 0.6) : BALANCE.buildRate;
   rate = Math.floor((rate * (100 + (fam?.mods.build ?? 0))) / 100);
+  if (isWinter(world)) rate = Math.max(1, Math.floor((rate * BALANCE.winterBuildPct) / 100));
   site.work = Math.min(site.workNeeded, site.work + rate);
   if (site.work >= site.workNeeded) {
     site.done = true;

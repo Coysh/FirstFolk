@@ -1,4 +1,4 @@
-import { BUILDINGS, GOODS, type BuildingType } from './defs';
+import { BUILDINGS, GOODS, RANK_NAMES, type BuildingType } from './defs';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
 import { owns, territoryBox } from './territory';
 import { chooseBoon } from './boons';
@@ -11,6 +11,13 @@ export type Command =
   | { type: 'demolish'; owner: number; id: number }
   | { type: 'chooseBoon'; owner: number; offerId: number; choice: number };
 
+/** What a locked building is waiting for, e.g. "Hamlet" or "Journeyman Carpenter". */
+export function lockLabel(world: World, owner: number, type: BuildingType): string {
+  const def = BUILDINGS[type];
+  if (def.rank && world.players[owner].rank < def.rank) return RANK_NAMES[def.rank];
+  return def.requires ? tradeTitle(def.requires.skill, def.requires.tier) : '';
+}
+
 export interface PlaceCheck {
   ok: boolean;
   reason?: string;
@@ -22,10 +29,7 @@ const MAX_SLOPE = 0.6;
 export function canPlace(world: World, owner: number, type: BuildingType, x: number, y: number): PlaceCheck {
   const def = BUILDINGS[type];
   if (!def.buildable) return { ok: false, reason: 'Cannot be built' };
-  if (!world.isUnlocked(owner, type)) {
-    const r = def.requires!;
-    return { ok: false, reason: `Needs a ${tradeTitle(r.skill, r.tier)}` };
-  }
+  if (!world.isUnlocked(owner, type)) return { ok: false, reason: `Needs a ${lockLabel(world, owner, type)}` };
   const size = def.size;
   const ex = x;
   const ey = y + size;

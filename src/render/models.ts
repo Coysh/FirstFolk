@@ -35,6 +35,38 @@ function cottage(b: ModelBuilder, wall: number, roof: number, w = 1.05, d = 0.85
   b.add(box(0.18, 0.14, 0.04), C.darkTimber, { pos: [ox + w * 0.22, 0.38, oz + d / 2 + 0.01] });
 }
 
+/** The founders' camp grows into a hall with each settlement rank (Hamlet, Village, Town). */
+function hall(b: ModelBuilder, rank: number) {
+  const w = 1.5 + rank * 0.12;
+  const d = 1.05;
+  const h = 0.62 + rank * 0.06;
+  if (rank >= 2) b.add(box(w + 0.3, 0.2, d + 0.3), C.stone, { pos: [0, 0.08, -0.15] });
+  cottage(b, rank >= 2 ? C.plaster : C.wattle, rank >= 3 ? C.thatchDark : C.thatch, w, d, h, 0, -0.15);
+  // carved ridge posts at each gable end
+  for (const z of [-0.15 - d / 2 - 0.1, -0.15 + d / 2 + 0.1]) b.add(cone(0.05, 0.3, 4), C.darkTimber, { pos: [0, 0.06 + h + 0.72, z] });
+  // a hearth fire out front, crates and the old wagon's wheel kept as a keepsake
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    b.add(dodeca(0.05), C.stoneDark, { pos: [0.6 + Math.cos(a) * 0.15, 0.03, 0.7 + Math.sin(a) * 0.15] });
+  }
+  b.add(cone(0.07, 0.16, 5), C.ember, { pos: [0.6, 0.08, 0.7] });
+  b.add(box(0.24, 0.22, 0.24), C.lightWood, { pos: [-0.75, 0.11, 0.6] });
+  b.add(cyl(0.2, 0.2, 0.05, 10), C.darkTimber, { pos: [-0.85, 0.22, 0.25], rot: [0.2, 0, Math.PI / 2] });
+  // banners: one per rank
+  for (let i = 0; i < rank; i++) {
+    const x = -0.55 + i * 0.55;
+    b.add(cyl(0.025, 0.025, 1.6, 5), C.wood, { pos: [x, 0.8, 0.5] });
+    b.add(box(0.03, 0.42, 0.28), [0xc0392b, 0x2e86c1, 0xf2c14e][i], { pos: [x, 1.38, 0.36] });
+  }
+  if (rank >= 3) {
+    // Town: a stone tower with a gilded flag.
+    b.add(box(0.5, 1.6, 0.5), C.stone, { pos: [0.95, 0.8, -0.55] });
+    b.add(cone(0.45, 0.6, 4), C.thatchDark, { pos: [0.95, 1.9, -0.55], rot: [0, Math.PI / 4, 0] });
+    b.add(cyl(0.02, 0.02, 0.5, 5), C.wood, { pos: [0.95, 2.4, -0.55] });
+    b.add(box(0.03, 0.18, 0.3), 0xf2c14e, { pos: [0.95, 2.55, -0.4] });
+  }
+}
+
 function logPile(b: ModelBuilder, x: number, z: number, n = 3) {
   const rows = [[-0.09, 0], [0.09, 0], [0, 0.13]];
   for (let i = 0; i < n; i++) {
@@ -47,6 +79,11 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
   const b = new ModelBuilder();
   switch (type) {
     case 'wagon': {
+      const rank = opts.tier ?? 0;
+      if (rank >= 1) {
+        hall(b, rank);
+        break;
+      }
       const y = 0.38;
       b.add(box(1.25, 0.18, 0.66), C.wood, { pos: [0, y, 0] });
       b.add(box(1.25, 0.16, 0.04), C.darkTimber, { pos: [0, y + 0.14, 0.31] });
@@ -220,6 +257,39 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       for (const x of [-0.14, 0.14]) b.add(box(0.03, 1.6, 0.03), C.wood, { pos: [x, 0.85, 0.42] });
       break;
     }
+    case 'watchtower': {
+      // A square stone-footed tower with a timber upper storey, a hip roof and a big banner.
+      b.add(box(1.1, 0.9, 1.1), C.stone, { pos: [0, 0.45, -0.1] });
+      for (let i = 0; i < 4; i++) b.add(box(1.14, 0.05, 1.14), C.stoneDark, { pos: [0, 0.2 + i * 0.22, -0.1] });
+      b.add(box(1.0, 0.9, 1.0), C.plaster, { pos: [0, 1.35, -0.1] });
+      for (const sx of [-0.5, 0.5]) for (const sz of [-0.6, 0.4]) b.add(box(0.08, 0.9, 0.08), C.timber, { pos: [sx, 1.35, sz] });
+      b.add(box(1.25, 0.08, 1.25), C.lightWood, { pos: [0, 1.84, -0.1] });
+      fence(b, -0.6, 0.6, 0.5, 5);
+      b.add(cone(0.95, 0.75, 4), C.thatchDark, { pos: [0, 2.3, -0.1], rot: [0, Math.PI / 4, 0] });
+      b.add(cyl(0.025, 0.025, 0.8, 5), C.wood, { pos: [0, 2.9, -0.1] });
+      b.add(box(0.03, 0.3, 0.45), opts.crest ?? 0x2e86c1, { pos: [0, 3.1, 0.14] });
+      b.add(box(0.26, 0.4, 0.05), C.door, { pos: [0, 0.2, 0.46] });
+      b.add(box(0.2, 0.22, 0.05), C.darkTimber, { pos: [0, 1.4, 0.41] });
+      break;
+    }
+    case 'longhouse': {
+      // A long timber hall with a turf-and-thatch roof running the length of the plot.
+      b.add(box(1.8, 0.12, 1.2), C.stoneDark, { pos: [0, 0.02, -0.1] });
+      b.add(box(1.7, 0.55, 1.05), C.wood, { pos: [0, 0.34, -0.1] });
+      for (const x of [-0.85, -0.42, 0, 0.42, 0.85]) b.add(box(0.07, 0.55, 1.08), C.timber, { pos: [x, 0.34, -0.1] });
+      b.add(gableRoof(1.25, 1.95, 0.75), C.thatch, { pos: [0, 0.6, -0.1] });
+      b.add(box(1.95, 0.07, 0.07), C.thatchDark, { pos: [0, 1.36, -0.1] });
+      for (const x of [-0.9, 0.9]) b.add(cone(0.06, 0.3, 4), C.darkTimber, { pos: [x, 1.45, -0.1], rot: [0, 0, x > 0 ? -0.5 : 0.5] });
+      b.add(box(0.28, 0.4, 0.05), C.door, { pos: [-0.3, 0.26, 0.44] });
+      b.add(box(0.2, 0.14, 0.05), C.darkTimber, { pos: [0.35, 0.4, 0.44] });
+      if (opts.crest !== undefined) {
+        b.add(cyl(0.02, 0.02, 1.0, 5), C.wood, { pos: [0.8, 0.5, 0.55] });
+        b.add(box(0.03, 0.22, 0.26), opts.crest, { pos: [0.8, 0.88, 0.42] });
+      }
+      b.add(cyl(0.1, 0.1, 0.22, 8), C.wood, { pos: [-0.8, 0.11, 0.6] });
+      logPile(b, 0.2, 0.75, 3);
+      break;
+    }
     case 'hut': {
       b.add(cyl(0.68, 0.72, 0.1, 10), C.stoneDark, { pos: [0, 0.03, -0.05] });
       b.add(cyl(0.6, 0.62, 0.48, 10), C.wattle, { pos: [0, 0.32, -0.05] });
@@ -239,6 +309,8 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       b.add(cyl(0.1, 0.1, 0.22, 8), C.wood, { pos: [0.7, 0.11, -0.45] });
       break;
     }
+    default:
+      b.add(box(1.2, 0.8, 1.2), C.wood, { pos: [0, 0.4, 0] });
   }
   return b.build();
 }

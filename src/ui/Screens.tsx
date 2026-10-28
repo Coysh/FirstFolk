@@ -166,9 +166,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 export function HowTo({ onClose }: { onClose: () => void }) {
   const steps = [
     { icon: '/assets/icons/woodcutter.png', title: 'Gather', text: 'Place a Woodcutter by the trees, a Forager by the berry bushes and a Quarry by the rocks. Workers fetch, carriers haul everything to your stores.' },
-    { icon: '/assets/icons/hut.png', title: 'Grow', text: 'Empty huts draw in new families when there are berries to spare. Children carry goods and come of age as new workers.' },
-    { icon: '/assets/icons/sawpit.png', title: 'Learn a trade', text: 'Work teaches. A woodcutter becomes a Carpenter, a quarrier a Mason. Each new tier transforms their workplace and unlocks new buildings.' },
-    { icon: '/assets/icons/people.png', title: 'Pass it down', text: 'Families remember their craft: children inherit part of it. Newcomers arrive with skills of their own.' },
+    { icon: '/assets/icons/hut.png', title: 'Grow', text: 'Families with room and food have children. Empty huts draw in newcomers, and young adults marry into new households.' },
+    { icon: '/assets/icons/lookout.png', title: 'Explore', text: 'You can only build inside your border. Lookouts push it outwards. Golden lights mark discoveries: grow your border over them to claim caches, lore, wanderers and rich land.' },
+    { icon: '/assets/icons/sawpit.png', title: 'Learn a trade', text: 'Work teaches. A woodcutter becomes a Carpenter, a quarrier a Mason. Each tier transforms the workplace and unlocks new buildings.' },
+    { icon: '/assets/icons/people.png', title: 'Shape your families', text: 'When a family masters a craft, choose one of three boons for them. Boons pass to their children and combine when families marry.' },
+    { icon: '/assets/icons/berries.png', title: 'Weather the winter', text: 'In winter bushes sleep and folk eat more. Stockpile food and build Fishers. Each chapter you finish raises your camp a rank.' },
   ];
   return (
     <Modal title="How to Play" onClose={onClose} wide>

@@ -51,6 +51,11 @@ export const BALANCE = {
   /** When nothing new has been seen or claimed for this long, a rumour reveals the nearest discovery. */
   rumourDelay: secs(45),
 
+  /** Winter: warning lead time, extra appetite, construction speed. */
+  winterWarning: secs(25),
+  winterAppetitePct: 25,
+  winterBuildPct: 70,
+
   /** Share of the family's best skill XP a child inherits on coming of age. */
   inheritPct: 40,
   xpPerHarvest: 10,
