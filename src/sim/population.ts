@@ -1,10 +1,10 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, FOODS, SKILLS, type BuildingType, type Good, type Skill } from './defs';
 import { playerMod } from './houses';
-import { walkTo } from './settlers';
+import { craftXp, walkTo } from './settlers';
 import { hasOmen } from './omens';
 import { bestSite } from './ai/placement';
-import { emptySkills, type Building, type Family, type PlayerState, type Settler, type World } from './world';
+import { type Building, type Family, type PlayerState, type Settler, type World } from './world';
 
 export const SURNAMES = [
   'Ashby', 'Thorne', 'Holloway', 'Fenwick', 'Marsh', 'Brook', 'Whitlow', 'Hale', 'Oakley', 'Underhill',
@@ -24,7 +24,7 @@ export function createFamily(world: World, owner: number, homeId: number, inheri
   const used = new Set([...world.families.values()].map((f) => f.surname));
   const free = SURNAMES.filter((n) => !used.has(n));
   const surname = inherit ?? (free.length ? world.rng.pick(free) : world.rng.pick(SURNAMES));
-  const fam: Family = { id: world.newId(), owner, surname, color: world.families.size % CREST_COLORS.length, homeId, skills: emptySkills(), birthCooldown: BALANCE.birthInterval, parents: [] };
+  const fam: Family = { id: world.newId(), owner, surname, color: world.families.size % CREST_COLORS.length, homeId, birthCooldown: BALANCE.birthInterval, parents: [] };
   world.families.set(fam.id, fam);
   return fam;
 }
@@ -67,7 +67,7 @@ function checkBirths(world: World, player: PlayerState): void {
     for (const s of world.settlers.values())
       if (s.familyId === fam.id) {
         members++;
-        if (!s.child && !s.elder) adults++;
+        if (!s.child) adults++;
       }
     const room = (BUILDINGS[home.type].housing ?? 0) - members;
     if (adults < 2 || room <= 0) continue;
@@ -173,7 +173,7 @@ function marry(world: World, player: PlayerState, hut: Building): boolean {
 
 /** Unmarried working adults, the candidates for a match. */
 export function singles(world: World, owner: number): Settler[] {
-  return [...world.settlers.values()].filter((s) => s.owner === owner && !s.child && !s.elder && s.spouseId === 0);
+  return [...world.settlers.values()].filter((s) => s.owner === owner && !s.child && s.spouseId === 0);
 }
 
 /** The first home with nobody in it, or null. */
@@ -190,12 +190,9 @@ export function wed(world: World, player: PlayerState, a: Settler, b: Settler, h
   const fa = world.families.get(a.familyId);
   const fb = world.families.get(b.familyId);
   if (!fa || !fb || fa === fb || a.spouseId || b.spouseId) return false;
-  const total = (f: Family) => SKILLS.reduce((n, k) => n + f.skills[k], 0);
-  const senior = total(fa) >= total(fb) ? fa : fb;
-  const fam = createFamily(world, player.id, hut?.id ?? 0, senior.surname);
+  const fam = createFamily(world, player.id, hut?.id ?? 0, (fa.id < fb.id ? fa : fb).surname);
   if (hut) hut.familyId = fam.id;
   fam.parents = [fa.id, fb.id];
-  for (const k of SKILLS) fam.skills[k] = Math.max(fa.skills[k], fb.skills[k]);
   a.familyId = fam.id;
   b.familyId = fam.id;
   a.spouseId = b.id;
@@ -231,15 +228,13 @@ export function spawnFamily(world: World, player: PlayerState, hut: Building | n
   const size = sizeOverride || Math.min(capacity, 2 + world.rng.int(2));
   const sx = spawn % world.size;
   const sy = (spawn - sx) / world.size;
-  // Newcomers bring a little know-how of their own, which makes each family distinct.
+  // Newcomers bring a little know-how of their own, which adds to the town's craft.
   const craft: Skill = SKILLS[world.rng.int(SKILLS.length)];
+  craftXp(world, player.id, craft, skillXp || 30);
   const folk: Settler[] = [];
   for (let i = 0; i < size; i++) {
     const age = i < 2 ? 1.6 + world.rng.float() * 1.5 : world.rng.float() * 1.3;
     const s = world.addSettler(player.id, fam.id, world.randomName(), age, sx, sy);
-    if (i === 0) s.skills[craft] = skillXp || world.rng.range(60, 150);
-    if (i === 1 && skillXp) s.skills[craft] = skillXp;
-    fam.skills[craft] = Math.max(fam.skills[craft], s.skills[craft]);
     s.job = { kind: 'arrive' };
     walkTo(world, s, target);
     if (i === 1 && folk.length) {

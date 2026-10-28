@@ -1,11 +1,12 @@
 import { BUILDINGS, type BuildingType, type Skill } from './defs';
 
 /**
- * Trades replace a tech tree: settlers earn XP in a skill by working, and reaching a tier
- * transforms their workplace (model variant), their gear, and unlocks new buildings.
+ * Crafts replace a tech tree, and they belong to the town: every harvest, every log sawn adds
+ * to the settlement's craft, and reaching a tier transforms *every* workplace of that craft at
+ * once (model, crew, speed) and unlocks new buildings. Nobody needs to follow who knows what.
  * Everything here is data; the renderer maps `tier` to model variants and gear.
  */
-export const TIER_XP = [0, 160, 650] as const;
+export const TIER_XP = [0, 250, 3500] as const;
 export const TIER_NAMES = ['Novice', 'Journeyman', 'Master'] as const;
 
 export interface TradeDef {

@@ -235,11 +235,12 @@ export class Game {
     const seat = w.players[PLAYER].seats[0];
     const best = seat && w.families.get(seat.familyId);
     if (!seat || !best) return;
-    const craft = SKILLS.reduce((a, k) => (best.skills[k] > best.skills[a] ? k : a), SKILLS[0]);
+    const crafts = w.players[PLAYER].crafts;
+    const craft = SKILLS.reduce((a, k) => (crafts[k] > crafts[a] ? k : a), SKILLS[0]);
     this.earned.value = recordDynasty({
       surname: best.surname,
       house: seat.house,
-      skill: best.skills[craft] >= TIER_XP[1] ? craft : null,
+      skill: crafts[craft] >= TIER_XP[1] ? craft : null,
       renown: w.players[PLAYER].renown,
       date: new Date().toISOString().slice(0, 10),
     });
@@ -326,6 +327,7 @@ export class Game {
           if (mine) audio.play('letter');
           break;
         case 'houseSeated':
+        case 'craftUp':
         case 'objectiveComplete':
           if (mine) audio.play('tierUp');
           break;

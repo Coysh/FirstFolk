@@ -1,18 +1,18 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, FOODS, GOODS, SKILLS, costTotal, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
+import { BUILDINGS, FOODS, GOODS, costTotal, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
 import { generateMap, isWalkableTerrain, type MapData } from './mapgen';
 import { PathFinder } from './path';
 import { Rng } from './rng';
 import type { Command } from './commands';
 import { applyCommand } from './commands';
 import { updateLogistics } from './logistics';
-import { updateSettler, assignJobs, grantXp, releaseJob } from './settlers';
+import { updateSettler, assignJobs } from './settlers';
 import { TIER_XP } from './trades';
 import { updatePopulation, createFamily } from './population';
 import { evaluateScenario, SCENARIOS, type Scenario, type ScenarioState } from './scenario';
 import { DIFFICULTY, type Difficulty, type Rules } from './rules';
 import { NO_OWNER, onBuildingComplete, recomputeTerritory, updateExploration } from './territory';
-import { addRenown, updateRenown, type RenownSource } from './renown';
+import { updateRenown, type RenownSource } from './renown';
 import type { DeedId } from './deeds';
 import { updateMarket } from './market';
 import { updateHappenings } from './happenings';
@@ -103,8 +103,6 @@ export interface Family {
   surname: string;
   color: number;
   homeId: number;
-  /** Best XP any member has reached per skill: the family's knowledge, inherited by children. */
-  skills: Skills;
   /** Ticks until the family can next have a child. */
   birthCooldown: number;
   /** Families this household was founded from by marriage. */
@@ -143,11 +141,8 @@ export interface Settler {
   anim: 'idle' | 'walk' | 'work';
   /** Tile the settler faces while working, or -1. */
   faceTile: number;
-  skills: Skills;
   /** Husband or wife (0 = unmarried). */
   spouseId: number;
-  /** Elders no longer work; they teach their family until they die. */
-  elder: boolean;
 }
 
 export type SimEvent =
@@ -157,16 +152,13 @@ export type SimEvent =
   | { type: 'buildingPlaced'; owner: number; id: number; buildingType: BuildingType }
   | { type: 'buildingComplete'; owner: number; id: number; buildingType: BuildingType }
   | { type: 'familyApproaching'; owner: number; familyId: number; surname: string; size: number; skill: Skill }
-  | { type: 'cameOfAge'; owner: number; settlerId: number; name: string; surname: string }
   | { type: 'born'; owner: number; settlerId: number; name: string; surname: string }
-  | { type: 'firstMaster'; owner: number; settlerId: number; name: string; surname: string; skill: Skill }
-  | { type: 'elder'; owner: number; settlerId: number; name: string; surname: string }
-  | { type: 'died'; owner: number; name: string; surname: string; age: number; legend: Skill | null; x: number; y: number }
   | { type: 'hungry'; owner: number }
   | { type: 'fed'; owner: number }
   | { type: 'objectiveComplete'; owner: number; label: string }
   | { type: 'chapterComplete'; owner: number; chapter: string; next: string }
-  | { type: 'tierUp'; owner: number; settlerId: number; buildingId: number; skill: Skill; tier: number }
+  /** A settlement's craft reaches a new tier (see trades.ts). */
+  | { type: 'craftUp'; owner: number; skill: Skill; tier: number }
   | { type: 'unlocked'; owner: number; buildingType: BuildingType }
   | { type: 'produced'; owner: number; buildingId: number; good: Good; bonus: boolean }
   | { type: 'delivered'; owner: number; buildingId: number; good: Good }
@@ -242,8 +234,10 @@ export interface PlayerState {
   maxDeficit: number;
   /** Temporary influence (festivals and the like). */
   boosts: { x: number; y: number; r: number; p: number; until: number }[];
-  /** Masters who died: each makes the settlement better at their craft, for good. */
+  /** Ancient legends (from barrow mounds): each makes the settlement better at a craft, for good. */
   legends: Legend[];
+  /** The settlement's crafts: XP from all work, shared by everyone (see trades.ts). */
+  crafts: Skills;
   /** Market glut per good (percent) and goods sold, see market.ts. */
   glut: Stock;
   sold: number;
@@ -538,16 +532,14 @@ export class World {
       tool: null,
       anim: 'idle',
       faceTile: -1,
-      skills: emptySkills(),
       spouseId: 0,
-      elder: false,
     };
     this.settlers.set(s.id, s);
     return s;
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -570,10 +562,8 @@ export class World {
     const skill = dynasty ? dynasty.skill : origin.skill;
     seatHouse(this, owner, dynasty ? dynasty.house : origin.house);
     if (skill) {
-      // A dynasty's founders know a little more with each generation.
-      const xp = TIER_XP[1] + (dynasty ? Math.min(4, dynasty.generation - 1) * 80 : 0);
-      for (const s of folk.slice(0, 2)) s.skills[skill] = xp;
-      fam.skills[skill] = xp;
+      // The founders arrive skilled in their craft (a dynasty a little more with each generation).
+      this.players[owner].crafts[skill] = TIER_XP[1] + (dynasty ? Math.min(4, dynasty.generation - 1) * 150 : 0);
       for (const t of unlocksFor(skill, 1)) this.players[owner].unlocked.push(t);
     }
   }
@@ -741,7 +731,7 @@ export class World {
     if (this.tick % 10 === 0) evaluateScenario(this);
 
     for (const s of this.settlers.values()) {
-      if (s.child || s.elder) continue;
+      if (s.child) continue;
       this.stats.adultTicks++;
       if (s.job.kind === 'idle') this.stats.idleAdultTicks++;
     }
@@ -752,48 +742,13 @@ export class World {
     for (let i = 0; i < ticks; i++) this.step();
   }
 
+  /** Children grow up (folk no longer age past that: the town is the story, not its people). */
   private updateAges(): void {
     const adult = comeOfAgeTicks();
-    const elder = Math.round(BALANCE.elderYears * BALANCE.yearTicks);
-    const teach = this.tick % BALANCE.elderTeachEvery === 0;
-    for (const s of [...this.settlers.values()]) {
+    for (const s of this.settlers.values()) {
+      if (!s.child) continue;
       s.age += 10;
-      const fam = this.families.get(s.familyId);
-      if (s.child && s.age >= adult) {
-        s.child = false;
-        // Inheritance: a new adult starts with part of the family's knowledge.
-        const pct = BALANCE.inheritPct;
-        if (fam) for (const k of SKILLS) s.skills[k] = Math.max(s.skills[k], Math.floor((fam.skills[k] * pct) / 100));
-        this.emit({ type: 'cameOfAge', owner: s.owner, settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
-      } else if (!s.elder && s.age >= elder) {
-        s.elder = true;
-        releaseJob(this, s);
-        this.emit({ type: 'elder', owner: s.owner, settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
-      } else if (s.elder && s.age >= lifespan(s) + (this.holds(s.owner, 'spring') ? BALANCE.yearTicks : 0)) {
-        this.die(s);
-      } else if (s.elder && teach) {
-        // Elders pass their best craft on to the family's working adults.
-        const best = SKILLS.reduce((a, k) => (s.skills[k] > s.skills[a] ? k : a), SKILLS[0]);
-        if (s.skills[best] > 0)
-          for (const o of this.settlers.values()) if (o.familyId === s.familyId && !o.child && !o.elder) grantXp(this, o, best, BALANCE.elderTeachXp);
-      }
-    }
-  }
-
-  /** A settler dies of old age. A Master becomes a legend: renown, and their craft lives on. */
-  die(s: Settler): void {
-    const fam = this.families.get(s.familyId);
-    const best = SKILLS.reduce((a, k) => (s.skills[k] > s.skills[a] ? k : a), SKILLS[0]);
-    const legend = s.skills[best] >= TIER_XP[2] ? best : null;
-    releaseJob(this, s);
-    this.settlers.delete(s.id);
-    const spouse = this.settlers.get(s.spouseId);
-    if (spouse) spouse.spouseId = 0;
-    const p = this.players[s.owner];
-    this.emit({ type: 'died', owner: s.owner, name: s.name, surname: fam?.surname ?? '', age: Math.floor(s.age / BALANCE.yearTicks), legend, x: s.x, y: s.y });
-    if (legend && p) {
-      p.legends.push({ name: s.name, surname: fam?.surname ?? '', skill: legend, tick: this.tick });
-      addRenown(this, s.owner, BALANCE.renown.legend, 'legends', s.x, s.y);
+      if (s.age >= adult) s.child = false;
     }
   }
 
@@ -835,7 +790,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'challenge', 'challengeWon', 'starfall', 'moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'challenge', 'challengeWon', 'starfall', 'moot', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);
@@ -843,7 +798,6 @@ export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berr
 export const comeOfAgeTicks = () => Math.round(BALANCE.comeOfAgeYears * BALANCE.yearTicks);
 
 /** Each settler's own span of years (deterministic from their id): somewhere in a year and a half. */
-export const lifespan = (s: Settler) => Math.round((BALANCE.lifespanYears + (((s.id * 2654435761) >>> 0) % 150) / 100) * BALANCE.yearTicks);
 
 export const FIRST_NAMES = [
   'Alfric', 'Edith', 'Osric', 'Hilda', 'Wulf', 'Edyth', 'Godwin', 'Mildred', 'Oswin', 'Elfgiva',

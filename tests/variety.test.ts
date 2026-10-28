@@ -21,7 +21,7 @@ describe('origins (openers)', () => {
       expect(w.players[0].seats[0].familyId).toBe(fam.id);
       expect(Object.keys(w.players[0].mods)).toEqual(Object.keys(HOUSES[o.house].mods));
       if (o.skill) {
-        expect(fam.skills[o.skill]).toBe(TIER_XP[1]);
+        expect(w.players[0].crafts[o.skill]).toBe(TIER_XP[1]);
         expect(w.players[0].unlocked.length).toBeGreaterThan(0);
       }
       // No founders' letter to answer: the origin was that choice.
@@ -98,13 +98,12 @@ describe('new discoveries', () => {
     expect(w.players[0].renownBy.legends).toBe(BALANCE.renown.legend);
   });
 
-  it('a Hermit comes to teach the largest family as an elder Master', () => {
+  it('a Hermit teaches the town the craft it knows least', () => {
     const { w, site } = valleyWith('hermit');
-    const pop = w.population(0);
+    const before = { ...w.players[0].crafts };
     claimArea(w, 0, site.x, site.y, 2);
-    expect(w.population(0)).toBe(pop + 1);
-    const hermit = [...w.settlers.values()].find((s) => s.elder)!;
-    expect(Math.max(hermit.skills.woodcraft, hermit.skills.stonework, hermit.skills.husbandry)).toBe(TIER_XP[2]);
+    const gained = (['woodcraft', 'stonework', 'husbandry'] as const).map((k) => w.players[0].crafts[k] - before[k]);
+    expect(Math.max(...gained)).toBe(BALANCE.hermitXp);
   });
 
   it('a Buried Hoard is worth renown at once', () => {
@@ -142,7 +141,7 @@ describe('dynasties (meta-progression)', () => {
     const fam = founders(w, 0);
     expect(fam.surname).toBe('Thorne');
     expect(w.players[0].seats[0].house).toBe('hammer');
-    expect(fam.skills.stonework).toBe(TIER_XP[1] + 160);
+    expect(w.players[0].crafts.stonework).toBe(TIER_XP[1] + 300);
     expect(w.players[0].unlocked).toContain('storehouse');
     // The rival still rolls an ordinary origin.
     expect(ORIGIN_IDS).toContain(w.players[1].origin);

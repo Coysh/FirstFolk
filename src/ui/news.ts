@@ -3,6 +3,7 @@ import { DEEDS } from '../sim/deeds';
 import { HOUSES } from '../sim/houses';
 import { NO_OWNER } from '../sim/territory';
 import { challengeDef } from '../sim/challenges';
+import { TRADES } from '../sim/trades';
 import type { SimEvent, World } from '../sim/world';
 
 /**
@@ -48,6 +49,8 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
       return e.owner === me ? { channel: 'toast', priority: 2, icon: icon(e.buildingType), text: `Lost the race for the ${BUILDINGS[e.buildingType].name.replace(/^The /, '')}: half its goods came home`, tone: 'warn' } : null;
     case 'unlocked':
       return e.owner === me ? { channel: 'toast', priority: 1, icon: icon(e.buildingType), text: `New: ${BUILDINGS[e.buildingType].name}`, tone: 'good' } : null;
+    case 'craftUp':
+      return e.owner === me ? { channel: 'toast', priority: 2, icon: ICONS.renown, text: `${TRADES[e.skill].icon} ${TRADES[e.skill].name} ${'★'.repeat(e.tier)}: every workplace grows`, sub: TRADES[e.skill].perks[e.tier], tone: 'big' } : null;
     case 'hungry':
       return e.owner === me ? { channel: 'toast', priority: 2, icon: ICONS.berries, text: 'Hungry! Build Foragers or Fishers', tone: 'warn', key: 'hunger' } : null;
     case 'winterComing':

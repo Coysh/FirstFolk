@@ -24,7 +24,7 @@ export function walkTo(world: World, s: Settler, target: number, adjacent = fals
   return true;
 }
 
-/** Drop whatever a settler is doing, undoing reservations (for elders retiring and the dead). */
+/** Drop whatever a settler is doing, undoing reservations. */
 export function releaseJob(world: World, s: Settler): void {
   const j = s.job;
   if (j.kind === 'work') {
@@ -65,7 +65,7 @@ export function setIdle(s: Settler): void {
 function idleSettlers(world: World, owner: number, adultsOnly: boolean): Settler[] {
   const out: Settler[] = [];
   for (const s of world.settlers.values())
-    if (s.owner === owner && s.job.kind === 'idle' && !s.elder && !(adultsOnly && s.child)) out.push(s);
+    if (s.owner === owner && s.job.kind === 'idle' && !(adultsOnly && s.child)) out.push(s);
   return out;
 }
 
@@ -105,7 +105,7 @@ export function assignJobs(world: World): void {
       const def = BUILDINGS[b.type];
       const e = world.entrance(b);
       if (b.done && def.job && !hands.get(b.id)) {
-        let s = nearestSkilled(idle, e.x, e.y, def.job.skill);
+        let s = nearest(world, idle, e.x, e.y);
         // The watch steps down to work: guards are the town's reserve of hands.
         if (s) idle.splice(idle.indexOf(s), 1);
         else s = recallGuard(world, guards, player.id, e.x, e.y);
@@ -135,7 +135,7 @@ export function assignJobs(world: World): void {
     let adults = 0;
     let carrying = 0;
     for (const s of world.settlers.values())
-      if (s.owner === player.id && !s.child && !s.elder) {
+      if (s.owner === player.id && !s.child) {
         adults++;
         if (s.job.kind === 'haul') carrying++;
       }
@@ -166,7 +166,7 @@ export function assignJobs(world: World): void {
       const working = hands.get(b.id) ?? 0;
       if (b.owner !== player.id || !b.done || !def.job || !working || working >= workSlots(b)) continue;
       const e = world.entrance(b);
-      const s = nearestSkilled(idle, e.x, e.y, def.job.skill, world.settlers.get(b.workerId)?.familyId ?? 0)!;
+      const s = nearest(world, idle, e.x, e.y)!;
       idle.splice(idle.indexOf(s), 1);
       hire(world, b, s, hands);
     }
@@ -231,56 +231,40 @@ export function workSlots(b: Building): number {
   return 1 + Math.min(2, b.tier);
 }
 
-/** Prefer whoever knows the trade (25 XP is worth one tile of walking), and kin of the head worker. */
-function nearestSkilled(candidates: Settler[], x: number, y: number, skill: Skill, kin = 0): Settler | undefined {
-  let best: Settler | undefined;
-  let bestD = Infinity;
-  for (const s of candidates) {
-    const d = cheb(s.x, s.y, x, y) - s.skills[skill] / 25 - (kin && s.familyId === kin ? 12 : 0);
-    if (d < bestD) {
-      bestD = d;
-      best = s;
-    }
-  }
-  return best;
+
+/** Work teaches the town: every harvest adds to the settlement's craft. */
+export function gainXp(world: World, s: Settler, skill: Skill, _b: Building): void {
+  craftXp(world, s.owner, skill, BALANCE.xpPerHarvest, s.x, s.y);
 }
 
-/** Work teaches: XP grows the settler and their family's knowledge, and tiers transform the workplace. */
-export function gainXp(world: World, s: Settler, skill: Skill, b: Building): void {
-  const after = grantXp(world, s, skill, BALANCE.xpPerHarvest, b.id);
-  if (after > b.tier) b.tier = after;
-}
-
-/** Add XP to a settler (and their family's knowledge); announces tier-ups and unlocks. Returns the new tier. */
-export function grantXp(world: World, s: Settler, skill: Skill, amount: number, buildingId = 0): number {
-  const before = tierOf(s.skills[skill]);
-  const fam = world.families.get(s.familyId);
-  s.skills[skill] += amount;
-  const famBefore = fam ? tierOf(fam.skills[skill]) : 0;
-  if (fam) fam.skills[skill] = Math.max(fam.skills[skill], s.skills[skill]);
-  const after = tierOf(s.skills[skill]);
-  if (fam && tierOf(fam.skills[skill]) > famBefore) {
-    // A family's first Master of a craft makes the whole settlement famous.
-    if (after === 2) {
-      addRenown(world, s.owner, BALANCE.renown.master, 'masters', s.x, s.y);
-      world.emit({ type: 'firstMaster', owner: s.owner, settlerId: s.id, name: s.name, surname: fam.surname, skill });
-    }
-  }
-  if (after > before) {
-    world.emit({ type: 'tierUp', owner: s.owner, settlerId: s.id, buildingId, skill, tier: after });
-
-    const player = world.players[s.owner];
-    for (const t of unlocksFor(skill, after)) {
+/**
+ * Add to a settlement's craft. Each new tier upgrades every workplace of that craft at once,
+ * unlocks its buildings, and (at Master) makes the town famous. Returns the craft's tier.
+ */
+export function craftXp(world: World, owner: number, skill: Skill, amount: number, x = -1, y = -1): number {
+  const player = world.players[owner];
+  if (!player) return 0;
+  const before = tierOf(player.crafts[skill]);
+  player.crafts[skill] += amount;
+  const after = tierOf(player.crafts[skill]);
+  for (let tier = before + 1; tier <= after; tier++) {
+    world.emit({ type: 'craftUp', owner, skill, tier });
+    addRenown(world, owner, tier === 2 ? BALANCE.renown.master : BALANCE.renown.skilled, 'masters', x, y);
+    for (const b of world.buildings.values()) if (b.owner === owner && BUILDINGS[b.type].job?.skill === skill && b.tier < tier) b.tier = tier;
+    for (const t of unlocksFor(skill, tier)) {
       if (player.unlocked.includes(t)) continue;
       player.unlocked.push(t);
-      world.emit({ type: 'unlocked', owner: s.owner, buildingType: t });
+      world.emit({ type: 'unlocked', owner, buildingType: t });
     }
   }
   return after;
 }
 
+/** A settlement's tier in a craft (0 novice, 1 skilled, 2 masterly). */
+export const craftTier = (world: World, owner: number, skill: Skill) => tierOf(world.players[owner]?.crafts[skill] ?? 0);
+
 function workTicks(world: World, s: Settler, base: number, skill: Skill): number {
-  let t = (base * TRADES[skill].speed[tierOf(s.skills[skill])] * 100) / (100 + playerMod(world, s.owner, `speed.${skill}`) + legendBonus(world, s.owner, skill));
+  let t = (base * TRADES[skill].speed[craftTier(world, s.owner, skill)] * 100) / (100 + playerMod(world, s.owner, `speed.${skill}`) + legendBonus(world, s.owner, skill));
   const player = world.players[s.owner];
   if (player.hungry) t *= 1.4;
   // Deeds: a timber drive or a harvest home.
@@ -297,7 +281,7 @@ export function legendBonus(world: World, owner: number, skill: Skill): number {
 }
 
 function rollBonus(world: World, s: Settler, skill: Skill): number {
-  return world.rng.int(100) < TRADES[skill].bonus[tierOf(s.skills[skill])] ? 1 : 0;
+  return world.rng.int(100) < TRADES[skill].bonus[craftTier(world, s.owner, skill)] ? 1 : 0;
 }
 
 function anyBuilder(world: World, owner: number): boolean {

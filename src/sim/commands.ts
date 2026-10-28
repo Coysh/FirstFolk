@@ -4,7 +4,7 @@ import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
 import { owns, territoryBox } from './territory';
 import { chooseHouse } from './houses';
 import { resolveEvent } from './events';
-import { tradeTitle } from './trades';
+import { TRADES } from './trades';
 import { performDeed } from './deeds';
 import { workOwner } from './works';
 import { launchRaid } from './warfare';
@@ -26,7 +26,7 @@ export type Command =
 export function lockLabel(world: World, owner: number, type: BuildingType): string {
   const def = BUILDINGS[type];
   if (def.rank && world.players[owner].rank < def.rank) return RANK_NAMES[def.rank];
-  return def.requires ? tradeTitle(def.requires.skill, def.requires.tier) : '';
+  return def.requires ? `${TRADES[def.requires.skill].name} ${'★'.repeat(def.requires.tier)}` : '';
 }
 
 export interface PlaceCheck {
@@ -40,7 +40,7 @@ const MAX_SLOPE = 0.6;
 export function canPlace(world: World, owner: number, type: BuildingType, x: number, y: number): PlaceCheck {
   const def = BUILDINGS[type];
   if (!def.buildable) return { ok: false, reason: 'Cannot be built' };
-  if (!world.isUnlocked(owner, type)) return { ok: false, reason: `Needs a ${lockLabel(world, owner, type)}` };
+  if (!world.isUnlocked(owner, type)) return { ok: false, reason: `Needs ${lockLabel(world, owner, type)}` };
   if (def.great) {
     const holder = workOwner(world, type);
     if (holder >= 0) return { ok: false, reason: holder === owner ? 'Already yours' : 'Your rival raised it first' };

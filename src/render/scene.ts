@@ -210,8 +210,7 @@ export class GameRenderer {
       } else if (e.type === 'holdingChanged') {
         const p = this.sites.position(this.world, e.siteId);
         if (p && seen(Math.floor(p.x), Math.floor(p.z))) this.effects.emit('sparkle', p.x, p.y + 1.5, p.z, 50);
-      } else if (e.type === 'died' && e.legend && seen(e.x, e.y)) this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 1, e.y + 0.5, 40);
-      else if (e.type === 'razed' && seen(e.x, e.y)) {
+      } else if (e.type === 'razed' && seen(e.x, e.y)) {
         // A burned post: a burst of flame and smoke that smoulders for a while.
         const y = this.hf.at(e.x + 1, e.y + 1);
         this.effects.emit('ember', e.x + 1, y + 0.6, e.y + 1, 60);

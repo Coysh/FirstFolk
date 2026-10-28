@@ -2,7 +2,8 @@ import { BALANCE } from './balance';
 import { BUILDINGS, FOODS, SKILLS, type Good } from './defs';
 import { spawnFamily } from './population';
 import { isWinter, seasonOf } from './seasons';
-import { grantXp } from './settlers';
+import { craftXp } from './settlers';
+import { TRADES } from './trades';
 import { NO_OWNER, revealArea } from './territory';
 import type { World } from './world';
 
@@ -61,10 +62,6 @@ export function canAfford(world: World, owner: number, cost: EventOption['cost']
   return Object.entries(cost ?? {}).every(([k, n]) => (k === 'food' ? world.food(owner) : world.stored(owner, k as Good)) >= (n ?? 0));
 }
 
-function adults(world: World, owner: number) {
-  return [...world.settlers.values()].filter((s) => s.owner === owner && !s.child);
-}
-
 function loseFood(world: World, owner: number, n: number): number {
   const have = world.food(owner);
   const lost = Math.min(have, n);
@@ -106,7 +103,7 @@ export const VALLEY_EVENTS: ValleyEventDef[] = [
     when: (w) => seasonOf(w.tick) === 1 || seasonOf(w.tick) === 2,
     options: [
       { label: 'Preserve it', detail: '+20 food for the winter', apply: (w, o) => (give(w, o, 'berries', 20), 'Jars and smoke-racks fill the storehouse.') },
-      { label: 'Hold a harvest fair', detail: 'Every adult +40 XP in their best craft', apply: (w, o) => feast(w, o, 40) },
+      { label: 'Hold a harvest fair', detail: 'Every craft +120', apply: (w, o) => feast(w, o, 40) },
     ],
   },
   {
@@ -139,7 +136,7 @@ export const VALLEY_EVENTS: ValleyEventDef[] = [
     weight: 2,
     when: (w) => seasonOf(w.tick) === 1,
     options: [
-      { label: 'Hold the feast', detail: '15 food: every adult +60 XP', cost: { food: 15 }, apply: (w, o) => feast(w, o, 60) },
+      { label: 'Hold the feast', detail: '15 food: every craft +180', cost: { food: 15 }, apply: (w, o) => feast(w, o, 60) },
       { label: 'Not this year', detail: 'Save the food', apply: () => 'Grumbles, but the larder stays full.' },
     ],
   },
@@ -175,7 +172,7 @@ export const VALLEY_EVENTS: ValleyEventDef[] = [
     weight: 2,
     when: (w, o) => w.players[o].rank >= 1,
     options: [
-      { label: 'Host them', detail: '12 food: quarriers +100 stonework XP, +6 stone', cost: { food: 12 }, apply: (w, o) => teach(w, o, 'stonework', 100, 'stone', 6) },
+      { label: 'Host them', detail: '12 food: stonework +300, +6 stone', cost: { food: 12 }, apply: (w, o) => teach(w, o, 'stonework', 100, 'stone', 6) },
       { label: 'Decline', detail: 'They move on', apply: () => 'The masons tip their caps and walk on.' },
     ],
   },
@@ -206,23 +203,14 @@ export const VALLEY_EVENTS: ValleyEventDef[] = [
 ];
 
 function feast(world: World, owner: number, xp: number): string {
-  const folk = adults(world, owner);
-  for (const s of folk) {
-    const best = SKILLS.reduce((a, k) => (s.skills[k] > s.skills[a] ? k : a), SKILLS[0]);
-    grantXp(world, s, best, xp);
-  }
-  return `${folk.length} adults sing, swap tricks of the trade and learn.`;
+  for (const k of SKILLS) craftXp(world, owner, k, xp * 3);
+  return `Songs and tricks of the trade: every craft +${xp * 3}.`;
 }
 
 function teach(world: World, owner: number, skill: (typeof SKILLS)[number], xp: number, good: Good, n: number): string {
   give(world, owner, good, n);
-  let taught = 0;
-  for (const s of adults(world, owner))
-    if (s.skills[skill] > 0) {
-      grantXp(world, s, skill, xp);
-      taught++;
-    }
-  return `${taught} of your folk learn new tricks.`;
+  craftXp(world, owner, skill, xp * 3);
+  return `Your ${TRADES[skill].name.toLowerCase()} grows: +${xp * 3}.`;
 }
 
 function replant(world: World, owner: number, n: number): string {

@@ -3,8 +3,8 @@ import { BUILDINGS, DISCOVERIES, GOODS, SKILLS, type Good } from './defs';
 import { spawnFamily } from './population';
 import { addRenown, mootUnderway } from './renown';
 import { greatWorkDone } from './works';
-import { grantXp } from './settlers';
-import { TIER_XP } from './trades';
+import { craftXp } from './settlers';
+import { TRADES } from './trades';
 import { playerMod } from './houses';
 import { guardCounts } from './settlers';
 import type { Building, Discovery, World } from './world';
@@ -57,14 +57,6 @@ export interface InfluenceSource {
   p: number;
 }
 
-/** Masters living in a home lend it pull: great families hold the land around them. */
-function familyPull(world: World, b: Building): number {
-  if (!b.familyId) return 0;
-  let masters = 0;
-  for (const s of world.settlers.values()) if (s.familyId === b.familyId && SKILLS.some((k) => s.skills[k] >= TIER_XP[2])) masters++;
-  return Math.min(4, masters) * BALANCE.masterPull;
-}
-
 /** Everything that radiates influence right now. */
 export function influenceSources(world: World, skipId = 0): InfluenceSource[] {
   const out: InfluenceSource[] = [];
@@ -78,11 +70,6 @@ export function influenceSources(world: World, skipId = 0): InfluenceSource[] {
       const rank = world.players[b.owner]?.rank ?? 0;
       r += rank * 4;
       p += rank * 30;
-    }
-    if (def.housing && b.type !== 'wagon') {
-      const pull = familyPull(world, b);
-      p += pull;
-      if (pull) r += 2;
     }
     const slots = def.garrison ?? 0;
     if (slots && (world.players[b.owner]?.rank ?? 0) >= 1 && b.guarded < slots) {
@@ -383,38 +370,28 @@ function claimReward(world: World, site: Discovery, owner: number): string {
       return '+12 logs, +6 stone, +4 planks and +12 berries';
     }
     case 'ruins': {
-      // The carvings teach the craft your folk know least.
-      const skill = SKILLS.reduce((a, k) => (bestXp(world, owner, k) < bestXp(world, owner, a) ? k : a), SKILLS[world.rng.int(SKILLS.length)]);
-      let n = 0;
-      for (const s of world.settlers.values())
-        if (s.owner === owner && !s.child) {
-          grantXp(world, s, skill, BALANCE.ruinsXp);
-          n++;
-        }
-      return `${n} adults learn ${BALANCE.ruinsXp} XP of ${skill}`;
+      // The carvings teach the craft your town knows least.
+      const skill = weakestCraft(world, owner);
+      craftXp(world, owner, skill, BALANCE.ruinsXp, site.x, site.y);
+      return `Old carvings: ${TRADES[skill].name} +${BALANCE.ruinsXp}`;
     }
     case 'wanderers': {
-      const fam = spawnFamily(world, world.players[owner], null, site.x, site.y, 4, BALANCE.wandererSkill);
-      return `The ${fam.surname} family join you, skilled Journeymen. Build them a hut!`;
+      spawnFamily(world, world.players[owner], null, site.x, site.y, 4, BALANCE.wandererSkill);
+      return 'A family of four joins you, and teaches your town their craft. Build them a hut!';
     }
     case 'barrow': {
-      // The ancient's craft: whichever your folk know best, so the legend pays off at once.
-      const skill = SKILLS.reduce((a, k) => (bestXp(world, owner, k) > bestXp(world, owner, a) ? k : a), SKILLS[0]);
+      // The ancient's craft: whichever your town knows best, so the legend pays off at once.
+      const crafts = world.players[owner].crafts;
+      const skill = SKILLS.reduce((a, k) => (crafts[k] > crafts[a] ? k : a), SKILLS[0]);
       world.players[owner].legends.push({ name: 'The Ancient', surname: '', skill, tick: world.tick });
       addRenown(world, owner, BALANCE.renown.legend, 'legends', site.x, site.y);
-      return `An ancient Master’s legend is yours: ${skill} is faster for everyone`;
+      return `An ancient Master’s legend: ${TRADES[skill].name} is ${BALANCE.legendPct}% faster for good`;
     }
     case 'hermit': {
-      const fam = largestFamily(world, owner);
-      const home = fam && world.buildings.get(fam.homeId);
-      if (!fam) return 'The hermit wanders off.';
-      const skill = SKILLS[world.rng.int(SKILLS.length)];
-      const e = home ? world.entrance(home) : { x: site.x, y: site.y };
-      const s = world.addSettler(owner, fam.id, world.randomName(), BALANCE.elderYears + 0.1, e.x, e.y);
-      s.elder = true;
-      s.skills[skill] = TIER_XP[2];
-      fam.skills[skill] = Math.max(fam.skills[skill], TIER_XP[1]);
-      return `${s.name}, a Master of ${skill}, comes to live with the ${fam.surname} family and teach them`;
+      // An old Master comes down from the hills to teach the craft your town knows least.
+      const skill = weakestCraft(world, owner);
+      craftXp(world, owner, skill, BALANCE.hermitXp, site.x, site.y);
+      return `A hermit teaches your folk: ${TRADES[skill].name} +${BALANCE.hermitXp}`;
     }
     case 'hoard': {
       const store = nearestStore(world, owner, site.x, site.y);
@@ -437,18 +414,9 @@ function claimReward(world: World, site: Discovery, owner: number): string {
   }
 }
 
-function largestFamily(world: World, owner: number) {
-  const counts = new Map<number, number>();
-  for (const s of world.settlers.values()) if (s.owner === owner) counts.set(s.familyId, (counts.get(s.familyId) ?? 0) + 1);
-  let best = 0;
-  for (const [id, n] of counts) if (n > (counts.get(best) ?? 0) || (n === counts.get(best) && id < best)) best = id;
-  return world.families.get(best);
-}
-
-function bestXp(world: World, owner: number, skill: (typeof SKILLS)[number]): number {
-  let best = 0;
-  for (const s of world.settlers.values()) if (s.owner === owner) best = Math.max(best, s.skills[skill]);
-  return best;
+function weakestCraft(world: World, owner: number): (typeof SKILLS)[number] {
+  const crafts = world.players[owner].crafts;
+  return SKILLS.reduce((a, k) => (crafts[k] < crafts[a] ? k : a), SKILLS[0]);
 }
 
 function nearestStore(world: World, owner: number, x: number, y: number): Building | undefined {

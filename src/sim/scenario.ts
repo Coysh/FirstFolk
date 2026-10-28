@@ -90,10 +90,9 @@ export const objectives = {
   masters(n: number): Objective {
     return {
       id: `masters-${n}`,
-      label: n === 1 ? 'Train a Master of any craft' : `Have ${n} Masters`,
+      label: n === 1 ? 'Master a craft' : `Master ${n} crafts`,
       evaluate: (w, o) => {
-        let c = 0;
-        for (const s of w.settlers.values()) if (s.owner === o && SKILLS.some((k) => s.skills[k] >= TIER_XP[2])) c++;
+        const c = SKILLS.filter((k) => w.players[o].crafts[k] >= TIER_XP[2]).length;
         return { current: c, target: n };
       },
     };
@@ -135,9 +134,7 @@ export const objectives = {
       id: `trade-${skill}-${tier}`,
       label: `Train a ${tradeTitle(skill, tier)}`,
       evaluate: (w, o) => {
-        let best = 0;
-        for (const s of w.settlers.values()) if (s.owner === o) best = Math.max(best, s.skills[skill]);
-        return { current: Math.min(best, TIER_XP[tier]), target: TIER_XP[tier] };
+        return { current: Math.min(w.players[o].crafts[skill], TIER_XP[tier]), target: TIER_XP[tier] };
       },
     };
   },
@@ -165,7 +162,7 @@ export const LANDFALL: Scenario = {
     with_(objectives.deeds(1), 'Hamlet', 'Your Great House (above the build bar) lends a power: click it, or press Z. Its card says what it does.'),
     with_(objectives.landmarks(1), 'Hamlet', 'Landmarks pay renown every minute you hold them, while a manned post (or your hall) stands within 9 tiles.'),
     with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: planks build Watchtowers.'),
-    with_(objectives.renown(250), 'Hamlet', 'Renown: watched landmarks, land, raids, discoveries, Masters and Market Day all add to it.'),
+    with_(objectives.renown(250), 'Hamlet', 'Renown: watched landmarks, land, raids, discoveries, crafts and Market Day all add to it.'),
     with_(objectives.building('watchtower'), 'Village', 'Watchtowers push hard: build them at the border to take land from your rival.'),
     with_(objectives.renown(650), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
     with_(objectives.renown(1400), 'Town', 'First to 1,400 renown wins. Landmarks pay only while a manned post watches them, and from 25:00 the Moot doubles them: take them back!'),

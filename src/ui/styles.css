@@ -2786,3 +2786,55 @@ button.danger.armed {
     min-width: 70vw;
   }
 }
+
+/* The town's crafts in the top bar. */
+.crafts {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  background: rgba(40, 26, 14, 0.62);
+  border: 1.5px solid var(--wood-light);
+  align-items: center;
+}
+.craft {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+.craft-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.craft-icon span {
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  font-size: 13px;
+}
+.craft-stars {
+  font-size: 8px;
+  color: var(--gold);
+  letter-spacing: -1px;
+}
+.craft.t2 .craft-icon span {
+  background: linear-gradient(#fff3c4, #f2c14e);
+}
+@media (max-width: 720px) {
+  .craft-icon {
+    width: 24px;
+    height: 24px;
+  }
+  .craft-icon span {
+    width: 19px;
+    height: 19px;
+    font-size: 11px;
+  }
+}

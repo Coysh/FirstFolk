@@ -124,7 +124,6 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       if (e.type === 'buildingComplete') timeline.push(`${t} built ${e.buildingType}`);
       else if (e.type === 'familyApproaching') timeline.push(`${t} the ${e.surname} family (${e.size}) arrives`);
       else if (e.type === 'objectiveComplete') timeline.push(`${t} ✓ ${e.label}`);
-      else if (e.type === 'cameOfAge') timeline.push(`${t} ${e.name} ${e.surname} comes of age`);
       else if (e.type === 'discovered' && e.owner === 0) timeline.push(`${t} 👁 spotted ${e.kind}`);
       else if (e.type === 'claimed' && e.owner === 0) timeline.push(`${t} ★ claimed ${e.kind}: ${e.text}`);
       else if (e.type === 'rumour' && e.owner === 0) timeline.push(`${t} 🗣 rumour of ${e.kind} to the ${e.dir}`);
@@ -150,7 +149,6 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       } else if (e.type === 'renown' && e.owner === 0 && e.amount >= 10) timeline.push(`${t}    +${e.amount} renown (${e.source})`);
       else if (e.type === 'deed' && e.owner === 0) timeline.push(`${t} ✦ deed ${e.deed}: ${e.text}`);
       else if (e.type === 'deed' && e.owner === 1) timeline.push(`${t} ✗ rival deed ${e.deed}`);
-      else if (e.type === 'died' && e.owner === 0) timeline.push(`${t} ✝ ${e.name} ${e.surname} dies aged ${e.age}${e.legend ? ` — a legend of ${e.legend}` : ''}`);
       else if (e.type === 'sold' && e.owner === 0) timeline.push(`${t} ⚖ sold ${e.n} ${e.good} for ${e.renown}`);
       else if (e.type === 'workBegun') timeline.push(`${t} ${e.owner === 0 ? '🏛 began' : '✗ rival began'} ${e.buildingType}`);
       else if (e.type === 'workLost') timeline.push(`${t} ✗ lost the race for ${e.buildingType}`);
@@ -162,9 +160,9 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       else if (e.type === 'chapterComplete') {
         chapters[e.chapter] = world.tick / TICK_HZ;
         timeline.push(`${t} ★ chapter ${e.chapter} complete`);
-      } else if (e.type === 'tierUp') {
+      } else if (e.type === 'craftUp' && e.owner === 0) {
         if (firstJourneyman < 0) firstJourneyman = world.tick / TICK_HZ;
-        timeline.push(`${t} ⬆ ${world.settlers.get(e.settlerId)?.name} reaches tier ${e.tier} in ${e.skill}`);
+        timeline.push(`${t} ⬆ ${e.skill} reaches tier ${e.tier}`);
       } else if (e.type === 'unlocked') timeline.push(`${t} 🔓 ${e.buildingType} unlocked`);
       else if (e.type === 'victory') {
         timeline.push(`${t} ★ ${e.scenario} won by ${e.winner === 0 ? 'the player' : 'the RIVAL'}`);

@@ -427,6 +427,30 @@ The evidence and the fixes:
 | Text-heavy Great Houses | Cards carried three paragraphs. | A two-word bonus, a strategy tag, and the power with four words. The bar shows the power's name, a ring and a key. The details are in tooltips. |
 | Uninviting New Game | 5 paragraphs, 3 choice grids and a seed box. | Picture first: five painted origin cards (generated with gpt-image-2), one line about the chosen house, and three chips (difficulty, rival, valley with omen icons) above a big **Begin**. |
 
+**v0.18 the town is the hero.** The player didn't care about individual settlers, family trees or personal skills at 100+ folk, and wanted to build, expand, optimise and compete. Everything personal was cut unless it changed a decision:
+- **Crafts belong to the town** (`craftXp`, `player.crafts`).
+  - Woodcraft, stonework and husbandry are three shared bars, filled by every harvest, every plank and every stone.
+  - Each tier, *skilled* (250) and *masterly* (3,500), upgrades **every** workplace of that craft at once: model, crew size, speed and bonus output. That's a satisfying town-wide moment.
+  - It also unlocks the craft's building (Sawpit, Storehouse, Fisher) and pays renown (+15, then +50).
+  - The top bar shows the three crafts as icons with stars and a progress ring.
+- **Gone:**
+  - per-settler skills;
+  - family knowledge and inheritance;
+  - elders, old age and deaths (folk grow up and stay);
+  - legends from deaths;
+  - family prestige and pull;
+  - surnames in the UI;
+  - the settler skill bars and the family panel.
+- **The settler panel** is now a name and what they're doing.
+- **Kept, because they matter:** households, which are how homes fill and births happen (silent), and the Barrow's ancient legend (+10% to your best craft).
+- **Discoveries and events now teach the town:**
+  - Ruins: +400 to your weakest craft.
+  - Hermit: +500.
+  - Wanderers: +200.
+  - The feast and the masons: craft XP.
+  - The Healing Spring is a plain landmark.
+- **Measured** (60 real duels): median 31–32 min, 2.4 lead changes, **30% comebacks**, 3.7 landmark flips a game (up from 2.6), no games ending on the clock, idle 5–8%, longest beat gap about 72 s. Craft tiers land at 1:44, 1:50 and 3:28 (skilled), and from 9:30 (masterly).
+
 **How `ui/news.ts` sorts the news:**
 - **Banners:** rank-ups, a raid on you, the star-fall, the Moot, your Great Work, and the opening goal. They show one at a time.
 - **Short toasts:** landmarks won or lost, raids, contests, house seats, hunger, new buildings.
@@ -1267,4 +1291,22 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - **Measured:** 9.0 items a minute before, about 3 a minute after.
 - **Great Houses:** a `bonus` and `tag` per house, cards cut to icon, name, tag, bonus and power, and a minimal bar.
 - **New Game:** full-screen with five illustrated origin cards (`public/assets/ui/origin-*.jpg`), a one-line house summary, chips for difficulty, rival and valley, and Begin (Enter starts). The title tagline no longer promises family lineage.
+
+### v0.18.0 The town is the hero: town crafts, no ageing, no family bookkeeping (2026-10-28)
+- **Built:**
+  - town crafts (`player.crafts`, `craftXp`, `craftTier`, the `craftUp` event) that upgrade every workplace together;
+  - the crafts strip in the top bar;
+  - craft lock labels ("Woodcraft ★");
+  - worker gear from the town's craft.
+- **Removed:**
+  - `Settler.skills`, `Settler.elder`, `Family.skills`;
+  - inheritance, elders, deaths and lineage legends (`die`, `lifespan`);
+  - family pull on influence;
+  - the `tierUp`, `firstMaster`, `elder`, `died` and `cameOfAge` events;
+  - the settler skill bars and family panel.
+- **Rebalanced:**
+  - craft tiers at 250 and 3,500;
+  - craft renown +15 and +50;
+  - ruins, hermit, wanderers and events re-rewarded.
+- **Saves:** version 18.
 

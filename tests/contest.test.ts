@@ -6,9 +6,8 @@ import { defenceOf, raidStrength } from '../src/sim/warfare';
 import { BUILDINGS, DISCOVERIES } from '../src/sim/defs';
 import { FAIR_LOT, FAIR_VALUE, fairPrice } from '../src/sim/market';
 import { recomputeTerritory } from '../src/sim/territory';
-import { TIER_XP } from '../src/sim/trades';
 import { evaluateScenario, LANDFALL } from '../src/sim/scenario';
-import { World, lifespan } from '../src/sim/world';
+import { World } from '../src/sim/world';
 import { newWorld, wagon } from './helpers';
 
 const tiles = (w: World, o: number) => w.territory.reduce((n, t) => n + (t === o ? 1 : 0), 0);
@@ -220,23 +219,6 @@ describe('Market Day', () => {
     w.enqueue({ type: 'sell', owner: 0, good: 'logs' });
     w.step();
     expect(w.stored(0, 'logs')).toBe(100);
-  });
-});
-
-describe('lineage', () => {
-  it('elders stop working and teach; a Master who dies becomes a legend', () => {
-    const w = newWorld();
-    const s = [...w.settlers.values()].find((x) => x.owner === 0 && !x.child)!;
-    s.skills.stonework = TIER_XP[2];
-    s.age = Math.round(BALANCE.elderYears * BALANCE.yearTicks) - 5;
-    w.run(20);
-    expect(s.elder).toBe(true);
-    expect(s.job.kind).toBe('idle');
-    s.age = lifespan(s);
-    w.run(20);
-    expect(w.settlers.has(s.id)).toBe(false);
-    expect(w.players[0].legends.map((l) => l.skill)).toContain('stonework');
-    expect(w.players[0].renownBy.legends).toBe(BALANCE.renown.legend);
   });
 });
 

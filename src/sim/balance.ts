@@ -45,8 +45,10 @@ export const BALANCE = {
   /** Fog lifts this far around every settler. */
   settlerSight: 3,
   /** Discovery rewards. */
-  ruinsXp: 120,
-  wandererSkill: 220,
+  ruinsXp: 400,
+  hermitXp: 500,
+  /** Craft a wanderer family teaches the town when it joins. */
+  wandererSkill: 200,
   /** A challenger needs this much more influence than the holder to take a tile. */
   influenceMargin: 10,
   /** Each frontier tower a player already has makes the next this much (percent) dearer. */
@@ -88,8 +90,6 @@ export const BALANCE = {
   watchRange: 9,
   /** A landmark a manned Stockade watches pays this much more a minute. */
   tendedBonus: 2,
-  /** Extra home influence per Master in the household (up to four). */
-  masterPull: 15,
   /** Losing at least this many tiles at once is news. */
   landLostNotice: 12,
   /**
@@ -102,8 +102,9 @@ export const BALANCE = {
     seized: 10,
     seizedMax: 30,
     objective: 5,
-    /** A family's first Master in a craft. */
-    master: 10,
+    /** The town's craft becoming skilled, and masterly (three crafts: up to 195 a game). */
+    skilled: 15,
+    master: 50,
     legend: 15,
     festival: 5,
     hoard: 20,
@@ -147,17 +148,10 @@ export const BALANCE = {
   eventGap: [secs(80), secs(140)] as [number, number],
   eventTimeout: secs(100),
 
-  /** Lineage: settlers become elders (stop working, teach the family), then die somewhere past `lifespanYears`. */
-  elderYears: 6,
-  lifespanYears: 7.4,
-  elderTeachEvery: secs(10),
-  elderTeachXp: 4,
-  /** Each legend (a Master who died) makes their craft this much (percent) faster, up to `legendCap` legends. */
+  /** Each legend (an ancient's barrow) makes its craft this much (percent) faster, up to `legendCap` legends. */
   legendPct: 10,
   legendCap: 3,
 
-  /** Share of the family's best skill XP a child inherits on coming of age. */
-  inheritPct: 40,
   xpPerHarvest: 10,
 
   startStock: { logs: 14, stone: 6, berries: 16 } as Record<string, number>,

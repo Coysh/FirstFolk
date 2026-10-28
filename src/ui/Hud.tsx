@@ -8,12 +8,12 @@ import { HOUSES, HOUSE_TIMEOUT } from '../sim/houses';
 import { BALANCE, TICK_HZ, secs } from '../sim/balance';
 import { canAfford, eventDef } from '../sim/events';
 import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
-import type { Family, World } from '../sim/world';
+import type { World } from '../sim/world';
 import { CREST_COLORS, plural } from '../sim/population';
-import { TIER_NAMES, TRADES, tierOf, tierProgress, tradeTitle } from '../sim/trades';
+import { TRADES, tierOf, tierProgress } from '../sim/trades';
 import { settings, toggleMute } from '../settings';
 import type { Shell } from '../shell';
-import { ageYears, describeSettler, formatTime } from './describe';
+import { describeSettler, formatTime } from './describe';
 import { HowTo, SettingsPanel } from './Screens';
 import { DEED_KEYS, HOTKEYS } from '../input/input';
 import { lockLabel } from '../sim/commands';
@@ -97,6 +97,7 @@ function TopBar({ game }: { game: Game }) {
           <b>{pop}</b>
           <small>/{housing}</small>
         </span>
+        <Crafts w={w} />
         {w.players[PLAYER].rank >= 1 && (
           <button
             class={`auto-homes ${w.players[PLAYER].autoHomes ? 'on' : ''}`}
@@ -215,27 +216,6 @@ function Goals({ game }: { game: Game }) {
         current && <div class="goals-next">➤ {current.label}</div>
       )}
     </section>
-  );
-}
-
-/** A family's craft, the house banner it flies (if any), and where the household came from. */
-function FamilyLine({ w, fam }: { w: World; fam: Family }) {
-  const best = SKILLS.reduce((a, k) => (fam.skills[k] > fam.skills[a] ? k : a), SKILLS[0]);
-  const craft = fam.skills[best] > 0 ? TRADES[best].titles[tierOf(fam.skills[best])] + 's' : 'folk';
-  const parents = fam.parents.map((id) => w.families.get(id)?.surname).filter(Boolean);
-  const seat = w.players[fam.owner]?.seats.find((s) => s.familyId === fam.id);
-  return (
-    <div class="family-line">
-      <p class="fam-title">
-        The {plural(fam.surname)}, <em>{craft}</em>
-      </p>
-      {seat && (
-        <p class="muted small fam-deed">
-          {HOUSES[seat.house].icon} They fly the banner of the <b>{HOUSES[seat.house].name}</b>.
-        </p>
-      )}
-      {parents.length === 2 && <p class="muted small">A household joining the {parents[0]} and {parents[1]} lines.</p>}
-    </div>
   );
 }
 
@@ -763,7 +743,7 @@ function BuildBar({ game }: { game: Game }) {
         const begun = def.great && w.countBuildings(PLAYER, t, true) > 0;
         const affordable = w.canAffordBuilding(PLAYER, t);
         const lock = unlocked ? '' : lockLabel(w, PLAYER, t);
-        const reqText = `Needs a ${lock}`;
+        const reqText = `Needs ${lock}`;
         // Towers: how many the settlement holds against what its rank allows.
         const capped = def.frontier && w.frontierCount(PLAYER) >= w.frontierCap(PLAYER);
         return (
@@ -779,7 +759,7 @@ function BuildBar({ game }: { game: Game }) {
             <img class="card-icon" src={icon(t)} alt="" />
             <span class="card-name">{def.name.replace(/^The /, '').replace(/^Mustering /, 'Muster ')}</span>
             <span class="card-cost">
-              {holder === PLAYER ? <span class="lock">✓ Yours</span> : holder >= 0 ? <span class="lock">✗ Rival’s</span> : begun ? <span class="lock">Under way</span> : unlocked ? costChips(t, w.buildCost(PLAYER, t)) : <span class="lock">🔒 {lock.replace(/^Journeyman /, '')}</span>}
+              {holder === PLAYER ? <span class="lock">✓ Yours</span> : holder >= 0 ? <span class="lock">✗ Rival’s</span> : begun ? <span class="lock">Under way</span> : unlocked ? costChips(t, w.buildCost(PLAYER, t)) : <span class="lock">🔒 {lock}</span>}
             </span>
           </button>
         );
@@ -826,23 +806,24 @@ function claimText(c: ClaimPreview): string {
   return `+${c.gained} land${c.fromRival ? ` (${c.fromRival} from your rival)` : ''}${c.sites.length ? ` · takes ${c.sites.join(', ')}!` : ''}`;
 }
 
-function SkillBars({ skills }: { skills: Record<string, number> }) {
+/** The town's three crafts: an icon each, stars for the tier, and a fill towards the next. */
+function Crafts({ w }: { w: World }) {
+  const crafts = w.players[PLAYER].crafts;
   return (
-    <div class="skills">
+    <span class="crafts">
       {SKILLS.map((k) => {
-        const xp = skills[k];
+        const xp = crafts[k];
         const t = tierOf(xp);
         return (
-          <div class="skill" key={k} title={`${xp} XP`}>
-            <span class="sk-name">{TRADES[k].name}</span>
-            <span class="sk-tier">{xp > 0 ? tradeTitle(k, t) : '—'}</span>
-            <div class="sk-bar">
-              <div style={{ width: `${Math.round(tierProgress(xp) * 100)}%` }} class={`t${t}`} />
-            </div>
-          </div>
+          <span class={`craft t${t}`} key={k} title={`${TRADES[k].name}: ${['novice', 'skilled', 'masterly'][t]}${t < 2 ? ` (${Math.round(tierProgress(xp) * 100)}% to ${['skilled', 'masterly'][t]}: ${TRADES[k].perks[t + 1]})` : ''}. All work in this craft fills it.`}>
+            <span class="craft-icon" style={{ background: `conic-gradient(var(--gold) ${tierProgress(xp) * 360}deg, rgba(0,0,0,0.3) 0)` }}>
+              <span>{TRADES[k].icon}</span>
+            </span>
+            <span class="craft-stars">{'★'.repeat(t)}{'☆'.repeat(2 - t)}</span>
+          </span>
         );
       })}
-    </div>
+    </span>
   );
 }
 
@@ -856,24 +837,13 @@ function InfoPanel({ game }: { game: Game }) {
   if (sel.kind === 'settler') {
     const s = w.settlers.get(sel.id);
     if (!s) return null;
-    const fam = w.families.get(s.familyId);
     return (
       <aside class="info panel">
         <button class="close" onClick={() => game.cancel()} aria-label="Close">
           ✕
         </button>
-        <h3>
-          <span class="crest" style={{ background: fam ? hex(CREST_COLORS[fam.color]) : '#888' }} />
-          {s.name} {fam?.surname}
-        </h3>
-        <p class="sub">
-          {s.child ? 'Child' : s.elder ? 'Elder (teaches the family)' : 'Adult'} · age {ageYears(s)}
-        </p>
-        <p class="doing">{describeSettler(w, s)}</p>
-        {fam && <FamilyLine w={w} fam={fam} />}
-        {s.spouseId > 0 && w.settlers.get(s.spouseId) && <p class="muted small">Married to {w.settlers.get(s.spouseId)!.name}</p>}
-        {!s.child && <SkillBars skills={s.skills} />}
-        {s.child && fam && <p class="muted small">Will inherit {BALANCE.inheritPct}% of the {fam.surname} family’s craft on coming of age.</p>}
+        <h3>{s.name}</h3>
+        <p class="doing">{s.child ? 'A child, growing up' : describeSettler(w, s)}</p>
       </aside>
     );
   }
@@ -921,21 +891,14 @@ function InfoPanel({ game }: { game: Game }) {
           {worker ? (
             <>
               <p>
-                Worker: <strong>{worker.name} {w.families.get(worker.familyId)?.surname ?? ''}</strong>
-                <span class="muted small">
-                  {' '}
-                  · crew {[...w.settlers.values()].filter((o) => o.job.kind === 'work' && o.job.buildingId === b.id).length}/{workSlots(b)}
-                </span>
+                Crew <strong>{[...w.settlers.values()].filter((o) => o.job.kind === 'work' && o.job.buildingId === b.id).length}/{workSlots(b)}</strong>
+                {trade && (
+                  <span class="muted small">
+                    {' '}
+                    · {trade.icon} {trade.name} {'★'.repeat(tierOf(w.players[b.owner].crafts[trade.skill]))}
+                  </span>
+                )}
               </p>
-              {trade && (
-                <div class="skill">
-                  <span class="sk-name">{trade.name}</span>
-                  <span class="sk-tier">{TIER_NAMES[tierOf(worker.skills[trade.skill])]}</span>
-                  <div class="sk-bar">
-                    <div class={`t${tierOf(worker.skills[trade.skill])}`} style={{ width: `${Math.round(tierProgress(worker.skills[trade.skill]) * 100)}%` }} />
-                  </div>
-                </div>
-              )}
             </>
           ) : (
             <p class="muted">Waiting for a free adult</p>
@@ -1005,7 +968,6 @@ function InfoPanel({ game }: { game: Game }) {
           )}
         </p>
       )}
-      {fam && <SkillBars skills={fam.skills} />}
       {b.type !== 'wagon' && (
         <button
           class={`danger ${confirm === b.id ? 'armed' : ''}`}
@@ -1053,7 +1015,7 @@ const SOURCE_NAMES: Record<string, string> = {
   landmarks: 'Landmarks',
   land: 'Land',
   discoveries: 'Discoveries',
-  masters: 'Masters',
+  masters: 'Crafts',
   goals: 'Goals',
   events: 'Events',
   deeds: 'Deeds',

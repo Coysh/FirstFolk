@@ -89,7 +89,7 @@ export class OpeningBot {
     const tower: BuildingType = world.isUnlocked(this.owner, 'watchtower') && this.affordable(world, 'watchtower') ? 'watchtower' : 'lookout';
     const towerSites = [...world.buildings.values()].filter((b) => b.owner === this.owner && BUILDINGS[b.type].claim && !b.done).length;
     const work = this.nextWork(world);
-    const idle = [...world.settlers.values()].filter((s) => s.owner === this.owner && !s.child && !s.elder && s.job.kind === 'idle').length;
+    const idle = [...world.settlers.values()].filter((s) => s.owner === this.owner && !s.child && s.job.kind === 'idle').length;
     const idleJob: BuildingType = (['woodcutter', 'quarry', 'fisher', 'forager'] as BuildingType[])[(world.tick / this.thinkEvery) % 4 | 0];
     const want: NodeKind | undefined = hungry ? 'bush' : starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined;
     const st = STYLES[this.style];

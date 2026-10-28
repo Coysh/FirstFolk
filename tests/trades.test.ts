@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { canPlace } from '../src/sim/commands';
 import { TIER_XP, tierOf } from '../src/sim/trades';
+import { craftXp } from '../src/sim/settlers';
+import { BALANCE } from '../src/sim/balance';
 import { newWorld, place, runSeconds, wagon } from './helpers';
 
 describe('trades and specialisation', () => {
@@ -9,25 +11,25 @@ describe('trades and specialisation', () => {
     const wg = wagon(w);
     const check = canPlace(w, 0, 'sawpit', wg.x + 3, wg.y - 2);
     expect(check.ok).toBe(false);
-    expect(check.reason).toMatch(/Journeyman Carpenter/);
+    expect(check.reason).toMatch(/Woodcraft ★/);
   });
 
-  it('woodcutting earns XP, transforms the workplace and unlocks the Sawpit', () => {
+  it('woodcutting fills the town’s woodcraft, which upgrades every woodcutter at once and unlocks the Sawpit', () => {
     const w = newWorld();
     const wc = place(w, 'woodcutter');
+    const wc2 = place(w, 'woodcutter');
     runSeconds(w, 20);
-    const worker = w.settlers.get(wc.workerId)!;
-    worker.skills.woodcraft = TIER_XP[1] - 10; // one more log to go
+    w.players[0].crafts.woodcraft = TIER_XP[1] - 10; // one more log to go
     const events: string[] = [];
     for (let i = 0; i < 600 && wc.tier === 0; i++) {
       w.step();
       for (const e of w.drainEvents()) events.push(e.type);
     }
     expect(wc.tier).toBe(1);
-    expect(events).toContain('tierUp');
+    expect(wc2.tier).toBe(1);
+    expect(events).toContain('craftUp');
     expect(events).toContain('unlocked');
     expect(w.isUnlocked(0, 'sawpit')).toBe(true);
-    expect(w.families.get(worker.familyId)!.skills.woodcraft).toBeGreaterThanOrEqual(TIER_XP[1]);
   });
 
   it('a Sawpit turns logs into planks but leaves a reserve for building', () => {
@@ -47,16 +49,14 @@ describe('trades and specialisation', () => {
     expect(pit.status).toMatch(/Saving logs|Waiting|full/);
   });
 
-  it('children inherit part of the family knowledge when they come of age', () => {
+  it('a town Master of a craft is famous, and folk never grow old', () => {
     const w = newWorld();
-    const child = [...w.settlers.values()].find((s) => s.child)!;
-    const fam = w.families.get(child.familyId)!;
-    fam.skills.stonework = 1000;
-    child.age = Math.round(1.5 * 3000) - 20;
-    runSeconds(w, 3);
-    expect(child.child).toBe(false);
-    expect(child.skills.stonework).toBe(400);
-    expect(tierOf(child.skills.stonework)).toBe(1);
+    craftXp(w, 0, 'stonework', TIER_XP[2]);
+    expect(tierOf(w.players[0].crafts.stonework)).toBe(2);
+    expect(w.players[0].renownBy.masters).toBe(BALANCE.renown.skilled + BALANCE.renown.master);
+    const pop = w.population(0);
+    runSeconds(w, 600);
+    expect(w.population(0)).toBeGreaterThanOrEqual(pop);
   });
 
   it('a full workplace with no free carriers is emptied by its own worker', () => {

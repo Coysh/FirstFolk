@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SKILLS, type Good, type Skill, type Tool } from '../sim/defs';
+import { BUILDINGS, type Good, type Skill, type Tool } from '../sim/defs';
 import { tierOf } from '../sim/trades';
 import { CREST_COLORS } from '../sim/population';
 import { hash2 } from '../sim/rng';
@@ -156,7 +156,7 @@ export class SettlersView {
         const id = -(band.id * 16 + k);
         let s = this.reavers.get(id);
         if (!s) {
-          s = { id, owner: -1, familyId: 0, name: '', child: false, age: 0, x: band.x, y: band.y, next: -1, progress: 0, stepLen: 1000, path: [], job: { kind: 'guard', buildingId: 0, phase: 'away' }, busy: 0, carry: null, tool: 'spear', anim: 'walk', faceTile: -1, skills: { woodcraft: 0, stonework: 0, husbandry: 0 }, spouseId: 0, elder: false };
+          s = { id, owner: -1, familyId: 0, name: '', child: false, age: 0, x: band.x, y: band.y, next: -1, progress: 0, stepLen: 1000, path: [], job: { kind: 'guard', buildingId: 0, phase: 'away' }, busy: 0, carry: null, tool: 'spear', anim: 'walk', faceTile: -1, spouseId: 0 };
           this.reavers.set(id, s);
           this.reaverBand.set(id, band.id);
         }
@@ -357,10 +357,10 @@ export class SettlersView {
       }
       if (moving) this.onStep?.(x, z, dt * (s.carry ? 2.2 : 1.4));
 
-      // Trade gear from the settler's best skill.
-      let bestSkill: Skill = 'woodcraft';
-      for (const k of SKILLS) if (s.skills[k] > s.skills[bestSkill]) bestSkill = k;
-      const tier = tierOf(s.skills[bestSkill]);
+      // Trade gear from the town's craft at their workplace: everyone rises together.
+      const work = s.job.kind === 'work' ? world.buildings.get(s.job.buildingId) : undefined;
+      const bestSkill: Skill = (work && BUILDINGS[work.type].job?.skill) || 'woodcraft';
+      const tier = work && s.owner >= 0 ? tierOf(world.players[s.owner].crafts[bestSkill]) : 0;
       if (tier >= 1 && !s.child) {
         this.apron.setMatrixAt(nApron, this.base);
         this.apron.setColorAt(nApron++, this.col.setHex(APRON[bestSkill]));
