@@ -8,6 +8,8 @@ export const C = {
   lightWood: 0xc79a62,
   thatch: 0xdcb45a,
   thatchDark: 0xb98f3a,
+  thatchLight: 0xe9c870,
+  glow: 0xffe3a0,
   moss: 0x7d9a48,
   stone: 0xa7a196,
   stoneDark: 0x857f74,
@@ -41,3 +43,4 @@ export const TERRAIN_COLORS: Record<number, number> = {
 
 export const TUNICS = [0x7b5e3b, 0x5d6e3a, 0x8c4b3a, 0x4f5f7a, 0x9a7b4f, 0x6f5a6b, 0x8a6d3b, 0x56704f];
 export const SKINS = [0xf2d0a9, 0xe5b98f, 0xc98e63, 0xa86f48, 0xf6dcc0];
+export const HAIRS = [0x3a2a1c, 0x6b4426, 0xa8742f, 0xd8b45a, 0x8a3a22, 0x2a2622, 0xb9b2a4];

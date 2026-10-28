@@ -1,6 +1,10 @@
 /**
  * Headless visual check. Needs the dev server running (npm run dev).
  *   node tools/screenshot.mjs --screen title|game [--seed 3] [--seconds 240] [--mobile] [--zoom 30] [--out file.png]
+ *     [--art classic]       code-built models instead of the Blender ones (for A/B)
+ *     [--focus hut]         centre the camera on the first building of that type (and list what exists)
+ *     [--yaw 0.6]           camera yaw, radians
+ *     [--perf]              print draw calls, triangles and mean frame time
  * In game mode it starts a New Game, fast-forwards the simulation with the scripted bot,
  * then lets the renderer settle before capturing.
  */
@@ -13,7 +17,11 @@ const opt = (n, d) => {
   const i = args.indexOf(`--${n}`);
   return i >= 0 ? args[i + 1] : d;
 };
-const url = opt('url', 'http://localhost:5173');
+const art = opt('art', '');
+const url = opt('url', 'http://localhost:5173') + (art ? `/?art=${art}` : '');
+const focus = opt('focus', '');
+const yaw = opt('yaw', '');
+const perf = args.includes('--perf');
 const screen = opt('screen', 'game');
 const seed = Number(opt('seed', '3'));
 const seconds = Number(opt('seconds', '0'));
@@ -54,6 +62,31 @@ if (screen === 'title') {
   if (zoom) {
     await page.evaluate((z) => (window.firstfolk.shell.game.view.rig.goalDistance = Number(z)), zoom);
     await page.waitForTimeout(1500);
+  }
+  if (yaw) {
+    await page.evaluate((y) => { const r = window.firstfolk.shell.game.view.rig; r.yaw = r.goalYaw = Number(y); }, yaw);
+  }
+  if (focus) {
+    const found = await page.evaluate((type) => {
+      const w = window.firstfolk.shell.game.world;
+      const all = [...w.buildings.values()].filter((b) => b.owner === 0);
+      const b = all.find((x) => x.type === type);
+      if (b) window.firstfolk.shell.game.view.rig.lookAt(b.x + 1, b.y + 1, true);
+      return { have: [...new Set(all.map((x) => x.type + (x.tier ? ':' + x.tier : '')))], found: !!b };
+    }, focus);
+    console.log('buildings:', found.have.join(', '), found.found ? '' : `(no ${focus}!)`);
+    await page.waitForTimeout(1500);
+  }
+  if (perf) {
+    const r = await page.evaluate(async () => {
+      const g = window.firstfolk.shell.game;
+      const t0 = performance.now();
+      let frames = 0;
+      await new Promise((res) => { const f = () => (performance.now() - t0 > 4000 ? res() : (frames++, requestAnimationFrame(f))); f(); });
+      const info = g.view.renderer.info.render;
+      return { calls: info.calls, triangles: info.triangles, settlers: g.world.settlers.size, buildings: g.world.buildings.size, ms: (performance.now() - t0) / frames };
+    });
+    console.log('perf:', JSON.stringify(r));
   }
 }
 mkdirSync(dirname(out), { recursive: true });

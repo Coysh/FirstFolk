@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { BuildingType, DiscoveryKind, Good } from '../sim/defs';
+import { artGeometry } from './art';
 import { ModelBuilder, box, cone, cyl, dodeca, gableRoof, ico, sphere } from './modelBuilder';
 import { C } from './palette';
 
@@ -76,6 +77,12 @@ function logPile(b: ModelBuilder, x: number, z: number, n = 3) {
 }
 
 export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {}): THREE.BufferGeometry {
+  // Blender-built model first: trade tiers are `<type>_<tier>` (a higher tier than modelled reuses the
+  // best one), and a single model is just `<type>`. Anything else falls through to the code model below.
+  let art: THREE.BufferGeometry | null = null;
+  for (let t = opts.tier ?? 0; t >= 0 && !art; t--) art = artGeometry(`${type}_${t}`, opts.crest);
+  art ??= artGeometry(type, opts.crest);
+  if (art) return art;
   const b = new ModelBuilder();
   switch (type) {
     case 'wagon': {

@@ -475,6 +475,66 @@ The evidence and the fixes:
 
 ---
 
+## 0e. The Storybook Art Pass (v0.20+): models made in Blender
+
+Every model used to be built in code from boxes, cones and cylinders. They were coherent but plain: huts were one yellow cone each, workshops were boxes with a flat lid, and settlers were thin pegs whose job and family were hard to read. The art pass moves the models into **Blender (via the Blender MCP)**, in the same storybook early-medieval style, and keeps everything that makes the renderer cheap.
+
+### What changed on screen
+| Thing | Before | Now |
+|---|---|---|
+| **Family hut** | A cone on a drum | A wattle round-house under a **beehive of layered thatch** (rings that flare over each other, a drooping fringe, a chimney pot that smokes when a family lives there), shuttered windows, a log pile, a bean-and-cabbage bed, a water butt, and a **crest pennant that flutters** |
+| **Settler** | Peg figure, cone hat | Chunky **gnome-like folk**: flared tunic, belt, big head with a nose and eyes, hair, and a **pointed hood in the family colour** whose tip trails behind. They nod with each axe blow, bob and sway when walking |
+| **Woodcutter** (3 tiers) | A box with a lid | A half-timbered cottage with a kingpost gable, a wood-shed and chopping block (tier 0), saw bench, planks and a hanging sign (tier 1), a master's crane and gilded gable tips (tier 2). A busy workshop smokes |
+| **Quarry** (3 tiers) | A pit with a tilted lid | Tall boulders stepping into terraces, a timber lean-to with a lantern, a wheelbarrow, a mason's bench (tier 1), a crane with a block on the hook (tier 2) |
+| **Wagon and hall** | A canvas box; then a plain hall | A covered wagon with **spoked wheels, hooped canvas, tongue, cargo and a cooking-pot campfire**; then a half-timbered hall with a banner at each front corner per rank and a stone keep at Town |
+| **Forager, storehouse, lookout** | Boxes | A cottage with berry baskets and a drying rack; a barn with an X-braced door and a hay hoist; a lashed-timber watchtower with a woven platform rail, a hung lantern and a swallow-tail banner |
+
+### How it works
+- **Pipeline** (`tools/blender/`): `storybook.py` is the shared kit, `buildings.py` and `settler.py` are the models, and `build.py` builds, exports and previews.
+  - Models are written as **Python geometry in game space** and become one Blender mesh each, so a build is reproducible and diffable.
+  - Run it through the Blender MCP with `exec(open('tools/blender/build.py').read())`, or headless with `Blender -b -P tools/blender/build.py`.
+  - It works in its own `FirstFolkArt` scene and never touches yours.
+- **Palette:** colours are parsed straight from `src/render/palette.ts`, so the Blender and code art share one palette.
+- **Output** (`public/models/`): `buildings.glb` (about 200 KB for fifteen buildings) and `settler.glb` (11 KB).
+  - Flat vertex colours, no textures, no normals, **meshopt-compressed**.
+  - The raw export was 660 KB; compression and dropping normals (the material is flat-shaded) cut it to a third.
+- **Runtime** (`src/render/art.ts`): the loader bakes each GLB node into the same non-indexed geometry the code builders make, with the shared material, the construction reveal and `InstancedMesh` settlers unchanged.
+  - **Crest markers:** faces painted `#ff00ff` take the family crest colour. A hut with no family flies a cream pennant.
+  - **Sway:** a `_SWAY` vertex weight drives pennant flutter (`withSway` in `wind.ts`), so only cloth moves.
+  - **Anchors:** empties named `model@smoke` place chimney smoke. Homes with a family and workshops with a worker smoke.
+  - **Settler tint:** the Blender settler is painted white, and the game multiplies in tunic, skin, hair and crest. Anything darker than white (belt, boots, eyes) is a shade of that tint, so it is correct for every family and skin.
+- **Fallback and A/B:** a model missing from the GLBs falls back to its code model, so replacement is one model at a time. **`?art=classic`** turns the Blender art off for an exact in-game comparison. Tiers above the highest modelled reuse the best one.
+
+### Budgets (enforced by `tests/art.test.ts`)
+- **Triangles:** at most 2,000 per building (the biggest is 1,632) and 420 per settler (it is 388).
+- **File size:** `buildings.glb` under 400 KB and `settler.glb` under 40 KB.
+- **Shape:** everything stays on its 2×2 footprint with the door on +z and its base on y = 0, and the settler parts keep the joint heights the procedural animation uses.
+- **Draw calls:** **+1** for the whole game (the settlers' hair), and none per building.
+
+### Measured: late game, seed 3, 25:00, 197 settlers and 98 buildings (headless, software GL)
+| | Draw calls | Triangles | Frame time |
+|---|---|---|---|
+| Classic (`?art=classic`) | 240 | 857k | 296 ms |
+| Blender art | 242 | 958k | 299 ms |
+
+The extra 100k triangles are about 12%, almost all of it settlers (388 against about 170 each). Frame time on software GL is within 1%.
+
+### Style rules for the next models
+- **Silhouette first.** A model must read at the strategy camera (pitch 0.86, distance 20) before it is charming up close.
+- **Layered, chunky, warm.** Layered thatch, thick roofs with drooping fringes, half-timber, stone footings made of individual stones.
+- **Every home and workplace has a lit window,** and anything with a family has a crest pennant.
+- **Keep the front-left corner (-0.7, 0.75) clear.** Stock piles sit there.
+- **Door on +z,** and nothing outside ±1.3.
+
+### Next, in priority order
+The old code models now stand out next to the new ones, so each of these is one more `buildings.py` function:
+1. **The rest of the town:** sawpit, forester, fisher, watchtower, stockade, muster hall, longhouse.
+2. **Great Works:** Stone Circle, Mead Hall and Granary.
+3. **Discoveries and landmarks in the wild,** and the reaver and guard variants of the settler.
+4. **Trees and rocks** are already cheap instanced code models and can stay.
+
+---
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -704,8 +764,8 @@ tests/        Vitest: determinism, mapgen, pathing, placement, gameplay loop, pa
 
 **Rendering:**
 - A flat-shaded heightmap terrain with vertex colours.
-- InstancedMesh for trees, rocks, bushes and settler body parts.
-- Code-built building models, with variants per trade tier.
+- InstancedMesh for trees, rocks, bushes and settler body parts (the Blender settler is eight instanced parts: body, head, hair, hood, two arms and two legs).
+- Building and settler models made in **Blender** (`tools/blender`, §0e) and loaded from `public/models/*.glb`, with the older code-built models as a fallback for anything not yet replaced. Variants per trade tier.
 - Procedural settler animation: walk, chop, mine, pick, hammer and carry.
 - Particle juice, and shadows from a camera-following directional light.
 - Picking ray-marches the heightmap instead of raycasting meshes.
@@ -713,6 +773,8 @@ tests/        Vitest: determinism, mapgen, pathing, placement, gameplay loop, pa
 **Controls:**
 - **Desktop:** drag to pan, wheel to zoom, right-drag or Q/E to rotate, WASD to move, number-key build hotkeys, Space to pause.
 - **Touch:** one-finger pan, pinch zoom, two-finger twist to rotate, tap to select, and tap-to-place with a confirm step.
+
+**3D models (v0.20):** Blender via the Blender MCP, exported as meshopt-compressed GLBs; see §0e.
 
 **Asset pipeline (in use since M1):** `tools/assets/generate.ts` in Node reads `OPENAI_API_KEY` from `process.env` only and never logs or bundles it.
 - A style-bible prompt prefix, anchor reference images through the edit endpoint, and transparent backgrounds.
@@ -1338,3 +1400,17 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **News on screen:** 2.8–3.9 items a minute across six real duels, against 9.0 before v0.17.
 - **How to Play** no longer describes ageing, families and legends. It covers crafts and seasons.
 
+### v0.20.0 The Storybook Art Pass: models made in Blender (2026-10-28)
+- **New pipeline:** `tools/blender/` builds the models in Blender (through the Blender MCP, or headless), and `build.py` exports `public/models/buildings.glb` and `settler.glb` and writes preview renders.
+- **Fifteen buildings:** the hut, the woodcutter (3 tiers), the quarry (3 tiers), the lookout, the wagon and its three hall ranks, the forager (2 tiers) and the storehouse.
+- **A new settler:** gnome-like folk with a hood in the family colour, hair, a nose and eyes. Head nod, step bob and sway, and a trailing hood tip are procedural.
+- **Renderer:** `render/art.ts` loads the GLBs (meshopt) and bakes them into the existing geometry layout.
+  - Crest markers recolour per family.
+  - `withSway` flutters pennants.
+  - Models carry chimney anchors.
+  - The construction reveal now follows each model's real height.
+  - `?art=classic` is an A/B switch, and anything missing falls back to its code model.
+- **Screenshot tool:** `--art`, `--focus <building>`, `--yaw` and `--perf`.
+- **Test:** `tests/art.test.ts` guards triangle budgets, file size, footprint, joint conventions, crest recolouring and the sway weights. It already caught a quarry whose boulders sank below the ground.
+- **Measured:** see §0e. Late game is +2 draw calls and +12% triangles, and frame time is within 1%.
+- **No gameplay change:** `src/sim/` is untouched and `SAVE_VERSION` is unchanged.

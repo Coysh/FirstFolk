@@ -5,9 +5,10 @@ import { CREST_COLORS } from '../sim/population';
 import { hash2 } from '../sim/rng';
 import { comeOfAgeTicks, type Settler, type World } from '../sim/world';
 import type { Effects } from './effects';
+import { artGeometry, hasArt } from './art';
 import { goodGeometry } from './models';
 import { ModelBuilder, box, cone, cyl, sphere } from './modelBuilder';
-import { C, SKINS, TUNICS } from './palette';
+import { C, HAIRS, SKINS, TUNICS } from './palette';
 import type { HeightField } from './terrain';
 
 const MAX = 1024;
@@ -16,6 +17,9 @@ const MAX = 1024;
 const HIP_Y = 0.18;
 const SHOULDER_Y = 0.37;
 const ARM_LEN = 0.17;
+/** Neck and hood-base heights of the Blender settler (settler.py), where the head and hood pivot. */
+const NECK_Y = 0.41;
+const HOOD_Y = 0.57;
 
 function toolGeometry(tool: Tool): THREE.BufferGeometry {
   const b = new ModelBuilder();
@@ -67,6 +71,8 @@ interface Anim {
 export class SettlersView {
   readonly group = new THREE.Group();
   private parts: Record<'body' | 'head' | 'hat' | 'armL' | 'armR' | 'legL' | 'legR', THREE.InstancedMesh>;
+  /** Hair is part of the Blender settler only; the code-built one is bald under its hat. */
+  private hair: THREE.InstancedMesh | null = null;
   /** Trade gear: leather aprons for Journeymen, a gold badge and feather for Masters. */
   private apron: THREE.InstancedMesh;
   private badge: THREE.InstancedMesh;
@@ -85,6 +91,7 @@ export class SettlersView {
   readonly positions = new Map<number, THREE.Vector3>();
 
   private base = new THREE.Matrix4();
+  private head = new THREE.Matrix4();
   private m = new THREE.Matrix4();
   private t = new THREE.Matrix4();
   private q = new THREE.Quaternion();
@@ -106,15 +113,24 @@ export class SettlersView {
       return im;
     };
     const limb = (w: number, h: number) => new THREE.BoxGeometry(w, h, w).translate(0, -h / 2, 0);
-    this.parts = {
-      body: mk(new THREE.CylinderGeometry(0.075, 0.11, 0.22, 7).translate(0, HIP_Y + 0.11, 0), mat(), true),
-      head: mk(new THREE.IcosahedronGeometry(0.085, 1).translate(0, 0.47, 0), mat(), true),
-      hat: mk(cone(0.095, 0.13, 7).translate(0, 0.585, 0), mat(), true),
-      armL: mk(limb(0.05, ARM_LEN), mat(), true),
-      armR: mk(limb(0.05, ARM_LEN), mat(), true),
-      legL: mk(limb(0.065, HIP_Y), mat(), true),
-      legR: mk(limb(0.065, HIP_Y), mat(), true),
+    // Body parts come from the Blender settler (settler.glb), painted white so each instance's tint
+    // (tunic, skin, hair, crest) multiplies in; with `?art=classic` they are the old primitives.
+    const painted = (g: THREE.BufferGeometry) => {
+      if (!g.getAttribute('color')) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.getAttribute('position').count * 3).fill(1), 3));
+      return g;
     };
+    const part = (key: string, classic: () => THREE.BufferGeometry) => artGeometry(key) ?? painted(classic());
+    this.parts = {
+      body: mk(part('settler_body', () => new THREE.CylinderGeometry(0.075, 0.11, 0.22, 7).translate(0, HIP_Y + 0.11, 0)), vmat, true),
+      head: mk(part('settler_head', () => new THREE.IcosahedronGeometry(0.085, 1).translate(0, 0.47, 0)), vmat, true),
+      hat: mk(part('settler_hood', () => cone(0.095, 0.13, 7).translate(0, 0.585, 0)), vmat, true),
+      armL: mk(part('settler_arm', () => limb(0.05, ARM_LEN)), vmat, true),
+      armR: mk(part('settler_arm', () => limb(0.05, ARM_LEN)), vmat, true),
+      legL: mk(part('settler_leg', () => limb(0.065, HIP_Y)), vmat, true),
+      legR: mk(part('settler_leg', () => limb(0.065, HIP_Y)), vmat, true),
+    };
+    const art = hasArt('settler_body');
+    if (art) this.hair = mk(artGeometry('settler_hair')!, vmat, true);
     this.tools = {
       axe: mk(toolGeometry('axe'), vmat, false),
       pick: mk(toolGeometry('pick'), vmat, false),
@@ -125,9 +141,9 @@ export class SettlersView {
       spear: mk(toolGeometry('spear'), vmat, false),
     };
     this.shield = mk(new THREE.CylinderGeometry(0.1, 0.1, 0.025, 9).rotateZ(Math.PI / 2).translate(-0.14, 0.3, 0.03), mat(), true);
-    this.apron = mk(new THREE.BoxGeometry(0.15, 0.2, 0.03).translate(0, HIP_Y + 0.1, 0.085), mat(), true);
-    this.badge = mk(new THREE.OctahedronGeometry(0.03).translate(0, 0.36, 0.085), new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0x6b4a00, metalness: 0.6, roughness: 0.3 }), false);
-    this.feather = mk(new THREE.ConeGeometry(0.018, 0.16, 4).rotateZ(-0.5).translate(0.07, 0.62, 0), new THREE.MeshStandardMaterial({ color: 0xfff6e0, flatShading: true }), false);
+    this.apron = mk(new THREE.BoxGeometry(0.15, 0.2, 0.03).translate(0, HIP_Y + 0.1, art ? 0.118 : 0.085), mat(), true);
+    this.badge = mk(new THREE.OctahedronGeometry(0.03).translate(0, 0.36, art ? 0.098 : 0.085), new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0x6b4a00, metalness: 0.6, roughness: 0.3 }), false);
+    this.feather = mk((art ? new THREE.ConeGeometry(0.018, 0.16, 4).rotateZ(-0.7).translate(0.115, 0.6, -0.02) : new THREE.ConeGeometry(0.018, 0.16, 4).rotateZ(-0.5).translate(0.07, 0.62, 0)), new THREE.MeshStandardMaterial({ color: 0xfff6e0, flatShading: true }), false);
     this.cargo = {
       logs: mk(goodGeometry('logs').scale(1.3, 1.3, 1.3), vmat, false),
       planks: mk(goodGeometry('planks').scale(1.3, 1.3, 1.3), vmat, false),
@@ -271,12 +287,19 @@ export class SettlersView {
       let lean = 0;
       let bob = 0;
       let crouch = 0;
+      // Head and hood: nodding with each blow, bobbing and swaying with each step, the hood tip trailing.
+      let nod = Math.sin(time * 1.6 + seed) * 0.02;
+      let headSway = 0;
+      let hoodTrail = 0;
       if (moving) {
         const w = time * (s.child ? 12 : 10) + seed;
         legSwing = Math.sin(w) * 0.7;
         armL = -Math.sin(w) * 0.55;
         armR = Math.sin(w) * 0.55;
         bob = Math.abs(Math.cos(w)) * 0.025;
+        nod = Math.abs(Math.cos(w - 0.7)) * 0.06 - 0.02;
+        headSway = Math.sin(w) * 0.05;
+        hoodTrail = 0.2 + Math.abs(Math.cos(w - 1.2)) * 0.12;
       }
       if (s.anim === 'work' && s.tool) {
         if (s.tool === 'saw') {
@@ -285,6 +308,7 @@ export class SettlersView {
           armL = -1.35 + Math.sin(w) * 0.3;
           armR = -1.35 + Math.sin(w) * 0.3;
           lean = 0.12 + Math.sin(w) * 0.06;
+          nod = 0.18 + Math.sin(w) * 0.05;
           if (Math.sin(w) > 0.97 && a.phase <= 0.97) this.onStrike?.('saw', x, y, z);
           a.phase = Math.sin(w);
         } else if (s.tool === 'axe' || s.tool === 'pick' || s.tool === 'hammer') {
@@ -295,6 +319,8 @@ export class SettlersView {
           armL = ang;
           armR = ang;
           lean = (1 - raise) * 0.18;
+          nod = (1 - raise) * 0.3 - 0.05;
+          hoodTrail = raise * 0.15;
           // A chip burst at the moment of impact.
           if (a.phase < 0.98 && (p >= 0.98 || p < a.phase) && s.faceTile >= 0) {
             const fx = (s.faceTile % world.size) + 0.5;
@@ -311,6 +337,7 @@ export class SettlersView {
           armL = -0.9 + Math.sin(w) * 0.35;
           armR = -0.9 - Math.sin(w) * 0.35;
           lean = 0.3;
+          nod = 0.2;
           crouch = 0.04;
           if (s.tool === 'shovel' && Math.sin(w) > 0.98) this.effects.emit('soil', x + Math.sin(a.yaw) * 0.3, y + 0.05, z + Math.cos(a.yaw) * 0.3, 1);
         }
@@ -329,8 +356,17 @@ export class SettlersView {
       if (lean) this.base.multiply(this.t.makeRotationX(lean));
 
       this.setPart(this.parts.body, i, this.base);
-      this.setPart(this.parts.head, i, this.base);
-      this.setPart(this.parts.hat, i, this.base);
+      if (this.hair) {
+        // Head, hair and hood pivot at the neck; the hood tip also lags behind the head.
+        this.head.copy(this.base).multiply(this.t.makeTranslation(0, NECK_Y, 0)).multiply(this.t.makeRotationX(nod)).multiply(this.t.makeRotationZ(headSway)).multiply(this.t.makeTranslation(0, -NECK_Y, 0));
+        this.setPart(this.parts.head, i, this.head);
+        this.hair.setMatrixAt(i, this.head);
+        this.m.copy(this.head).multiply(this.t.makeTranslation(0, HOOD_Y, 0)).multiply(this.t.makeRotationX(-hoodTrail)).multiply(this.t.makeTranslation(0, -HOOD_Y, 0));
+        this.setPart(this.parts.hat, i, this.m);
+      } else {
+        this.setPart(this.parts.head, i, this.base);
+        this.setPart(this.parts.hat, i, this.base);
+      }
       this.limb(this.parts.legL, i, -0.045, HIP_Y, legSwing);
       this.limb(this.parts.legR, i, 0.045, HIP_Y, -legSwing);
       this.limb(this.parts.armL, i, -0.105, SHOULDER_Y, armL);
@@ -384,6 +420,7 @@ export class SettlersView {
       this.parts.armR.setColorAt(i, this.col);
       this.parts.head.setColorAt(i, this.col.setHex(SKINS[Math.floor(hash2(s.id, 3, 3) * SKINS.length)]));
       this.parts.hat.setColorAt(i, this.col.setHex(fam ? CREST_COLORS[fam.color] : s.owner < 0 ? 0x1e1d24 : 0x888888));
+      this.hair?.setColorAt(i, this.col.setHex(s.owner < 0 ? 0x1e1d24 : HAIRS[Math.floor(hash2(s.id, 4, 3) * HAIRS.length)]));
       this.parts.legL.setColorAt(i, this.col.setHex(C.trousers));
       this.parts.legR.setColorAt(i, this.col);
 
@@ -397,6 +434,11 @@ export class SettlersView {
       p.count = i;
       p.instanceMatrix.needsUpdate = true;
       if (p.instanceColor) p.instanceColor.needsUpdate = true;
+    }
+    if (this.hair) {
+      this.hair.count = i;
+      this.hair.instanceMatrix.needsUpdate = true;
+      if (this.hair.instanceColor) this.hair.instanceColor.needsUpdate = true;
     }
     this.apron.count = nApron;
     this.apron.instanceMatrix.needsUpdate = true;

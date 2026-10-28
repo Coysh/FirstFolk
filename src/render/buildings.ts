@@ -7,6 +7,7 @@ import type { Effects } from './effects';
 import { buildingGeometry, goodGeometry, scaffoldGeometry } from './models';
 import { ModelBuilder, box } from './modelBuilder';
 import type { HeightField } from './terrain';
+import { withSway } from './wind';
 
 interface View {
   group: THREE.Group;
@@ -37,7 +38,7 @@ export class BuildingsView {
   readonly group = new THREE.Group();
   private views = new Map<number, View>();
   private geoCache = new Map<string, THREE.BufferGeometry>();
-  readonly material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
+  readonly material = withSway(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 }));
   private scaffoldGeo = scaffoldGeometry();
   private plinthGeo = new ModelBuilder().add(box(1.84, 1.0, 1.84), 0x8f7f5c, { pos: [0, -0.52, 0] }).build();
   private goodGeo = Object.fromEntries(GOODS.map((g) => [g, goodGeometry(g)])) as Record<Good, THREE.BufferGeometry>;
@@ -108,7 +109,7 @@ export class BuildingsView {
     let clip: THREE.Plane | null = null;
     if (!b.done) {
       clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), group.position.y);
-      clipMat = this.material.clone();
+      clipMat = withSway(this.material.clone());
       clipMat.clippingPlanes = [clip];
       clipMat.side = THREE.DoubleSide;
       model.material = clipMat;
@@ -158,7 +159,9 @@ export class BuildingsView {
     v.scaffold.visible = !b.done;
     if (v.clip) {
       // Reveal the building from the ground up, with a short head start so the footings show.
-      const reveal = 0.05 + progress * MODEL_HEIGHT;
+      const geo = v.model.geometry;
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      const reveal = 0.05 + progress * (geo.boundingBox?.max.y ?? MODEL_HEIGHT);
       v.clip.constant = p.y + reveal;
       v.hammerTimer -= dt;
       if (b.builderId && v.hammerTimer <= 0 && progress > 0) {
@@ -206,7 +209,12 @@ export class BuildingsView {
     // Ambient life: chimney smoke from homes, campfire at the wagon, dust from busy workshops.
     v.smokeTimer -= dt;
     if (v.smokeTimer <= 0 && b.done) {
-      if (isHome(b.type) && b.familyId) {
+      // A chimney anchor painted in Blender wins; homes with a family and busy workshops smoke from it.
+      const chimney = v.model.geometry.userData.smoke as [number, number, number] | undefined;
+      if (chimney && (isHome(b.type) ? b.familyId : b.workerId && b.alert === '')) {
+        this.effects.emit('smoke', p.x + chimney[0], p.y + chimney[1], p.z + chimney[2], 1);
+        v.smokeTimer = 0.45;
+      } else if (isHome(b.type) && b.familyId) {
         this.effects.emit('smoke', p.x, p.y + 1.45, p.z - 0.05, 1);
         v.smokeTimer = 0.45;
       } else if (b.type === 'wagon') {

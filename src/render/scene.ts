@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BUILDINGS, type BuildingType } from '../sim/defs';
 import type { SimEvent, World } from '../sim/world';
 import type { Quality } from '../settings';
+import { loadArt } from './art';
 import { BuildingsView } from './buildings';
 import { CameraRig } from './camera';
 import { buildDecor } from './decor';
@@ -122,6 +123,7 @@ export class GameRenderer {
     this.scene.add(this.nature.group, this.effects.group);
 
     await progress(0.62, 'Raising homes and workshops');
+    await loadArt(import.meta.env.BASE_URL);
     this.buildings = new BuildingsView(this.hf, this.effects);
     this.settlers = new SettlersView(this.hf, this.effects);
     this.settlers.onStep = (x, z, a) => this.paths.step(x, z, a);

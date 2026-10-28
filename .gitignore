@@ -6,3 +6,4 @@ screenshots
 *.log
 tools/assets/raw
 .DS_Store
+__pycache__/

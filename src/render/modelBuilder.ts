@@ -39,6 +39,8 @@ export class ModelBuilder {
       colors[i * 3 + 2] = tmpColor.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    // Wind flutter weight for pennants (0 for everything built in code); see withSway in wind.ts.
+    g.setAttribute('sway', new THREE.BufferAttribute(new Float32Array(n), 1));
     this.parts.push(g);
     return this;
   }
