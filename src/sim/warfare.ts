@@ -54,9 +54,12 @@ export function huscarls(world: World, hall: Building | undefined): number {
 
 /** A warband's strength: its huscarls, plus the settlement's war bonus. */
 export function raidStrength(world: World, owner: number, n: number): number {
-  const s = n * (BALANCE.guardStrength + playerMod(world, owner, 'husc'));
+  let s = n * (BALANCE.guardStrength + playerMod(world, owner, 'husc'));
+  // Fury of the underdog: a settlement far behind fights a quarter harder (a comeback lever).
+  const p = world.players[owner];
+  if (p && world.players.some((o) => o.id !== owner && o.renown - p.renown >= BALANCE.underdogGap)) s = Math.floor((s * (100 + BALANCE.underdogFury)) / 100);
   // The War-Horn has sounded: half as strong again.
-  return world.players[owner]?.warhorn ? Math.floor((s * 3) / 2) : s;
+  return p?.warhorn ? Math.floor((s * 3) / 2) : s;
 }
 
 /** How hard a building is to take: its guards, nearby stockades, the hall's ward and huscarls close by. */

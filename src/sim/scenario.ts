@@ -164,9 +164,9 @@ export const LANDFALL: Scenario = {
     with_(objectives.deeds(1), 'Hamlet', 'Your Great House (above the build bar) lends a power: click it, or press Z. Its card says what it does.'),
     with_(objectives.landmarks(1), 'Hamlet', 'Landmarks pay renown every minute you hold them, while a manned post (or your hall) stands within 9 tiles.'),
     with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: planks build Watchtowers.'),
-    with_(objectives.renown(300), 'Hamlet', 'Renown: landmarks, land, discoveries, Masters, deeds and Market Day all add to it.'),
+    with_(objectives.renown(250), 'Hamlet', 'Renown: watched landmarks, land, raids, discoveries, Masters and Market Day all add to it.'),
     with_(objectives.building('watchtower'), 'Village', 'Watchtowers push hard: build them at the border to take land from your rival.'),
-    with_(objectives.renown(750), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
+    with_(objectives.renown(650), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
     with_(objectives.renown(1400), 'Town', 'First to 1,400 renown wins. Landmarks pay only while a manned post watches them, and from 25:00 the Moot doubles them: take them back!'),
   ],
 };

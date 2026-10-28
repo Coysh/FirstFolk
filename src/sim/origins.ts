@@ -47,10 +47,10 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     id: 'riverfolk',
     name: 'River Folk',
     icon: '🐟',
-    blurb: 'Journeyman Gatherers: Fishers from the start, and the House of the Plough (40% faster gathering, Harvest Home).',
+    blurb: 'Journeyman Gatherers: Fishers from the start, and the House of the Plough (15% faster gathering, Harvest Home).',
     skill: 'husbandry',
     house: 'plough',
-    stock: { berries: 20, logs: 6 },
+    stock: { berries: 12 },
   },
   wayfarers: {
     id: 'wayfarers',

@@ -48,7 +48,7 @@ export interface HouseDef {
 export const HOUSES: Record<HouseId, HouseDef> = {
   axe: { id: 'axe', name: 'House of the Axe', icon: '🪓', color: 0x6b8e23, passive: 'Woodcutting and sawing are 40% faster.', mods: { 'speed.woodcraft': 40 }, power: 'timber', suits: 'Builders: timber for Great Works and towers' },
   hammer: { id: 'hammer', name: 'House of the Hammer', icon: '🔨', color: 0x8d6e63, passive: 'Everything is built 40% faster, and quarrying is 20% faster.', mods: { build: 40, 'speed.stonework': 20 }, power: 'raise', suits: 'Builders: race the Great Works' },
-  plough: { id: 'plough', name: 'House of the Plough', icon: '🧺', color: 0xd4a017, passive: 'Foraging and fishing are 40% faster.', mods: { 'speed.husbandry': 40 }, power: 'harvest', suits: 'Growers: a big, well-fed town' },
+  plough: { id: 'plough', name: 'House of the Plough', icon: '🧺', color: 0xd4a017, passive: 'Foraging and fishing are 15% faster.', mods: { 'speed.husbandry': 15 }, power: 'harvest', suits: 'Growers: a big, well-fed town' },
   horn: { id: 'horn', name: 'House of the Horn', icon: '🧭', color: 0x2e86c1, passive: 'Towers claim 3 tiles further, and your folk see 4 tiles further.', mods: { claim: 3, sight: 4 }, power: 'expedition', suits: 'Expanders: wide land and far landmarks' },
   hearth: { id: 'hearth', name: 'House of the Hearth', icon: '❤️', color: 0xc0392b, passive: 'Children are born a third more often.', mods: { birth: 25 }, power: 'festival', suits: 'Growers: more folk for every post and workshop' },
   spear: { id: 'spear', name: 'House of the Spear', icon: '⚔️', color: 0x7b241c, passive: 'Each huscarl fights at 15, not 10.', mods: { husc: 5 }, power: 'warhorn', suits: 'Raiders: burn the rival’s towers' },

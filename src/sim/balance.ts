@@ -117,7 +117,7 @@ export const BALANCE = {
   firstChallenge: secs(7 * 60),
   challengeGap: [secs(210), secs(270)] as [number, number],
   /** Acclaim: after the Moot begins, a lead this large ends the race early. */
-  acclaimLead: 500,
+  acclaimLead: 600,
   /** Star-fall: a new landmark lands between the settlements from this tick (≡ 5 mod 10). */
   starfallAt: secs(15 * 60) + 5,
 
@@ -134,6 +134,8 @@ export const BALANCE = {
   /** A settlement this far behind in renown recharges its deeds this much (percent) faster. */
   underdogGap: 120,
   underdogPct: 30,
+  /** ...and its huscarls fight this much (percent) harder. */
+  underdogFury: 25,
   /** When nothing new has been seen or claimed for this long, a rumour reveals the nearest discovery. */
   rumourDelay: secs(45),
 

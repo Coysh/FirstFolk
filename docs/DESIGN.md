@@ -376,7 +376,30 @@ The measurements behind each:
   - About 2.2 lead changes a game, with 24–27% comebacks.
   - Origins fall between 36% and 64% (Kinfolk strongest, even with one extra child rather than two).
   - Real games (origins and omens, 15 duels): 8 : 7, median 31.3 min, 2.7 lead changes, 20% comebacks, 4.2 landmark flips a game.
-- **The goal is now 1,400** (from 1,600), because watched landmarks pay less.
+- **The goal is now 1,400** (from 1,600), because watched landmarks pay less. Village now needs 250 renown and Town 650.
+- **v0.16.1 balance pass on fresh seeds:**
+  - **The Plough was the real outlier.** Food is the economy's bottleneck, so "+30% gathering for the whole town" won River Folk 63–78% of their games and made Balanced (which seats the Plough first) dominant. It's now +15%.
+  - **Fury of the underdog:** a settlement 120+ renown behind raids a quarter harder.
+  - **Acclaim needs a 600 lead,** because walkovers at the Moot had reached 22%.
+  - **Final numbers:**
+
+    | Measure | Result |
+    |---|---|
+    | Matrix, seeds 100+ and 300+ | Every style 38–58% overall; none above 60% in either block |
+    | 60 real duels (origins and omens) | **30 : 30** |
+    | Median length | 31–34 min |
+    | Lead changes | 2.1 a game |
+    | Comebacks | 22% |
+    | Acclaim endings | 20% |
+    | Landmark flips | about 2.6 a game |
+    | Longest gap between major beats | 56–60 s |
+    | Idle adults | about 2% |
+
+  - **A measurement caveat for next time:**
+    - **The samples are smaller than they look.** A 12-seed block is only 12 maps, and every game on a map shares its side advantage. Origin and side tallies move ±20% between blocks.
+    - **Origins are tied to sides.** With `--origins`, the player's origin cycles but the rival's comes from the seed, so origin results are confounded with the map.
+    - **Judge styles across two seed blocks before tuning,** and treat single-block origin numbers as hints.
+
 - **Raids were rare at first, and the measurements showed why:**
   - **Huscarls waited behind every tower's guards,** so the first raid came at 20:00 or later. They now staff first.
   - **Posts never took workers.** The watch can now borrow an extra crew hand from a busy workplace.
@@ -1196,4 +1219,11 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - **After the fixes:** all styles 42–59%.
 - **Bug found by the duels:** a raid whose target had already burned reported "held: 90 vs 0". The band now just goes home.
 - **Saves:** version 17 (shape changed: seats, mods, the house offer, families without boons).
+
+### v0.16.1 Balance on fresh seeds: the Plough, underdog fury, acclaim (2026-10-28)
+- **Plough** gathering is +15% (was +30%).
+- **Underdog fury:** 120+ renown behind, huscarls fight 25% harder.
+- **Acclaim** needs a 600 lead (was 500).
+- **Rank thresholds:** Village at 250 renown and Town at 650. Without them, the scripted player's Hamlet chapter missed 16:00 on seed 13.
+- **Measured:** see §0c. 60 real duels finished 30 : 30, and every style stayed between 38% and 58% across two seed blocks.
 
