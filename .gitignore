@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.env.*
+screenshots
+*.log
+tools/assets/raw
+.DS_Store

@@ -1,0 +1,25 @@
+{
+  "model": "gpt-image-2",
+  "transparentModel": "gpt-image-1.5",
+  "styleIcon": "Hand-painted storybook game icon for a cosy early-medieval settlement strategy game. Warm earthy palette (golden thatch, timber brown, moss green, bilberry blue, cream). Soft light from the top-left, gentle painterly shading with a confident dark-brown ink outline, chunky readable silhouette that still reads at 32 pixels. A single object, centred, filling about 80% of the frame, isolated on a fully transparent background. No text, no letters, no frame, no ground shadow, no background scene.",
+  "styleArt": "Painterly storybook illustration in the style of a cosy indie strategy game, early-medieval northern European folk setting, soft golden light, warm earthy palette with moss greens, golden thatch and bilberry blues, gentle low-poly-inspired shapes, atmospheric depth. No text, no letters, no logos, no UI.",
+  "assets": [
+    { "id": "icon-logs", "kind": "icon", "anchor": true, "out": "icons/logs.png", "size": 128, "prompt": "Three freshly cut timber logs stacked in a small pyramid, pale cut ends with visible tree rings, brown bark." },
+    { "id": "icon-stone", "kind": "icon", "out": "icons/stone.png", "size": 128, "prompt": "Two roughly squared grey stone blocks, one resting on the other, with chisel marks and a few chips." },
+    { "id": "icon-berries", "kind": "icon", "out": "icons/berries.png", "size": 128, "prompt": "A small cluster of ripe bilberries (deep blue-purple) with two green leaves on a short sprig." },
+    { "id": "icon-planks", "kind": "icon", "out": "icons/planks.png", "size": 128, "prompt": "A neat stack of three sawn wooden planks, light honey-coloured wood grain, tied with a twine strap." },
+    { "id": "icon-people", "kind": "icon", "out": "icons/people.png", "size": 128, "prompt": "Two simple friendly villager figures side by side, an adult and a child, wearing rustic tunics and little pointed hoods, faces kept very simple." },
+    { "id": "icon-woodcutter", "kind": "icon", "out": "icons/woodcutter.png", "size": 128, "prompt": "A woodcutter's axe embedded in a chopping stump, with a couple of wood chips." },
+    { "id": "icon-forager", "kind": "icon", "out": "icons/forager.png", "size": 128, "prompt": "A woven wicker basket overflowing with bilberries." },
+    { "id": "icon-quarry", "kind": "icon", "out": "icons/quarry.png", "size": 128, "prompt": "An iron pickaxe leaning against a rough grey boulder." },
+    { "id": "icon-forester", "kind": "icon", "out": "icons/forester.png", "size": 128, "prompt": "A young green sapling growing from a small mound of dark soil, with a little wooden trowel beside it." },
+    { "id": "icon-hut", "kind": "icon", "out": "icons/hut.png", "size": 128, "prompt": "A small round thatched roundhouse with wattle walls, a dark doorway and a wisp of chimney smoke." },
+    { "id": "icon-sawpit", "kind": "icon", "out": "icons/sawpit.png", "size": 128, "prompt": "A two-handled pit saw resting across a log on wooden trestles." },
+    { "id": "icon-storehouse", "kind": "icon", "out": "icons/storehouse.png", "size": 128, "prompt": "A small timber storehouse barn on stone footings with a thatched roof and big wooden doors." },
+    { "id": "icon-scroll", "kind": "icon", "out": "icons/scroll.png", "size": 128, "prompt": "A rolled parchment scroll, partly open, tied with a red ribbon." },
+    { "id": "icon-hammer", "kind": "icon", "out": "icons/hammer.png", "size": 128, "prompt": "A wooden mallet crossed with a small iron hammer." },
+    { "id": "logo", "kind": "logo", "out": "ui/logo.png", "width": 900, "gen": "1536x1024", "prompt": "Game logo wordmark that reads exactly \"FirstFolk\" in one line. Chunky hand-carved wooden lettering with warm golden-honey highlights and a dark brown outline, slightly playful storybook serif letterforms. A small thatched roundhouse sits on top of the letter F, a sprig of green leaves curls from the final k, and a few bilberries decorate the base. Centred, isolated on a fully transparent background, no other text." },
+    { "id": "loading-art", "kind": "art", "out": "ui/loading.jpg", "width": 1600, "gen": "1536x1024", "prompt": "A family with a covered wooden wagon pulled by an ox arrives at dawn at the edge of a lush green river valley, distant low hills, pine and oak woods, morning mist over a winding river, a few birds in a peach and pale-blue sky. Wide landscape composition with space at the bottom centre." },
+    { "id": "parchment", "kind": "texture", "out": "ui/parchment.jpg", "width": 512, "gen": "1024x1024", "prompt": "Seamless tileable texture of soft cream parchment paper with very subtle fibres and faint warm mottling, evenly lit, flat, no stains near edges, no text." }
+  ]
+}
