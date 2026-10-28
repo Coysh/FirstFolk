@@ -1,10 +1,14 @@
 /**
  * Headless playtests. Usage: npm run sim -- --seed 3 --minutes 12 [--games 10] [--think 160] [--difficulty hard] [--quiet]
  * With --think equal to the rival's (normal 160), it is a fair AI-vs-AI duel: the balance harness.
+ * --style / --rival-style pick bot personalities; --matrix plays every style against every other
+ * (both sides, --games seeds each, --jobs in parallel) and prints the win matrix.
  */
 import { playtest } from '../src/sim/playtest';
 import type { Difficulty } from '../src/sim/rules';
 import { ORIGIN_IDS } from '../src/sim/origins';
+import { BOT_STYLES, type BotStyle } from '../src/sim/ai/styles';
+import { runMatrix } from './matrix';
 
 const args = process.argv.slice(2);
 const arg = (name: string, def: number) => {
@@ -25,11 +29,26 @@ const quiet = args.includes('--quiet');
 const real = args.includes('--real');
 const useOrigins = real || args.includes('--origins');
 const useOmens = real || args.includes('--omens');
+const style = (str('style', '') || undefined) as BotStyle | undefined;
+const rivalStyle = (str('rival-style', '') || undefined) as BotStyle | undefined;
+
+if (args.includes('--duel')) {
+  // One game for the matrix: a compact report on stdout.
+  const r = playtest(seed, minutes, { think, difficulty, origin: useOrigins ? ORIGIN_IDS[arg('game', 0) % ORIGIN_IDS.length] : undefined, omens: useOmens, style, rivalStyle });
+  const { timeline: _t, populationByMinute: _p, territoryByMinute: _tr, ...rest } = r;
+  console.log('JSON:' + JSON.stringify(rest));
+  process.exit(0);
+}
+if (args.includes('--matrix')) {
+  const styles = (str('styles', '') ? str('styles', '').split(',') : BOT_STYLES) as BotStyle[];
+  await runMatrix({ styles, seed, games, minutes, think, real, jobs: arg('jobs', 12), passthrough: args.filter((a) => a === '--origins' || a === '--omens') });
+  process.exit(0);
+}
 
 const reports: ReturnType<typeof playtest>[] = [];
 for (let g = 0; g < games; g++) {
   const t0 = performance.now();
-  const r = playtest(seed + g, minutes, { think, difficulty, origin: useOrigins ? ORIGIN_IDS[g % ORIGIN_IDS.length] : undefined, omens: useOmens });
+  const r = playtest(seed + g, minutes, { think, difficulty, origin: useOrigins ? ORIGIN_IDS[g % ORIGIN_IDS.length] : undefined, omens: useOmens, style, rivalStyle });
   reports.push(r);
   if (games === 1) {
     console.log(r.timeline.join('\n'));
@@ -40,7 +59,7 @@ for (let g = 0; g < games; g++) {
   }
   if (!quiet || games === 1)
     console.log(
-      `seed ${r.seed}${real ? ` [${r.origins.join(' v ')} | ${r.omens.join(', ')}]` : ''}: winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'}${r.byTime ? ' (time)' : ''} at ${r.victorySec < 0 ? '-' : `${(r.victorySec / 60).toFixed(1)}m`} · renown ${r.renownByMinute.at(-1)?.join(':')} · leads ${r.leadChanges} · comeback ${r.winnerDeficit} · flips ${r.holdingFlips} · idle ${r.idleAdultPct}% · major gap ${r.longestMajorGapSec}s · stock ${r.stockAt.join('/')} · chapters ${JSON.stringify(r.chapters)} · pop ${r.populationByMinute.at(-1)} · ${Math.round(performance.now() - t0)}ms`,
+      `seed ${r.seed}${real ? ` [${r.origins.join(' v ')} | ${r.omens.join(', ')}]` : ''}: winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'}${r.byTime ? ' (time)' : ''} at ${r.victorySec < 0 ? '-' : `${(r.victorySec / 60).toFixed(1)}m`} · renown ${r.renownByMinute.at(-1)?.join(':')} · leads ${r.leadChanges} · comeback ${r.winnerDeficit} · flips ${r.holdingFlips} · idle ${r.idleAdultPct}% · major gap ${r.longestMajorGapSec}s · stock ${r.stockAt.join('/')} · chapters ${JSON.stringify(r.chapters)} · pop ${r.populationByMinute.at(-1)} · towers ${r.towers.join(':')} · ${Math.round(performance.now() - t0)}ms`,
     );
 }
 if (games > 1) {

@@ -24,6 +24,7 @@ import { unlocksFor } from './trades';
 import { isWinter, updateSeasons, type Season } from './seasons';
 import { updateValleyEvents } from './events';
 import { OpeningBot } from './ai/openingBot';
+import { styleOf, type BotStyle } from './ai/styles';
 
 export type Stock = Record<Good, number>;
 export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 });
@@ -251,6 +252,8 @@ export interface PlayerState {
   /** Deed effects running until a tick. */
   buffs: { timber: number; harvest: number };
   deedsUsed: number;
+  /** How this settlement's bot plays when one runs it (the rival; see ai/styles.ts). */
+  style: BotStyle;
 }
 
 export interface Legend {
@@ -297,6 +300,8 @@ export interface WorldOptions {
   omens?: OmenId[];
   /** A tag for special games, e.g. 'daily-20261028'. */
   label?: string;
+  /** The rival's personality (balance harness); by default it follows the rival's origin. */
+  rivalStyle?: BotStyle;
 }
 
 export class World {
@@ -382,7 +387,7 @@ export class World {
     for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y, 0, n.kind === 'rock' ? (n.max ?? BALANCE.rockStone) * seams : n.max);
     for (const site of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER, heldBy: NO_OWNER });
     this.setupPlayer(0, this.map.starts[0], opts.origin, opts.dynasty);
-    if (this.scenario.rival) this.addRival();
+    if (this.scenario.rival) this.addRival(opts.rivalStyle);
   }
 
   // ---- geometry helpers -------------------------------------------------
@@ -534,7 +539,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '' };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced' };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -570,10 +575,14 @@ export class World {
   }
 
   /** Player 1 at the mirrored start, played by the bot at a difficulty-set pace. */
-  addRival(): void {
-    if (!this.players[1]) this.setupPlayer(1, this.map.starts[1], this.players[0]?.origin ? rivalOrigin(this.seed) : undefined);
+  addRival(style?: BotStyle): void {
+    if (!this.players[1]) {
+      this.setupPlayer(1, this.map.starts[1], this.players[0]?.origin ? rivalOrigin(this.seed) : undefined);
+      const rival = this.players[1] as PlayerState;
+      rival.style = style ?? styleOf(rival.origin);
+    }
     const think = hasOmen(this, 'restless') ? Math.round((this.rules.rivalThink * 3) / 40) * 10 : this.rules.rivalThink;
-    this.ais = [new OpeningBot(1, think, this.tick)];
+    this.ais = [new OpeningBot(1, think, this.tick, this.players[1].style)];
   }
 
   randomName(): string {

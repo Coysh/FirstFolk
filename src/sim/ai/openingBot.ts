@@ -9,6 +9,9 @@ import { canAfford, eventDef } from '../events';
 import { BOON_TIMEOUT } from '../boons';
 import { isHome } from '../population';
 import { bestSite } from './placement';
+import { STYLES, type BotStyle } from './styles';
+
+type Idea = [boolean, BuildingType, { x: number; y: number }?, NodeKind?];
 
 /**
  * A simple "competent player" used by headless playtests: a fixed opening, then
@@ -27,13 +30,15 @@ export class OpeningBot {
   /**
    * @param thinkEvery ticks between strategic decisions (the rival's difficulty knob)
    * @param fromTick skip opening moves already made (when restoring a save)
+   * @param style its priorities (see styles.ts)
    */
   constructor(
     private owner = 0,
     private thinkEvery = 100,
     fromTick = 0,
+    readonly style: BotStyle = 'balanced',
   ) {
-    this.opening = this.opening.filter((o) => o.at > fromTick || fromTick === 0);
+    this.opening = this.opening.filter((o) => o.at >= fromTick);
   }
 
   update(world: World): void {
@@ -79,21 +84,25 @@ export class OpeningBot {
     const idle = [...world.settlers.values()].filter((s) => s.owner === this.owner && !s.child && !s.elder && s.job.kind === 'idle').length;
     const idleJob: BuildingType = (['woodcutter', 'quarry', 'fisher', 'forager'] as BuildingType[])[(world.tick / this.thinkEvery) % 4 | 0];
     const want: NodeKind | undefined = hungry ? 'bush' : starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined;
+    const st = STYLES[this.style];
+    // Push the border: towards a seen discovery, for room, or towards what we lack.
+    const towers = count('lookout') + (this.style === 'balanced' ? 0 : count('watchtower') + count('outpost'));
+    const push: Idea = [towerSites === 0 && (!!target || !!want || (!st.towersOnlyWithAim && towers < pop / st.towerPer)), tower, target ?? undefined, want];
 
     // Ordered ideas; the first one that is wanted, affordable and has a valid site is done.
-    const ideas: [boolean, BuildingType, { x: number; y: number }?, NodeKind?][] = [
+    const ideas: Idea[] = [
       [emptyHuts === 0 && pop >= world.housing(this.owner) - 2, home],
       // Like a player following the goals: the first Lookout as soon as there are homes.
       [count('lookout') === 0 && count('hut') >= 2, 'lookout', target ?? undefined],
       [world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0, 'sawpit'],
       [world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0, 'watchtower', target ?? undefined],
       [world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0, 'storehouse'],
+      ...(st.towersFirst ? [push] : []),
       // The late game's race: always have one Great Work under way.
       [!!work, work ?? 'hut'],
       [hungry && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 10), 'fisher'],
       [hungry && count('forager') < Math.ceil(pop / 6), 'forager'],
-      // Push the border: towards a seen discovery, for room, or towards what we lack.
-      [towerSites === 0 && (!!target || count('lookout') < pop / 8 || !!want), tower, target ?? undefined, want],
+      ...(st.towersFirst ? [] : [push]),
       [starving('woodcutter') && count('forester') < count('woodcutter') / 2, 'forester'],
       [count('woodcutter') < Math.ceil(pop / 7) && world.stored(this.owner, 'logs') < 80, 'woodcutter'],
       [emptyHuts === 0, 'hut'],
@@ -139,7 +148,7 @@ export class OpeningBot {
   private trade(world: World): boolean {
     if (!marketOpen(world, this.owner)) return false;
     for (const g of GOODS) {
-      const keep = FOODS.includes(g) ? Math.max(60, world.population(this.owner)) : 100;
+      const keep = FOODS.includes(g) ? Math.max(60, world.population(this.owner)) : STYLES[this.style].sellKeep;
       if (world.stored(this.owner, g) - FAIR_LOT >= keep && fairPrice(world, this.owner, g) * 10 >= FAIR_VALUE[g] * 6) {
         world.enqueue({ type: 'sell', owner: this.owner, good: g });
         return true;

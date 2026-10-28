@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { hashWorld } from '../src/sim/hash';
 import { claimArea } from '../src/sim/territory';
 import { World } from '../src/sim/world';
+import { styleOf } from '../src/sim/ai/styles';
+import { deserializeWorld, serializeWorld } from '../src/sim/save';
 
 describe('the rival', () => {
   it('starts across the valley and builds through Commands', () => {
@@ -27,6 +29,22 @@ describe('the rival', () => {
       return hashWorld(w);
     };
     expect(run()).toBe(run());
+  });
+
+  it('the rival has a personality that follows its origin, and keeps it through a save', () => {
+    expect(styleOf('wayfarers')).toBe('expander');
+    expect(styleOf('hillclan')).toBe('builder');
+    expect(styleOf('')).toBe('balanced');
+    const w = new World({ seed: 4, origin: 'woodfolk' });
+    expect(w.players[1].style).toBe(styleOf(w.players[1].origin));
+    const forced = new World({ seed: 4, rivalStyle: 'expander' });
+    expect(forced.players[1].style).toBe('expander');
+    forced.run(600);
+    const back = deserializeWorld(JSON.parse(JSON.stringify(serializeWorld(forced))));
+    expect(back.players[1].style).toBe('expander');
+    forced.run(600);
+    back.run(600);
+    expect(hashWorld(back)).toBe(hashWorld(forced));
   });
 
   it('the peaceful scenario has no rival', () => {

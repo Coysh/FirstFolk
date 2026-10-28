@@ -6,6 +6,8 @@ import type { Difficulty } from './rules';
 import type { OriginId } from './origins';
 import { rollOmens } from './omens';
 import { plural } from './population';
+import { BUILDINGS } from './defs';
+import type { BotStyle } from './ai/styles';
 
 export interface PlaytestReport {
   seed: number;
@@ -45,6 +47,10 @@ export interface PlaytestReport {
   /** Territory size (tiles) per minute: the frontier should keep moving. */
   territoryByMinute: number[];
   populationByMinute: number[];
+  /** Frontier buildings (towers and outposts) finished by [player, rival]: is spam paying? */
+  towers: number[];
+  /** Each side's bot style. */
+  styles: string[];
   timeline: string[];
 }
 
@@ -60,12 +66,17 @@ export interface PlaytestOptions {
   /** Play as an origin with the valley's omens, like a real game (default: classic start, no omens). */
   origin?: OriginId;
   omens?: boolean;
+  /** Bot personalities for the player and the rival (see ai/styles.ts). */
+  style?: BotStyle;
+  rivalStyle?: BotStyle;
 }
 
 /** Headless playtest: the scripted bot plays one game and we measure the pacing beats. */
 export function playtest(seed: number, minutes: number, opts: PlaytestOptions = {}): PlaytestReport {
-  const world = new World({ seed, difficulty: opts.difficulty, origin: opts.origin, omens: opts.omens ? rollOmens(seed) : [] });
-  const bot = new OpeningBot(0, opts.think ?? 100);
+  const world = new World({ seed, difficulty: opts.difficulty, origin: opts.origin, omens: opts.omens ? rollOmens(seed) : [], rivalStyle: opts.rivalStyle });
+  const bot = new OpeningBot(0, opts.think ?? 100, 0, opts.style);
+  world.players[0].style = bot.style;
+  const towers = [0, 0];
   const renownByMinute: [number, number][] = [];
   const stockAt: number[] = [];
   let holdingFlips = 0;
@@ -86,6 +97,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     world.step();
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
+      if (e.type === 'buildingComplete' && (BUILDINGS[e.buildingType].frontier || e.buildingType === 'outpost')) towers[e.owner]++;
       if ('owner' in e && e.owner !== 0 && !['claimed', 'rankUp', 'deed', 'workBegun'].includes(e.type) && !(e.type === 'holdingChanged' && e.from === 0)) continue;
       if (e.type === 'buildingComplete') timeline.push(`${t} built ${e.buildingType}`);
       else if (e.type === 'familyApproaching') timeline.push(`${t} the ${e.surname} family (${e.size}) arrives`);
@@ -188,6 +200,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     stockAt,
     territoryByMinute,
     populationByMinute,
+    towers,
+    styles: world.players.map((p) => p.style),
     timeline,
   };
 }

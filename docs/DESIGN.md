@@ -243,6 +243,41 @@ Measured (60 duels with origins and omens):
 | Acclaim endings | 12% |
 | Landmark flips per game | about 12 |
 
+## 0c. The Shield Pass (v0.13+): every banner needs a spear
+
+The third playtest was a full game, won and enjoyed, with three complaints:
+1. **Watchtowers dominated.** The best plan was to build as many as possible, so the late game repeated itself.
+2. **The Great Houses were confusing.** Their deeds got used without anyone knowing what they did.
+3. **Families went unnoticed.** With 170 settlers there was never a reason to look at one.
+
+The measurements behind each:
+
+| Complaint | Evidence | Fix |
+|---|---|---|
+| Watchtower spam | Towers cost goods only, need no people and can't be attacked. Escalation counted each type separately, so mixing Lookouts and Watchtowers kept both cheap. In the v0.13 strategy matrix the **Expander** style won **63%** of fair duels and beat every other style. | Garrisons, raids, Stockades and reavers (v0.14) |
+| Confusing Great Houses | The council was "the top 4 families by prestige, each lending a deed from its boons or best craft". Seats shuffled, effects were only in a hover tooltip (none on touch), and result toasts had no numbers. | Three house seats you choose, with numbers on the cards (v0.15) |
+| Invisible families | Boon letters were small stat picks, and prestige was never shown. | Families run themselves; the choices move to the houses (v0.15) |
+
+### The strategy matrix (v0.13)
+- **Bot styles** (`ai/styles.ts`) give the bot distinct priorities over the same rules:
+  - **Balanced** is the old bot.
+  - **Expander** wants a tower for every 5 folk and puts towers ahead of the economy.
+  - **Builder** pushes the border only towards a goal, sells more and leans on Great Works.
+- **The rival's character follows its origin:** Wayfarers and Kinfolk expand, Hill Clan and Woodfolk build, and the rest play balanced. The style is saved with the rival.
+- **`npm run sim -- --matrix --games 8 --minutes 46 --think 160 --origins`** plays every style against every other, from both sides on the same seeds, in parallel. It prints a win matrix, each style's overall win rate, towers per game and renown by source, and raises a **dominance alarm** when a style wins more than 60% or beats every other.
+
+**Baseline** (v0.13.0, 8 seeds × both sides, origins, no omens):
+
+| Row vs column | Balanced | Expander | Builder |
+|---|---|---|---|
+| Balanced | — | 44% | 56% |
+| Expander | 56% | — | 69% |
+| Builder | 44% | 31% | — |
+
+- **Overall:** Expander 63% (16.8 towers a game), Balanced 50% (10.4), Builder 38% (9.5).
+- **Where Expander wins:** landmarks (876 renown on average) and land.
+- **With omens on (`--real`)** the rival side wins 37 of 48 games; Restless Neighbours tilts it on purpose. Fairness checks therefore use `--origins` without omens.
+
 ---
 
 ## 1. Design guardrails
@@ -968,4 +1003,14 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **Duels caught:**
   - Challenge prizes made games about 2 minutes shorter (median ~27.8) and Acclaim at a 400 lead ended 23% of games. The goal is now 1,600 and Acclaim needs a 500 lead.
   - The star race only ran if a challenge happened to be due. It now starts the moment the star falls.
+
+### v0.13.0 The strategy matrix: measuring the watchtower problem (2026-10-28)
+- **Why:** a full human game found one dominant plan, building watchtowers. Before changing anything, the harness had to be able to see it.
+- **Built:**
+  - bot styles (Balanced, Expander, Builder);
+  - the rival's personality following its origin, saved with the game;
+  - `--matrix` (parallel style-vs-style duels with a dominance alarm);
+  - frontier towers per game in every report.
+- **Measured:** Expander wins 63% and beats every other style (see §0c). That confirms the feedback.
+- **Fixed on the way:** a restored rival skipped the opening move due on the exact tick of the save.
 
