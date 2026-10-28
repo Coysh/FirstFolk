@@ -131,7 +131,8 @@ export function offerBoon(world: World, fam: Family, reason: string): void {
   activateNext(world, fam.owner);
 }
 
-export const BOON_TIMEOUT = secs(60);
+/** A boon choice waits this long in the ledger before the family chooses for itself. */
+export const BOON_TIMEOUT = secs(120);
 /** Minimum quiet time between one boon choice and the next. */
 export const BOON_GAP = secs(45);
 

@@ -11,7 +11,7 @@ import type { Difficulty } from './sim/rules';
 import { deserializeWorld, type SaveData } from './sim/save';
 import { World } from './sim/world';
 import { rollOmens } from './sim/omens';
-import type { OriginId } from './sim/origins';
+import type { Dynasty, OriginId } from './sim/origins';
 import { readSave, settings } from './settings';
 
 export type Screen = 'title' | 'loading' | 'game';
@@ -52,6 +52,10 @@ export class Shell {
       } else audio.resume();
     });
     window.addEventListener('pagehide', persist);
+    // Browsers only allow sound after a gesture: the first tap or key anywhere starts the band.
+    const wake = () => audio.start();
+    window.addEventListener('pointerdown', wake, { once: true });
+    window.addEventListener('keydown', wake, { once: true });
     settings.subscribe((s) => {
       audio.setVolumes(s);
       this.menuView?.applyQuality(s.quality);
@@ -132,8 +136,8 @@ export class Shell {
   }
 
   /** A new valley: the omens come from the seed, the origin is the player's opener. */
-  async newGame(seed: number, difficulty: Difficulty, rival = true, origin?: OriginId, label = ''): Promise<void> {
-    await this.launch(async () => new World({ seed, difficulty, scenario: rival ? 'landfall' : 'peaceful', origin, omens: rollOmens(seed), label }), true);
+  async newGame(seed: number, difficulty: Difficulty, rival = true, origin?: OriginId, label = '', dynasty?: Dynasty): Promise<void> {
+    await this.launch(async () => new World({ seed, difficulty, scenario: rival ? 'landfall' : 'peaceful', origin, omens: rollOmens(seed), label, dynasty }), true);
   }
 
   async continueGame(): Promise<void> {
@@ -185,6 +189,8 @@ export class Shell {
     this.game?.dispose();
     this.game = null;
     this.screen.value = 'title';
+    audio.setMuffled(false);
+    audio.setMood('theme', 1);
     void this.buildMenuScene();
   }
 }

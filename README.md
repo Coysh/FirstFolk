@@ -22,11 +22,12 @@ npx tsx tools/assets/generate.ts [--force id…]   # regenerate art with the Ope
 | Zoom | wheel, + / − | pinch |
 | Rotate | right-drag, Q / E (90° snaps) | two-finger twist |
 | Build | 1–9, 0, − or the build shelf, click to place (Shift keeps placing) | tap a card, tap the ground, **Build here** |
-| Choose | click a boon card or an event option (both resolve themselves if ignored) | tap |
 | Deeds | Z X C V or click a Great House; targeted deeds then take a click on the map | tap |
 | Market Day | ⚖️ Market in the top bar (from Hamlet) | tap |
 | Explore | click a row in *Out in the wild* to fly to a discovery | tap |
 | Select | click a settler or building | tap |
+| Letters | decisions wait in the ledger at the left: open one when convenient | tap |
+| Sound | M mutes, or the 🔊 button; volumes for music, ambience and effects in Settings | 🔊 button |
 | Other | Space pauses, Esc cancels or opens the menu, F focuses the selection, Del demolishes | ☰ opens the menu |
 
 ## Layout

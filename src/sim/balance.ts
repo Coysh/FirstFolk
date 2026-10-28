@@ -100,10 +100,10 @@ export const BALANCE = {
   winterAppetitePct: 25,
   winterBuildPct: 70,
 
-  /** Valley events: the first arrives after the opening, then one every 80–140 s; unanswered after 45 s they resolve cautiously. */
+  /** Valley events: the first arrives after the opening, then one every 80–140 s; unanswered after 100 s they resolve cautiously. */
   firstEvent: secs(150),
   eventGap: [secs(80), secs(140)] as [number, number],
-  eventTimeout: secs(45),
+  eventTimeout: secs(100),
 
   /** Lineage: settlers become elders (stop working, teach the family), then die somewhere past `lifespanYears`. */
   elderYears: 6,

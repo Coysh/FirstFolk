@@ -1,20 +1,22 @@
 import { signal } from '@preact/signals';
 import * as THREE from 'three';
 import { audio, type Sfx } from './audio/audio';
-import { TICK_MS } from './sim/balance';
+import { BALANCE, TICK_MS } from './sim/balance';
+import { seasonOf } from './sim/seasons';
 import { canPlace } from './sim/commands';
 import { BUILDINGS, DISCOVERIES, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Tool } from './sim/defs';
-import { DEEDS, council, deedOf, deedTargetProblem, type DeedId } from './sim/deeds';
+import { DEEDS, bestCraft, council, deedOf, deedPower, prestige, deedTargetProblem, outpostSpot, type DeedId } from './sim/deeds';
+import { previewInfluence } from './sim/territory';
 import { serializeWorld } from './sim/save';
 import { BOONS } from './sim/boons';
 import { eventDef } from './sim/events';
 import { plural } from './sim/population';
 import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
-import { TRADES, tradeTitle } from './sim/trades';
+import { TIER_XP, TRADES, tradeTitle } from './sim/trades';
 import type { SimEvent, World } from './sim/world';
 import type { Overlay } from './render/overlay';
 import type { GameRenderer } from './render/scene';
-import { recordDaily, writeSave } from './settings';
+import { recordDaily, recordDynasty, writeSave, type StoredDynasty } from './settings';
 import { ORIGINS, type OriginId } from './sim/origins';
 import { OMENS } from './sim/omens';
 
@@ -41,6 +43,23 @@ export interface GhostState {
   reason?: string;
   /** Resources within the work radius, for placement feedback. */
   inRange?: number;
+  /** For border buildings: land it would win (and from the rival), and what it would bring over. */
+  claim?: ClaimPreview;
+}
+
+export interface ClaimPreview {
+  gained: number;
+  fromRival: number;
+  sites: string[];
+}
+
+/** Where a targeted deed would land, and what it would do. */
+export interface DeedPreview {
+  x: number;
+  y: number;
+  r: number;
+  problem: string;
+  claim?: ClaimPreview;
 }
 
 const AUTOSAVE_SECONDS = 45;
@@ -63,6 +82,10 @@ export class Game {
   readonly objectives = signal<ObjectiveStatus[]>([]);
   readonly toasts = signal<Toast[]>([]);
   readonly victory = signal<{ scenario: string; winner: number; byTime: boolean } | null>(null);
+  /** The ledger letter being read (see Hud's Ledger), and whether the first one has opened itself. */
+  readonly ledgerOpen = signal<string | null>(null);
+  readonly deedPreview = signal<DeedPreview | null>(null);
+  ledgerTaught = false;
   /** The Market Day popover is open. */
   readonly marketOpen = signal(false);
   readonly banner = signal<{ title: string; sub: string } | null>(null);
@@ -143,20 +166,66 @@ export class Game {
       this.version.value++;
       this.objectives.value = objectiveStatus(this.world, PLAYER);
       this.watchCouncil();
+      this.conduct();
     }
   }
 
-  /** A family rising to the Great Houses is news: it means a new deed to call. */
-  private seated: number[] | null = null;
+  /**
+   * The music follows the game: the village theme at work, the long night in winter, banners
+   * at the border when the rival is pressing (land or a landmark lost lately, or they lead
+   * late on), and the main theme as the Moot finale. The soundscape follows the camera.
+   */
+  private tenseUntil = 0;
+  private sceneTimer = 0;
+  private conduct(): void {
+    const w = this.world;
+    const me = w.players[PLAYER];
+    const rival = w.players[1];
+    audio.setMuffled(this.paused.value || this.menuOpen.value);
+    if (this.victory.value || w.scenarioState.winner >= 0) return audio.setMood('theme', 1);
+    const late = w.tick > 15 * 600;
+    const pressed = this.tenseUntil > w.tick || (!!rival && late && rival.renown - me.renown >= 120);
+    const intensity = w.tick < 120 * 10 ? 0 : me.rank >= 2 ? 2 : 1;
+    if (w.scenario.timeLimit && w.tick >= BALANCE.mootAt) audio.setMood('moot', 3);
+    else if (pressed) audio.setMood('tension', 2);
+    else if (seasonOf(w.tick) === 3) audio.setMood('winter', 1);
+    else audio.setMood('village', intensity);
+    if ((this.sceneTimer -= 0.2) <= 0) {
+      this.sceneTimer = 1;
+      audio.setScene({ season: seasonOf(w.tick), ...this.view.listen() });
+    }
+  }
+
+  /** The dynasty this victory earned (shown on the report). */
+  readonly earned = signal<StoredDynasty | null>(null);
+
+  /** Winning remembers your greatest house, to found a future valley. */
+  private rememberHouse(): void {
+    const w = this.world;
+    const fams = [...w.families.values()].filter((f) => f.owner === PLAYER);
+    if (!fams.length) return;
+    const best = fams.reduce((a, f) => (prestige(w, f) > prestige(w, a) ? f : a));
+    const craft = bestCraft(best);
+    this.earned.value = recordDynasty({
+      surname: best.surname,
+      boons: best.boons.slice(0, 2),
+      skill: best.skills[craft] >= TIER_XP[1] ? craft : null,
+      renown: w.players[PLAYER].renown,
+      date: new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  /** A new deed reaching the council is news (families swapping seats is not). */
+  private seated: DeedId[] | null = null;
   private watchCouncil(): void {
-    const now = council(this.world, PLAYER).map((f) => f.id);
+    const seats = council(this.world, PLAYER);
+    const now = seats.map((f) => deedOf(f)!);
     if (this.seated)
-      for (const id of now) {
+      for (const fam of seats) {
+        const id = deedOf(fam)!;
         if (this.seated.includes(id)) continue;
-        const fam = this.world.families.get(id)!;
-        const deed = DEEDS[deedOf(fam)!];
         audio.play('objective');
-        this.toast('/assets/icons/people.png', `The ${plural(fam.surname)} rise to the Great Houses: ${deed.icon} ${deed.name} is yours to call.`, 'good');
+        this.toast('/assets/icons/people.png', `The ${plural(fam.surname)} rise to the Great Houses: ${DEEDS[id].icon} ${DEEDS[id].name} is yours to call.`, 'good');
       }
     this.seated = now;
   }
@@ -180,7 +249,8 @@ export class Game {
       switch (e.type) {
         case 'buildingComplete': {
           const p = this.posOf(e.id);
-          if (p) audio.play('complete', this.distanceTo(p.x, p.z), this.hearing() * 1.5);
+          if (BUILDINGS[e.buildingType].great) audio.stinger('work');
+          else if (p) audio.play('complete', this.distanceTo(p.x, p.z), this.hearing() * 1.5);
           if (e.buildingType !== 'wagon') (BUILDINGS[e.buildingType].great || e.buildingType === 'watchtower' ? this.toast.bind(this) : this.news.bind(this))(icon(e.buildingType), `${BUILDINGS[e.buildingType].name} finished`, 'good');
           break;
         }
@@ -243,7 +313,7 @@ export class Game {
             this.toast('/assets/icons/scroll.png', `Your rival claimed the ${d.name}.`, 'warn');
             break;
           }
-          audio.play('tierUp');
+          audio.stinger('discovery');
           this.banner.value = { title: `${d.icon} ${d.name} claimed!`, sub: e.text };
           setTimeout(() => (this.banner.value = null), 4200);
           break;
@@ -254,7 +324,8 @@ export class Game {
           this.toast('/assets/icons/people.png', `A traveller tells of the ${DISCOVERIES[e.kind].name} to the ${e.dir}. Push your border that way!`, 'info');
           break;
         case 'boonOffered':
-          if (e.owner === PLAYER) audio.play('objective');
+          // A letter arrives in the ledger: a soft chime, no interruption.
+          if (e.owner === PLAYER) audio.play('letter');
           break;
         case 'boonChosen':
           if (e.owner !== PLAYER) break;
@@ -288,7 +359,7 @@ export class Game {
             this.toast('/assets/icons/scroll.png', `Word arrives: the rival settlement is now a ${RANK_NAMES[e.rank]}.`, 'warn');
             break;
           }
-          audio.play('tierUp');
+          audio.stinger('rankUp');
           this.banner.value = {
             title: `Your camp is now a ${RANK_NAMES[e.rank]}!`,
             sub: e.unlocks.length ? `New: ${e.unlocks.map((t) => BUILDINGS[t].name).join(', ')} · the border grows · a family earns a boon` : 'The border grows · a family earns a boon',
@@ -296,7 +367,7 @@ export class Game {
           setTimeout(() => (this.banner.value = null), 5200);
           break;
         case 'valleyEvent':
-          if (e.owner === PLAYER) audio.play('arrive');
+          if (e.owner === PLAYER) audio.play('letter');
           break;
         case 'eventResolved': {
           if (e.owner !== PLAYER) break;
@@ -319,16 +390,18 @@ export class Game {
         case 'holdingChanged': {
           const d = DISCOVERIES[e.kind];
           if (e.owner === PLAYER) {
-            audio.play('tierUp');
+            audio.stinger('landmark');
             this.banner.value = { title: `${d.icon} ${d.name} is yours!`, sub: e.from >= 0 ? `Taken from your rival: +${d.renown} renown a minute while you hold it` : `+${d.renown} renown a minute while you hold it` };
             setTimeout(() => (this.banner.value = null), 3800);
           } else if (e.from === PLAYER) {
-            audio.play('warn');
+            audio.stinger('loss');
+            this.tenseUntil = this.world.tick + 600;
             this.toast('/assets/icons/lookout.png', `Your rival’s border has swallowed the ${d.name}! Push back with Watchtowers or a Festival.`, 'warn');
           }
           break;
         }
         case 'landLost':
+          this.tenseUntil = this.world.tick + 450;
           if (this.landLostCooldown > this.world.tick) break;
           this.landLostCooldown = this.world.tick + 300;
           this.toast('/assets/icons/lookout.png', `Your rival’s influence is pushing into your land (${e.tiles} tiles lost).`, 'warn');
@@ -345,7 +418,7 @@ export class Game {
             if (e.deed === 'festival' || e.deed === 'expedition') this.toast('/assets/icons/scroll.png', `Your rival’s ${plural(e.surname)} ${e.deed === 'festival' ? 'hold a festival near your border' : 'raise an outpost in the wilds'}.`, 'warn');
             break;
           }
-          audio.play('tierUp');
+          audio.stinger('deed');
           this.toast('/assets/icons/people.png', `${d.icon} ${d.name}! ${e.text}`, 'big');
           break;
         }
@@ -359,7 +432,7 @@ export class Game {
           this.toast(icon(e.buildingType), `Your rival has begun ${BUILDINGS[e.buildingType].name}! Only the first to finish it gets it.`, 'warn');
           break;
         case 'workLost':
-          audio.play('warn');
+          audio.stinger('loss');
           this.toast(icon(e.buildingType), `Your rival finished ${BUILDINGS[e.buildingType].name} first. Your site is abandoned; half its materials came home.`, 'warn');
           break;
         case 'firstMaster':
@@ -377,17 +450,19 @@ export class Game {
           } else this.news('/assets/icons/people.png', `${e.name} ${e.surname} has died, aged ${e.age}. The family mourns.`);
           break;
         case 'starfall':
-          audio.play('tierUp');
+          audio.stinger('starfall');
           this.banner.value = { title: '☄️ A star has fallen!', sub: 'It came down between you and your rival: a Star-Stone, the richest landmark in the valley. Push your border over it first!' };
           setTimeout(() => (this.banner.value = null), 5600);
           break;
         case 'moot':
-          audio.play('tierUp');
+          audio.stinger('moot');
           this.banner.value = { title: '📯 The Valley Moot!', sub: 'Folk from all around gather for the final stretch: every landmark now pays double renown' };
           setTimeout(() => (this.banner.value = null), 5200);
           break;
         case 'victory':
           this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime };
+          audio.stinger(e.winner === PLAYER ? 'victory' : 'defeat');
+          if (e.winner === PLAYER) this.rememberHouse();
           if (this.world.label.startsWith('daily-')) recordDaily({ date: this.world.label.slice(6), won: e.winner === PLAYER, renown: this.world.players[PLAYER].renown, time: Math.floor(this.world.tick / 10) });
           this.save(false);
           break;
@@ -423,7 +498,11 @@ export class Game {
   }
 
   cancel(): void {
-    if (this.mode.value.kind === 'deed') this.mode.value = { kind: 'select' };
+    if (this.mode.value.kind === 'deed') {
+      this.mode.value = { kind: 'select' };
+      this.deedPreview.value = null;
+      this.view.showTargetRing(null);
+    }
     else if (this.mode.value.kind === 'place') {
       this.mode.value = { kind: 'select' };
       this.ghost.value = null;
@@ -436,6 +515,10 @@ export class Game {
       this.updateGhost(sx, sy);
       return;
     }
+    if (this.mode.value.kind === 'deed') {
+      this.updateDeedPreview(sx, sy);
+      return;
+    }
     const sid = this.view.settlerAt(sx, sy, 20);
     const bid = sid === null ? this.view.buildingAt(sx, sy) : null;
     this.hovered = sid !== null ? { kind: 'settler', id: sid } : bid !== null ? { kind: 'building', id: bid } : null;
@@ -446,18 +529,11 @@ export class Game {
     audio.start();
     const mode = this.mode.value;
     if (mode.kind === 'deed') {
-      const p = this.view.groundAt(sx, sy);
-      if (!p) return;
-      const x = Math.floor(p.x);
-      const y = Math.floor(p.z);
-      const problem = deedTargetProblem(this.world, PLAYER, mode.deed, x, y);
-      if (problem) {
-        audio.play('warn');
-        this.toast('/assets/icons/scroll.png', problem, 'warn');
-        return;
-      }
-      this.world.enqueue({ type: 'deed', owner: PLAYER, familyId: mode.familyId, x, y });
-      this.mode.value = { kind: 'select' };
+      // Touch: the first tap aims (with a preview), the ✓ button confirms. Mouse: click to do it.
+      this.deedPreview.value = null;
+      this.updateDeedPreview(sx, sy);
+      this.touchPlacing.value = touch;
+      if (!touch) this.confirmDeed();
       return;
     }
     if (mode.kind === 'place') {
@@ -557,6 +633,51 @@ export class Game {
     this.selection.value = { kind: 'building', id };
   }
 
+  confirmDeed(): void {
+    const mode = this.mode.value;
+    const pv = this.deedPreview.value;
+    if (mode.kind !== 'deed' || !pv) return;
+    if (pv.problem) {
+      audio.play('warn');
+      this.toast('/assets/icons/scroll.png', pv.problem, 'warn');
+      return;
+    }
+    this.world.enqueue({ type: 'deed', owner: PLAYER, familyId: mode.familyId, x: pv.x, y: pv.y });
+    this.mode.value = { kind: 'select' };
+    this.deedPreview.value = null;
+    this.view.showTargetRing(null);
+  }
+
+  /** Aiming a Festival or an Expedition: show the ring it would cover and the land it would win. */
+  private updateDeedPreview(sx: number, sy: number): void {
+    const mode = this.mode.value;
+    const p = this.view.groundAt(sx, sy);
+    if (mode.kind !== 'deed' || !p) return;
+    const x = Math.floor(p.x);
+    const y = Math.floor(p.z);
+    const prev = this.deedPreview.value;
+    if (prev && prev.x === x && prev.y === y) return;
+    const problem = deedTargetProblem(this.world, PLAYER, mode.deed, x, y);
+    const fam = this.world.families.get(mode.familyId);
+    let r = 0;
+    let claim: ClaimPreview | undefined;
+    if (!problem && fam && (mode.deed === 'festival' || mode.deed === 'expedition')) {
+      const power = deedPower(fam);
+      const src =
+        mode.deed === 'festival'
+          ? { owner: PLAYER, x, y, r: 10 + power * 2, p: 110 + power * 30 }
+          : { owner: PLAYER, ...(outpostSpot(this.world, PLAYER, x, y) ?? { x, y }), r: (BUILDINGS.outpost.claim ?? 7) + (power > 1 ? 2 : 0) + (fam.mods.claim ? 2 : 0), p: BUILDINGS.outpost.power ?? 70 };
+      if (mode.deed === 'expedition') {
+        src.x += 1;
+        src.y += 1;
+      }
+      r = src.r;
+      claim = toPreview(previewInfluence(this.world, src));
+    }
+    this.deedPreview.value = { x, y, r, problem, claim };
+    this.view.showTargetRing(r && !problem ? { x: x + 0.5, z: y + 0.5, r } : null);
+  }
+
   private updateGhost(sx: number, sy: number): void {
     const mode = this.mode.value;
     if (mode.kind !== 'place') return;
@@ -572,7 +693,13 @@ export class Game {
     const job = def.job;
     if (job && job.kind === 'gather') inRange = countInRange(this.world, x, y + def.size, job.node, job.radius);
     else if (job && job.kind === 'plant') inRange = countInRange(this.world, x, y + def.size, 'tree', job.radius);
-    this.ghost.value = { type: mode.type, x, y, ok: check.ok, reason: check.reason, inRange };
+    // Border buildings: preview the land and landmarks they would win.
+    let claim: ClaimPreview | undefined;
+    if (def.claim && check.ok) {
+      const c = Math.floor(def.size / 2);
+      claim = toPreview(previewInfluence(this.world, { owner: PLAYER, x: x + c, y: y + c, r: def.claim, p: def.power ?? 60 }));
+    }
+    this.ghost.value = { type: mode.type, x, y, ok: check.ok, reason: check.reason, inRange, claim };
     this.view.setGhost(this.ghost.value);
   }
 
@@ -604,6 +731,10 @@ const RIVAL_NEWS = new Set<SimEvent['type']>(['claimed', 'rankUp', 'deed', 'work
 
 export function icon(type: BuildingType | string): string {
   return `/assets/icons/${type === 'wagon' ? 'hut' : type}.png`;
+}
+
+function toPreview(p: ReturnType<typeof previewInfluence>): ClaimPreview {
+  return { gained: p.gained, fromRival: p.fromRival, sites: p.sites.map((s) => `${DISCOVERIES[s.kind].icon} ${DISCOVERIES[s.kind].name}`) };
 }
 
 function countInRange(world: World, cx: number, cy: number, kind: string, r: number): number {

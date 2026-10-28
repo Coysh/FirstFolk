@@ -155,3 +155,17 @@ describe('happenings and matches', () => {
     expect(fams.length).toBe(3);
   });
 });
+
+describe('dynasties (meta-progression)', () => {
+  it('a winning house founds the next valley with its name, boons and craft, more skilled each generation', () => {
+    const dynasty = { surname: 'Thorne', boons: ['masterBuilders', 'keenEyes'] as const, skill: 'stonework' as const, generation: 3 };
+    const w = new World({ seed: 8, origin: 'dynasty', dynasty: { ...dynasty, boons: [...dynasty.boons] } });
+    const fam = founders(w, 0);
+    expect(fam.surname).toBe('Thorne');
+    expect(fam.boons).toEqual(['masterBuilders', 'keenEyes']);
+    expect(fam.skills.stonework).toBe(TIER_XP[1] + 160);
+    expect(w.players[0].unlocked).toContain('storehouse');
+    // The rival still rolls an ordinary origin.
+    expect(ORIGIN_IDS).toContain(w.players[1].origin);
+  });
+});

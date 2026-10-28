@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOONS, addBoon, drawBoons, mod } from '../src/sim/boons';
+import { BOONS, BOON_TIMEOUT, addBoon, drawBoons, mod } from '../src/sim/boons';
 import { hashWorld } from '../src/sim/hash';
 import { World } from '../src/sim/world';
 import { place, runSeconds, wagon } from './helpers';
@@ -27,7 +27,7 @@ describe('family boons', () => {
 
   it('unanswered offers resolve themselves so the game never waits', () => {
     const w = new World({ scenario: 'peaceful', seed: 2 });
-    runSeconds(w, 65);
+    runSeconds(w, BOON_TIMEOUT / 10 + 5);
     const founders = [...w.families.values()][0];
     expect(founders.boons.length).toBeGreaterThanOrEqual(1);
   });

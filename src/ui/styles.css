@@ -2120,3 +2120,167 @@ button.danger.armed {
   font-size: 11px;
   color: var(--ink-soft);
 }
+
+/* ---------- sound ---------- */
+.mute-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 18px;
+  background: linear-gradient(#7a5230, var(--wood));
+  border-color: var(--wood-dark);
+}
+.mute-btn.on {
+  border-color: var(--warn);
+  background: rgba(120, 40, 30, 0.7);
+}
+
+/* ---------- the ledger: decisions as letters, not popups ---------- */
+.ledger {
+  position: absolute;
+  left: 10px;
+  bottom: calc(240px + var(--safe-b));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  z-index: 2;
+}
+.ledger-label {
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--wood-dark);
+  color: var(--gold);
+  font: 800 9.5px var(--body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.letter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 300px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  background: var(--parchment-tex) center / 240px, var(--paper);
+  border: 2px solid var(--wood);
+  box-shadow: var(--shadow);
+  font: 800 13px var(--body);
+  text-align: left;
+  animation: letter-arrive 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes letter-arrive {
+  from {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+}
+.letter:hover:not(:disabled) {
+  border-color: var(--gold);
+  transform: translateX(3px);
+}
+.letter.waiting {
+  opacity: 0.55;
+}
+.letter.urgent {
+  border-color: var(--warn);
+  animation: letter-urgent 1s ease-in-out infinite;
+}
+@keyframes letter-urgent {
+  50% {
+    box-shadow: 0 0 0 3px rgba(181, 64, 47, 0.35), var(--shadow);
+  }
+}
+.seal {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.seal span {
+  width: 29px;
+  height: 29px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  background: radial-gradient(circle at 35% 35%, #c9473b, #8e2a20);
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.3);
+}
+.letter-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.letter-open {
+  width: 340px;
+  padding: 10px 12px 10px;
+  background: var(--parchment-tex) center / 320px, var(--paper);
+  border: 2px solid var(--gold);
+  border-radius: 8px 8px 14px 14px;
+  box-shadow: var(--shadow), 0 0 0 4px rgba(242, 193, 78, 0.22);
+  animation: letter-in 0.35s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.letter-open.boon-letter {
+  width: min(560px, calc(100vw - 20px));
+}
+.letter-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.letter-head div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.letter-head small {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+.letter-head strong {
+  font: 700 16px var(--heading);
+}
+.later {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+.letter-open .boon-timer {
+  margin: 6px 0 8px;
+}
+@media (max-width: 720px) {
+  .ledger {
+    left: 6px;
+    right: 6px;
+    bottom: calc(228px + var(--safe-b));
+  }
+  .letter {
+    max-width: 70vw;
+  }
+  .letter-open,
+  .letter-open.boon-letter {
+    width: 100%;
+  }
+  .hud:has(.letter-open) .frontier {
+    display: none;
+  }
+}
+
+.placebar .great {
+  color: #9a6b00;
+  font-weight: 900;
+}
+
+.choice.dynasty {
+  border-color: var(--gold);
+  background: linear-gradient(#fff8e0, #f3e2b2);
+}
+.dynasty-note {
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(242, 193, 78, 0.25);
+  font-weight: 700;
+}

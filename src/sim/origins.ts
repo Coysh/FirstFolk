@@ -8,7 +8,7 @@ import type { Good, Skill } from './defs';
  * craft the founders already know (unlocking its building at once), a boon that brings a
  * deed, and a little extra in the wagon. The rival rolls one of its own.
  */
-export type OriginId = 'woodfolk' | 'hillclan' | 'riverfolk' | 'wayfarers' | 'kinfolk';
+export type OriginId = 'woodfolk' | 'hillclan' | 'riverfolk' | 'wayfarers' | 'kinfolk' | 'dynasty';
 
 export interface OriginDef {
   id: OriginId;
@@ -59,6 +59,14 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     boons: ['wanderlust', 'keenEyes'],
     stock: { logs: 8, berries: 6 },
   },
+  dynasty: {
+    id: 'dynasty',
+    name: 'Dynasty',
+    icon: '👑',
+    blurb: 'Your greatest house from a valley you won, founding a new one.',
+    boons: [],
+    stock: { logs: 6, berries: 6 },
+  },
   kinfolk: {
     id: 'kinfolk',
     name: 'Kinfolk',
@@ -70,7 +78,20 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
   },
 };
 
-export const ORIGIN_IDS = Object.keys(ORIGINS) as OriginId[];
+/** The five origins anyone can pick (a dynasty is earned; see `Dynasty`). */
+export const ORIGIN_IDS: OriginId[] = ['woodfolk', 'hillclan', 'riverfolk', 'wayfarers', 'kinfolk'];
+
+/**
+ * A dynasty: the greatest house of a valley you won, carried into the next one (meta-progression).
+ * The founders bear its name, its two finest boons and its craft; each win with it adds a generation,
+ * and each generation the founders start a little more skilled.
+ */
+export interface Dynasty {
+  surname: string;
+  boons: BoonId[];
+  skill: Skill | null;
+  generation: number;
+}
 
 /** The rival's origin, from the seed (so a valley always has the same neighbour). */
 export function rivalOrigin(seed: number): OriginId {

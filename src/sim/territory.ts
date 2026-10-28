@@ -94,17 +94,18 @@ export function influenceSources(world: World): InfluenceSource[] {
 }
 
 let scratch: Int32Array[] = [];
+let lockedScratch: Int8Array = new Int8Array(0);
 
 /**
- * Re-draw the borders from influence. A tile changes hands only when the challenger's
- * influence beats the holder's by a margin, so borders are stable until really pushed.
+ * Who would hold each tile given these influence sources (pure: reads the current border
+ * for tie-breaks and the challenger's margin, writes nothing). Returns a shared scratch array.
  */
-export function recomputeTerritory(world: World): void {
+function settle(world: World, sources: InfluenceSource[], out: Int8Array): Int8Array {
   const n = world.size * world.size;
   const players = world.players.length;
   if (scratch.length !== players || scratch[0]?.length !== n) scratch = world.players.map(() => new Int32Array(n));
   for (const a of scratch) a.fill(0);
-  for (const src of influenceSources(world)) {
+  for (const src of sources) {
     const inf = scratch[src.owner];
     if (!inf) continue;
     const rr = src.r * src.r + src.r;
@@ -116,13 +117,12 @@ export function recomputeTerritory(world: World): void {
       }
   }
   // Footprints and entrances always belong to their building's owner.
-  const locked = new Int8Array(n).fill(NO_OWNER);
+  if (lockedScratch.length !== n) lockedScratch = new Int8Array(n);
+  const locked = lockedScratch.fill(NO_OWNER);
   for (const b of world.buildings.values()) {
     const size = BUILDINGS[b.type].size;
     for (let dy = 0; dy <= size; dy++) for (let dx = 0; dx < size; dx++) if (world.inBounds(b.x + dx, b.y + dy)) locked[world.idx(b.x + dx, b.y + dy)] = b.owner;
   }
-  const gained = world.players.map(() => ({ n: 0, x: 0, y: 0 }));
-  const lost = world.players.map(() => 0);
   for (let i = 0; i < n; i++) {
     const cur = world.territory[i];
     let next = cur;
@@ -142,12 +142,59 @@ export function recomputeTerritory(world: World): void {
         if (bestV > hold) next = best;
       }
     }
+    out[i] = next;
+  }
+  return out;
+}
+
+let previewScratch: Int8Array = new Int8Array(0);
+
+/**
+ * What a new influence source would do, for placement previews: tiles gained (from the wild
+ * and from the rival), and the landmarks and finds it would bring over. Changes nothing.
+ */
+export function previewInfluence(world: World, extra: InfluenceSource): { gained: number; fromRival: number; sites: Discovery[] } {
+  const n = world.size * world.size;
+  if (previewScratch.length !== n) previewScratch = new Int8Array(n);
+  const next = settle(world, [...influenceSources(world), extra], previewScratch);
+  let gained = 0;
+  let fromRival = 0;
+  for (let i = 0; i < n; i++)
+    if (next[i] === extra.owner && world.territory[i] !== extra.owner) {
+      gained++;
+      if (world.territory[i] !== NO_OWNER) fromRival++;
+    }
+  const sites = world.sites.filter((s) => {
+    const i = world.idx(s.x, s.y);
+    return next[i] === extra.owner && world.territory[i] !== extra.owner && (s.claimedBy === NO_OWNER || DISCOVERIES[s.kind].renown);
+  });
+  return { gained, fromRival, sites };
+}
+
+let settleScratch: Int8Array = new Int8Array(0);
+
+/**
+ * Re-draw the borders from influence. A tile changes hands only when the challenger's
+ * influence beats the holder's by a margin, so borders are stable until really pushed.
+ */
+export function recomputeTerritory(world: World): void {
+  const n = world.size * world.size;
+  if (settleScratch.length !== n) settleScratch = new Int8Array(n);
+  const owners = settle(world, influenceSources(world), settleScratch);
+  const players = world.players.length;
+  const gained = world.players.map(() => ({ n: 0, x: 0, y: 0 }));
+  const lost = world.players.map(() => 0);
+  for (let i = 0; i < n; i++) {
+    const cur = world.territory[i];
+    const next = owners[i];
     if (next === cur) continue;
     world.territory[i] = next;
-    const g = gained[next];
-    g.n++;
-    g.x += i % world.size;
-    g.y += Math.floor(i / world.size);
+    if (next !== NO_OWNER) {
+      const g = gained[next];
+      g.n++;
+      g.x += i % world.size;
+      g.y += Math.floor(i / world.size);
+    }
     if (cur !== NO_OWNER) lost[cur]++;
   }
   let changed = false;

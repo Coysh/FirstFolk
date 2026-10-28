@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { icon, PLAYER, type Game } from '../game';
+import { icon, PLAYER, type ClaimPreview, type Game } from '../game';
+import { audio } from '../audio/audio';
 import { ICON } from '../render/overlay';
 import { BUILDINGS, BUILD_MENU, DISCOVERIES, FOODS, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
@@ -10,7 +11,7 @@ import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
 import type { Family, World } from '../sim/world';
 import { CREST_COLORS, plural } from '../sim/population';
 import { TIER_NAMES, TRADES, tierOf, tierProgress, tradeTitle } from '../sim/trades';
-import { settings } from '../settings';
+import { settings, toggleMute } from '../settings';
 import type { Shell } from '../shell';
 import { ageYears, describeSettler, formatTime } from './describe';
 import { HowTo, SettingsPanel } from './Screens';
@@ -36,8 +37,7 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       <Goals game={game} />
       <RaceBar game={game} />
       <Frontier game={game} />
-      <BoonTray game={game} />
-      <EventCard game={game} />
+      <Ledger game={game} />
       <Toasts game={game} />
       <InfoPanel game={game} />
       {game.marketOpen.value && <Market game={game} />}
@@ -115,6 +115,15 @@ function TopBar({ game }: { game: Game }) {
             </button>
           ))}
         </div>
+        <button
+          class={`mute-btn ${settings.value.muted ? 'on' : ''}`}
+          onClick={() => toggleMute()}
+          aria-label={settings.value.muted ? 'Unmute sound' : 'Mute sound'}
+          aria-pressed={settings.value.muted}
+          title={`${settings.value.muted ? 'Unmute' : 'Mute'} (M)`}
+        >
+          {settings.value.muted ? '🔇' : '🔊'}
+        </button>
         <button class="menu-btn" onClick={() => (game.menuOpen.value = true)} aria-label="Menu" title="Menu (Esc)">
           ☰
         </button>
@@ -340,20 +349,28 @@ function DeedBar({ game }: { game: Game }) {
   const mode = game.mode.value;
   if (mode.kind !== 'deed') return null;
   const d = DEEDS[mode.deed];
-  const hint =
+  const pv = game.deedPreview.value;
+  const base =
     mode.deed === 'expedition'
       ? 'Tap a spot beyond your border (up to 18 tiles out) for the outpost'
       : mode.deed === 'festival'
         ? 'Tap a spot at your border: your influence surges there for a minute'
         : 'Tap the construction site to raise';
+  const hint = pv?.problem || (pv?.claim ? claimText(pv.claim) : base);
+  const tone = pv?.problem ? 'bad' : pv?.claim?.sites.length ? 'great' : 'ok';
   return (
     <div class="placebar panel">
       <span class="deed-icon big">{d.icon}</span>
       <div class="ptext">
         <strong>{d.name}</strong>
-        <span class="ok">{hint}</span>
+        <span class={tone}>{hint}</span>
       </div>
       <div class="pbtns">
+        {game.touchPlacing.value && pv && (
+          <button class="primary" disabled={!!pv.problem} onClick={() => game.confirmDeed()}>
+            ✓ Here
+          </button>
+        )}
         <button onClick={() => game.cancel()}>✕</button>
       </div>
     </div>
@@ -401,64 +418,158 @@ function Market({ game }: { game: Game }) {
   );
 }
 
-/** A messenger's news with a choice attached. Never blocks; resolves cautiously if ignored. */
-function EventCard({ game }: { game: Game }) {
+/**
+ * The ledger: decisions wait here as sealed letters instead of popping up over the game.
+ * Open one whenever it suits you; each shows how long it will wait before it is settled
+ * sensibly on your behalf. Only the very first decision of a game opens by itself, so you
+ * learn where letters arrive.
+ */
+function Ledger({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
-  const ev = w.players[PLAYER].event;
-  if (!ev) return null;
-  const def = eventDef(ev.def);
-  if (!def) return null;
-  const left = Math.max(0, (ev.expires - w.tick) / BALANCE.eventTimeout);
+  const p = w.players[PLAYER];
+  const items: LedgerItem[] = [];
+  if (p.event) {
+    const def = eventDef(p.event.def);
+    if (def) items.push({ key: `e${p.event.id}`, icon: def.icon, title: def.title, left: (p.event.expires - w.tick) / BALANCE.eventTimeout, secs: Math.ceil((p.event.expires - w.tick) / TICK_HZ) });
+  }
+  for (const o of p.offers) {
+    const fam = w.families.get(o.familyId);
+    if (!fam) continue;
+    const live = o.expires > 0;
+    items.push({ key: `b${o.id}`, icon: '🎁', title: `A gift for the ${plural(fam.surname)}`, left: live ? (o.expires - w.tick) / BOON_TIMEOUT : 1, secs: live ? Math.ceil((o.expires - w.tick) / TICK_HZ) : 0, waiting: !live, crest: fam.color });
+  }
+  const open = game.ledgerOpen.value;
+  const openItem = items.find((i) => i.key === open);
+  useEffect(() => {
+    // The first decision of the game opens itself; after that, letters wait to be opened.
+    if (!game.ledgerTaught && items.some((i) => !i.waiting)) {
+      game.ledgerTaught = true;
+      game.ledgerOpen.value = items.find((i) => !i.waiting)!.key;
+    }
+    if (open && !openItem) game.ledgerOpen.value = null;
+  });
+  if (!items.length) return null;
   return (
-    <section class="event-card" key={ev.id} aria-label={def.title}>
-      <header>
-        <span class="ev-icon">{def.icon}</span>
-        <strong>{def.title}</strong>
+    <section class="ledger" aria-label="Decisions waiting">
+      {openItem ? (
+        openItem.key.startsWith('e') ? (
+          <EventLetter game={game} />
+        ) : (
+          <BoonLetter game={game} offerId={Number(openItem.key.slice(1))} />
+        )
+      ) : (
+        <>
+          <span class="ledger-label">Letters</span>
+          {items.map((i) => (
+            <button
+              key={i.key}
+              class={`letter ${i.waiting ? 'waiting' : ''} ${!i.waiting && i.secs <= 15 ? 'urgent' : ''}`}
+              disabled={i.waiting}
+              onClick={() => {
+                audio.play('click');
+                game.ledgerOpen.value = i.key;
+              }}
+              title={i.waiting ? 'Waiting its turn' : `${i.title}: ${i.secs}s before it is settled for you`}
+            >
+              <span class="seal" style={{ background: `conic-gradient(var(--gold) ${Math.max(0, i.left) * 360}deg, rgba(0,0,0,0.25) 0)` }}>
+                <span>{i.icon}</span>
+              </span>
+              <span class="letter-title">{i.title}</span>
+              {i.crest !== undefined && <span class="crest" style={{ background: hex(CREST_COLORS[i.crest]) }} />}
+            </button>
+          ))}
+        </>
+      )}
+    </section>
+  );
+}
+
+interface LedgerItem {
+  key: string;
+  icon: string;
+  title: string;
+  /** 0..1 of the waiting time left. */
+  left: number;
+  secs: number;
+  waiting?: boolean;
+  crest?: number;
+}
+
+function LetterHead({ game, icon, title, sub, left }: { game: Game; icon: string; title: string; sub?: string; left: number }) {
+  return (
+    <>
+      <header class="letter-head">
+        <span class="ev-icon">{icon}</span>
+        <div>
+          {sub && <small>{sub}</small>}
+          <strong>{title}</strong>
+        </div>
+        <button class="later" onClick={() => (game.ledgerOpen.value = null)} title="Decide later" aria-label="Decide later">
+          Later
+        </button>
       </header>
+      <div class="boon-timer">
+        <div style={{ width: `${Math.max(0, left) * 100}%` }} />
+      </div>
+    </>
+  );
+}
+
+/** A messenger's news with a choice attached. Resolves cautiously if left too long. */
+function EventLetter({ game }: { game: Game }) {
+  const w = game.world;
+  const ev = w.players[PLAYER].event;
+  const def = ev && eventDef(ev.def);
+  if (!ev || !def) return null;
+  return (
+    <div class="letter-open" key={ev.id}>
+      <LetterHead game={game} icon={def.icon} title={def.title} left={(ev.expires - w.tick) / BALANCE.eventTimeout} />
       <p class="ev-text">{def.text}</p>
       <div class="ev-options">
         {def.options.map((o, i) => {
           const ok = canAfford(w, PLAYER, o.cost);
           const d = o.describe ? o.describe(w, PLAYER, ev.data ?? []) : o;
           return (
-            <button key={i} class={`ev-opt ${i === def.options.length - 1 ? 'quiet' : ''}`} disabled={!ok} onClick={() => game.chooseEvent(ev.id, i)}>
+            <button
+              key={i}
+              class={`ev-opt ${i === def.options.length - 1 ? 'quiet' : ''}`}
+              disabled={!ok}
+              onClick={() => {
+                game.ledgerOpen.value = null;
+                game.chooseEvent(ev.id, i);
+              }}
+            >
               <strong>{d.label}</strong>
               <small>{d.detail}</small>
             </button>
           );
         })}
       </div>
-      <div class="boon-timer">
-        <div style={{ width: `${left * 100}%` }} />
-      </div>
-    </section>
+    </div>
   );
 }
 
-/** Spore-style evolution picks: choose how a family grows. Never blocks the game. */
-function BoonTray({ game }: { game: Game }) {
-  useWorldRefresh(game);
+/** Spore-style evolution picks: choose how a family grows. */
+function BoonLetter({ game, offerId }: { game: Game; offerId: number }) {
   const w = game.world;
-  const offers = w.players[PLAYER].offers;
-  const o = offers[0];
-  if (!o || o.expires === 0) return null;
-  const fam = w.families.get(o.familyId);
-  if (!fam) return null;
-  const left = Math.max(0, (o.expires - w.tick) / BOON_TIMEOUT);
+  const o = w.players[PLAYER].offers.find((x) => x.id === offerId);
+  const fam = o && w.families.get(o.familyId);
+  if (!o || !fam) return null;
   return (
-    <section class="boon-tray" key={o.id} aria-label="Choose a family boon">
-      <header>
-        <span class="crest" style={{ background: hex(CREST_COLORS[fam.color]) }} />
-        <div>
-          <small>{o.reason}</small>
-          <strong>Choose a boon for the {fam.surname} family</strong>
-        </div>
-        {offers.length > 1 && <span class="more">+{offers.length - 1}</span>}
-      </header>
+    <div class="letter-open boon-letter" key={o.id}>
+      <LetterHead game={game} icon="🎁" sub={o.reason} title={`Choose a gift for the ${fam.surname} family`} left={(o.expires - w.tick) / BOON_TIMEOUT} />
       <div class="boon-cards">
         {o.choices.map((id, i) => (
-          <button key={id} class="boon-card" style={{ animationDelay: `${i * 90}ms` }} onClick={() => game.chooseBoon(o.id, i)}>
+          <button
+            key={id}
+            class="boon-card"
+            style={{ animationDelay: `${i * 90}ms` }}
+            onClick={() => {
+              game.ledgerOpen.value = null;
+              game.chooseBoon(o.id, i);
+            }}
+          >
             <span class="bc-icon">{BOONS[id].icon}</span>
             <strong>{BOONS[id].name}</strong>
             <span class="bc-blurb">{BOONS[id].blurb}</span>
@@ -470,10 +581,7 @@ function BoonTray({ game }: { game: Game }) {
           </button>
         ))}
       </div>
-      <div class="boon-timer">
-        <div style={{ width: `${left * 100}%` }} />
-      </div>
-    </section>
+    </div>
   );
 }
 
@@ -569,8 +677,9 @@ function PlaceBar({ game, type }: { game: Game; type: BuildingType }) {
   if (!g) hint = touch ? 'Tap the ground to choose a spot' : 'Move over the ground to choose a spot';
   else if (!g.ok) hint = g.reason;
   else if (g.inRange !== undefined) hint = g.inRange === 0 ? `No ${what} in reach here` : `${g.inRange} ${what} in reach`;
+  else if (g.claim) hint = claimText(g.claim);
   else hint = touch ? 'Looks good!' : 'Click to build · Shift-click to keep building';
-  const tone = g && !g.ok ? 'bad' : g?.inRange === 0 ? 'warn' : 'ok';
+  const tone = g && !g.ok ? 'bad' : g?.inRange === 0 || g?.claim?.gained === 0 ? 'warn' : g?.claim?.sites.length ? 'great' : 'ok';
   return (
     <div class="placebar panel">
       <img src={icon(type)} alt="" />
@@ -588,6 +697,12 @@ function PlaceBar({ game, type }: { game: Game; type: BuildingType }) {
       </div>
     </div>
   );
+}
+
+/** "+86 land (31 from your rival) · takes 🗿 Standing Stones!" */
+function claimText(c: ClaimPreview): string {
+  if (!c.gained) return 'Wins no new land here: try nearer the edge, or the rival’s side';
+  return `+${c.gained} land${c.fromRival ? ` (${c.fromRival} from your rival)` : ''}${c.sites.length ? ` · takes ${c.sites.join(', ')}!` : ''}`;
 }
 
 function SkillBars({ skills }: { skills: Record<string, number> }) {
@@ -869,7 +984,7 @@ function Victory({ game }: { game: Game }) {
               )}
               {me.origin && (
                 <li>
-                  Founded by {ORIGINS[me.origin].name}
+                  Founded by {me.origin === 'dynasty' ? 'your dynasty' : ORIGINS[me.origin].name}
                   {them?.origin ? `, against ${ORIGINS[them.origin].name}` : ''}
                 </li>
               )}
@@ -888,6 +1003,12 @@ function Victory({ game }: { game: Game }) {
             </ul>
           </div>
         </div>
+        {won && game.earned.value && (
+          <p class="dynasty-note">
+            👑 The {plural(game.earned.value.surname)} will be remembered
+            {game.earned.value.generation > 1 ? ` (generation ${game.earned.value.generation})` : ''}. Found your next valley with them from New Game.
+          </p>
+        )}
         <p class="muted">{won ? 'Keep building as long as you like.' : 'Your folk carry on. A new valley awaits whenever you want a rematch.'}</p>
         <button class="primary big" onClick={() => (game.victory.value = null)}>
           Keep playing

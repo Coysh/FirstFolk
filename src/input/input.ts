@@ -1,6 +1,7 @@
 import { BUILD_MENU } from '../sim/defs';
 import { council } from '../sim/deeds';
 import type { Game } from '../game';
+import { toggleMute } from '../settings';
 
 /** Build hotkeys in shelf order. */
 export const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'];
@@ -166,6 +167,7 @@ export class Input {
       if (this.game.world.isUnlocked(0, type)) this.game.startPlacing(type);
     }
     else if (k === 'f') this.game.focusSelection();
+    else if (k === 'm') toggleMute();
     else if (DEED_KEYS.includes(k)) {
       const fam = council(this.game.world, 0)[DEED_KEYS.indexOf(k)];
       if (fam) this.game.useDeed(fam.id);

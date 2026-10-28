@@ -1,13 +1,17 @@
 import { signal } from '@preact/signals';
 import type { SaveData } from './sim/save';
+import type { Dynasty } from './sim/origins';
 import { summarize, type SaveSummary } from './sim/save';
 
 export type Quality = 'high' | 'balanced' | 'low';
 
 export interface Settings {
   master: number;
+  music: number;
   ambience: number;
   effects: number;
+  /** Silences everything (M key or the speaker button), keeping the levels for later. */
+  muted: boolean;
   quality: Quality;
   hints: boolean;
 }
@@ -17,8 +21,10 @@ const SAVE_KEY = 'firstfolk.save.v1';
 
 const defaults: Settings = {
   master: 0.8,
+  music: 0.6,
   ambience: 0.6,
   effects: 0.7,
+  muted: false,
   quality: matchMedia('(pointer: coarse)').matches ? 'balanced' : 'high',
   hints: true,
 };
@@ -33,6 +39,10 @@ function read<T>(key: string): T | null {
 }
 
 export const settings = signal<Settings>({ ...defaults, ...(read<Partial<Settings>>(SETTINGS_KEY) ?? {}) });
+
+export function toggleMute(): void {
+  saveSettings({ ...settings.value, muted: !settings.value.muted });
+}
 
 export function saveSettings(next: Settings): void {
   settings.value = next;
@@ -101,4 +111,27 @@ export function recordDaily(r: DailyResult): void {
   } catch {
     /* storage unavailable */
   }
+}
+
+/** Houses that won a valley, remembered to found the next (newest first, up to six). */
+const DYNASTY_KEY = 'firstfolk.dynasties.v1';
+
+export interface StoredDynasty extends Dynasty {
+  renown: number;
+  date: string;
+}
+
+export const dynasties = signal<StoredDynasty[]>(read<StoredDynasty[]>(DYNASTY_KEY) ?? []);
+
+/** Remember a winning house; winning again with the same name adds a generation. */
+export function recordDynasty(d: Omit<StoredDynasty, 'generation'>): StoredDynasty {
+  const prev = dynasties.value.find((x) => x.surname === d.surname);
+  const entry: StoredDynasty = { ...d, generation: (prev?.generation ?? 0) + 1 };
+  dynasties.value = [entry, ...dynasties.value.filter((x) => x.surname !== d.surname)].slice(0, 6);
+  try {
+    localStorage.setItem(DYNASTY_KEY, JSON.stringify(dynasties.value));
+  } catch {
+    /* storage unavailable */
+  }
+  return entry;
 }

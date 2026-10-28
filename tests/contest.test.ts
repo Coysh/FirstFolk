@@ -221,3 +221,20 @@ describe('the renown race', () => {
     expect(w.drainEvents().some((e) => e.type === 'victory' && e.byTime)).toBe(true);
   });
 });
+
+describe('influence previews', () => {
+  it('a preview reports the land and landmarks a tower would win, without changing anything', async () => {
+    const { previewInfluence } = await import('../src/sim/territory');
+    const w = new World({ seed: 2 });
+    const site = w.sites.find((s) => DISCOVERIES[s.kind].renown && !DISCOVERIES[s.kind].aura)!;
+    const before = Int8Array.from(w.territory);
+    const p = previewInfluence(w, { owner: 0, x: site.x - 2, y: site.y, r: 12, p: 100 });
+    expect(p.gained).toBeGreaterThan(50);
+    expect(p.sites.map((s) => s.id)).toContain(site.id);
+    expect(Array.from(w.territory)).toEqual(Array.from(before));
+    // And the real thing matches the preview.
+    w.addBuilding('watchtower', 0, site.x - 3, site.y - 1, true);
+    recomputeTerritory(w);
+    expect(site.heldBy).toBe(0);
+  });
+});

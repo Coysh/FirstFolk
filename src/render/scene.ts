@@ -238,6 +238,15 @@ export class GameRenderer {
     this.ghostTiles.scale.set(size, 1, size + 1);
     this.ghostTiles.position.set(g.x + size / 2, base + 0.05, g.y + (size + 1) / 2);
     this.ghostTiles.visible = true;
+    // Border buildings: the reach of their influence.
+    const claim = BUILDINGS[g.type].claim;
+    if (claim && !BUILDINGS[g.type].housing) {
+      const cx = g.x + size / 2;
+      const cz = g.y + size / 2;
+      this.rangeRing.position.set(cx, this.hf.at(cx, cz) + 0.1, cz);
+      this.rangeRing.scale.setScalar(claim);
+      this.rangeRing.visible = true;
+    }
     // Work radius for gatherers and foresters.
     const job = BUILDINGS[g.type].job;
     if (job && (job.kind === 'gather' || job.kind === 'plant')) {
@@ -263,6 +272,34 @@ export class GameRenderer {
       this.hoverRing.position.set(pos.x, pos.y + 0.04, pos.z);
       this.hoverRing.scale.setScalar(radius / 0.4);
     }
+  }
+
+  /** A ring on the ground where a deed would land (null hides it). */
+  showTargetRing(t: { x: number; z: number; r: number } | null): void {
+    this.rangeRing.visible = !!t;
+    if (!t) return;
+    this.rangeRing.position.set(t.x, this.hf.at(t.x, t.z) + 0.15, t.z);
+    this.rangeRing.scale.setScalar(t.r);
+  }
+
+  /** What the camera hears: how much water and how much village is around its focus (0..1). */
+  listen(): { water: number; village: number } {
+    const t = this.rig.target;
+    let water = 0;
+    let n = 0;
+    const seen = new Set<number>();
+    for (let dy = -8; dy <= 8; dy += 2)
+      for (let dx = -8; dx <= 8; dx += 2) {
+        const x = Math.floor(t.x) + dx;
+        const y = Math.floor(t.z) + dy;
+        if (!this.world.inBounds(x, y)) continue;
+        const i = this.world.idx(x, y);
+        n++;
+        if (this.world.map.terrain[i] === 0) water++;
+        const b = this.world.buildingAt[i];
+        if (b) seen.add(b);
+      }
+    return { water: n ? Math.min(1, (water / n) * 2.5) : 0, village: Math.min(1, seen.size / 8) };
   }
 
   groundHeight(x: number, z: number): number {

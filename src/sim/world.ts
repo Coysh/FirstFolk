@@ -17,7 +17,7 @@ import type { DeedId } from './deeds';
 import { updateMarket } from './market';
 import { updateHappenings } from './happenings';
 import { addBoon, offerBoon, updateOffers, type BoonId, type Mod } from './boons';
-import { ORIGINS, rivalOrigin, type OriginId } from './origins';
+import { ORIGINS, rivalOrigin, type Dynasty, type OriginId } from './origins';
 import { hasOmen, type OmenId } from './omens';
 import { unlocksFor } from './trades';
 import { isWinter, updateSeasons, type Season } from './seasons';
@@ -283,6 +283,8 @@ export interface WorldOptions {
   blank?: boolean;
   /** The player's founding origin (see origins.ts); without one, the founders choose a boon at 0:00. */
   origin?: OriginId;
+  /** With origin 'dynasty': the house carried over from a won valley. */
+  dynasty?: Dynasty;
   /** Rule twists for this valley (see omens.ts). */
   omens?: OmenId[];
   /** A tag for special games, e.g. 'daily-20261028'. */
@@ -367,7 +369,7 @@ export class World {
     const seams = hasOmen(this, 'richSeams') ? 2 : 1;
     for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y, 0, n.kind === 'rock' ? (n.max ?? BALANCE.rockStone) * seams : n.max);
     for (const site of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER, heldBy: NO_OWNER });
-    this.setupPlayer(0, this.map.starts[0], opts.origin);
+    this.setupPlayer(0, this.map.starts[0], opts.origin, opts.dynasty);
     if (this.scenario.rival) this.addRival();
   }
 
@@ -519,12 +521,12 @@ export class World {
     return s;
   }
 
-  private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId): void {
+  private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
     this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '' };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
-    const fam = createFamily(this, owner, wagon.id);
+    const fam = createFamily(this, owner, wagon.id, dynasty?.surname);
     wagon.familyId = fam.id;
     const e = this.entrance(wagon);
     const origin = originId ? ORIGINS[originId] : null;
@@ -541,10 +543,17 @@ export class World {
     // An origin is that choice made before the clock starts: a craft, a boon (and its deed), supplies.
     for (const g of GOODS) wagon.stock[g] += origin.stock[g] ?? 0;
     for (const b of origin.boons) addBoon(fam, b);
-    if (origin.skill) {
-      for (const s of folk.slice(0, 2)) s.skills[origin.skill] = TIER_XP[1];
-      fam.skills[origin.skill] = TIER_XP[1];
-      for (const t of unlocksFor(origin.skill, 1)) this.players[owner].unlocked.push(t);
+    const skill = dynasty ? dynasty.skill : origin.skill;
+    if (dynasty) {
+      for (const b of dynasty.boons.slice(0, 2)) addBoon(fam, b);
+      fam.glory = dynasty.generation * 2;
+    }
+    if (skill) {
+      // A dynasty's founders know a little more with each generation.
+      const xp = TIER_XP[1] + (dynasty ? Math.min(4, dynasty.generation - 1) * 80 : 0);
+      for (const s of folk.slice(0, 2)) s.skills[skill] = xp;
+      fam.skills[skill] = xp;
+      for (const t of unlocksFor(skill, 1)) this.players[owner].unlocked.push(t);
     }
   }
 

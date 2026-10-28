@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 import { audio } from '../audio/audio';
 import { DIFFICULTY_INFO, type Difficulty } from '../sim/rules';
-import { dailyBest, dailySeed, saveSettings, saveSummary, settings, todayKey, type Quality } from '../settings';
+import { dailyBest, dailySeed, dynasties, saveSettings, saveSummary, settings, todayKey, type Quality, type StoredDynasty } from '../settings';
+import { BOONS } from '../sim/boons';
+import { TRADES } from '../sim/trades';
 import { ORIGINS, ORIGIN_IDS, type OriginId } from '../sim/origins';
 import { OMENS, rollOmens } from '../sim/omens';
 import type { Shell } from '../shell';
@@ -122,16 +124,28 @@ function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void;
   const [seed, setSeed] = useState(String(daily ? dailySeed(todayKey()) : randomSeed()));
   const [rival, setRival] = useState(true);
   const [origin, setOrigin] = useState<OriginId>('woodfolk');
+  const [heir, setHeir] = useState<StoredDynasty | null>(null);
   const seedNum = Number(seed.replace(/\D/g, '')) || 0;
+  const pick = heir ? 'dynasty' : origin;
   const start = () =>
-    daily ? void shell.newGame(dailySeed(todayKey()), 'normal', true, origin, `daily-${todayKey()}`) : void shell.newGame(seedNum || randomSeed(), difficulty, rival, origin);
+    daily
+      ? void shell.newGame(dailySeed(todayKey()), 'normal', true, pick, `daily-${todayKey()}`, heir ?? undefined)
+      : void shell.newGame(seedNum || randomSeed(), difficulty, rival, pick, '', heir ?? undefined);
   return (
     <Modal title={daily ? `Daily Valley · ${todayKey()}` : 'New Game'} onClose={onClose} wide>
       <p class="muted">{daily ? 'Everyone gets the same valley today. Win it, then beat your own renown.' : 'Your family arrives with a wagon of supplies in an unexplored valley.'}</p>
       <div class="field-label">Your founding house</div>
       <div class="choices origins">
         {ORIGIN_IDS.map((id) => (
-          <button key={id} class={`choice origin ${origin === id ? 'on' : ''}`} onClick={() => setOrigin(id)} aria-pressed={origin === id}>
+          <button
+            key={id}
+            class={`choice origin ${!heir && origin === id ? 'on' : ''}`}
+            onClick={() => {
+              setOrigin(id);
+              setHeir(null);
+            }}
+            aria-pressed={!heir && origin === id}
+          >
             <strong>
               <span class="or-icon">{ORIGINS[id].icon}</span> {ORIGINS[id].name}
             </strong>
@@ -139,6 +153,24 @@ function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void;
           </button>
         ))}
       </div>
+      {dynasties.value.length > 0 && (
+        <>
+          <div class="field-label">Or carry on a dynasty (houses that won you a valley)</div>
+          <div class="choices origins">
+            {dynasties.value.map((d) => (
+              <button key={d.surname} class={`choice origin dynasty ${heir?.surname === d.surname ? 'on' : ''}`} onClick={() => setHeir(d)} aria-pressed={heir?.surname === d.surname}>
+                <strong>
+                  <span class="or-icon">👑</span> The {d.surname} line{d.generation > 1 ? `, generation ${d.generation}` : ''}
+                </strong>
+                <span>
+                  {d.boons.map((b) => BOONS[b].name).join(' & ') || 'No boons'}
+                  {d.skill ? ` · ${TRADES[d.skill].name} from the start` : ''} · won with {d.renown}★
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {seedNum > 0 && (
         <div class="omens">
           <span class="field-label">This valley’s omens</span>
@@ -193,17 +225,22 @@ function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void;
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const s = settings.value;
   const set = (patch: Partial<typeof s>) => saveSettings({ ...s, ...patch });
-  const slider = (key: 'master' | 'ambience' | 'effects', label: string) => (
+  const slider = (key: 'master' | 'music' | 'ambience' | 'effects', label: string) => (
     <label class="slider">
       <span>{label}</span>
-      <input type="range" min={0} max={1} step={0.05} value={s[key]} onInput={(e) => set({ [key]: Number((e.target as HTMLInputElement).value) })} onChange={() => audio.play('click')} />
+      <input type="range" min={0} max={1} step={0.05} value={s[key]} aria-label={`${label} volume`} onInput={(e) => set({ [key]: Number((e.target as HTMLInputElement).value) })} onChange={() => audio.play('click')} />
       <span class="val">{Math.round(s[key] * 100)}</span>
     </label>
   );
   return (
     <Modal title="Settings" onClose={onClose}>
       <div class="field-label">Sound</div>
+      <label class="toggle">
+        <input type="checkbox" checked={s.muted} onChange={(e) => set({ muted: (e.target as HTMLInputElement).checked })} />
+        Mute all sound (M)
+      </label>
       {slider('master', 'Master')}
+      {slider('music', 'Music')}
       {slider('ambience', 'Ambience')}
       {slider('effects', 'Effects')}
       <div class="field-label">Graphics</div>
@@ -229,7 +266,7 @@ export function HowTo({ onClose }: { onClose: () => void }) {
     { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,500 renown wins, or the most renown when the clock reaches 45:00. From 25:00 the Moot makes landmarks pay double. Landmarks, land, discoveries, Masters, deeds, Great Works and Market Day all count.' },
     { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Families with room and food have children; empty huts draw newcomers; young adults marry into new households.' },
     { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Influence decides the border: Lookouts and Watchtowers push it, and your rival can push back. Landmarks (groves, oakwoods, outcrops, standing stones) pay renown every minute you hold them.' },
-    { icon: '/assets/icons/people.png', title: 'Raise great houses', text: 'Work makes Journeymen and Masters. Pick each family’s boons. Your four greatest houses each lend a Deed (Z X C V): Raise, Expeditions, Festivals and more.' },
+    { icon: '/assets/icons/people.png', title: 'Raise great houses', text: 'Work makes Journeymen and Masters. Choices arrive as letters at the left: open them when you like. Your four greatest houses each lend a Deed (Z X C V). Win, and your greatest house can found your next valley.' },
     { icon: '/assets/icons/henge.png', title: 'Race for Great Works', text: 'From Village rank: the Stone Circle, Mead Hall and Great Granary. Only one of each in the valley, so finish first! Sell surplus on Market Day for renown.' },
     { icon: '/assets/icons/berries.png', title: 'Generations', text: 'Winters bite, so stockpile food. Folk grow old, teach their families and die; a Master who dies becomes a legend that makes their craft faster for all.' },
   ];
@@ -277,6 +314,11 @@ export function HowTo({ onClose }: { onClose: () => void }) {
             <td>Family deeds</td>
             <td>Z X C V, or click a Great House</td>
             <td>Tap a Great House</td>
+          </tr>
+          <tr>
+            <td>Mute</td>
+            <td>M, or the 🔊 button</td>
+            <td>🔊 button</td>
           </tr>
           <tr>
             <td>Pause / menu</td>

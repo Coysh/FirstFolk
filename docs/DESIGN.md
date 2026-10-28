@@ -175,6 +175,40 @@ Measured (60 fair duels with origins and omens: `npm run sim -- --seed 100 --min
 - **Betrothal** (Valley Event, from Hamlet). The two most promising matches in your town are put to you by name, with their crafts and deeds, e.g. "Edith Thorne, Master Mason (Raise) & Osric Ashby (Expedition)". Bless one, and the new household inherits the best of both families: crafts, boons and so deeds. The player now *breeds* their council, the Spore lever made explicit. A couple with no free home lives as a homeless household until the next one is built. Events can now carry data chosen at draw time (`setup`) and show dynamic options (`describe`).
 - **Council news.** A family rising to the Great Houses is announced along with the deed it brings, so you can see how your families are evolving.
 
+### v0.11: sound you'll want on, decisions you take when you like, and a reason to come back
+- **The soundtrack** (`audio/music.ts`, `audio/instruments.ts`). Four original pieces in old modes, written note by note and played live by a synthesised band:
+
+  | Piece | Mode and metre | When it plays |
+  |---|---|---|
+  | *The First Valley* | D Dorian, 3/4 | The main theme: title, victory, and the Moot at 120 bpm with full drums |
+  | *Hearthsong* | G Mixolydian, 3/4 | The village at work |
+  | *The Long Night* | E Aeolian, 4/4, with bells | Winter |
+  | *Banners at the Border* | D Dorian, 4/4, shawm and drum | When the rival presses |
+
+  The band: Karplus–Strong lute and harp (rendered once per pitch), a breathy recorder with delayed vibrato, a hurdy-gurdy drone with a rhythmic buzz, frame drum, bells and a shawm horn, all through a hall reverb and a gentle bus compressor.
+  - **The conductor follows the game.** Moods change at four-bar phrase boundaries, so transitions stay musical.
+    - **Tension** follows land or a landmark lost in the last 45–60 s, or a rival 120 renown ahead after 15:00.
+    - **Intensity** adds layers: drone and harp, then lute arpeggios, then the melody and its octave doubling, then drums.
+    - **Rests:** calm pieces leave 8–18 s of drone-only rest between passes, so the music never becomes wallpaper.
+  - **Stingers** (fanfares, bells and a falling flute) mark discoveries, landmarks won or lost, rank-ups, star-fall, the Moot, deeds, Great Works, victory and defeat, ducking the music beneath them.
+  - **Measured headless:** every mood plays with no errors and peaks below 0.5, integrated loudness about -24 LUFS. A test checks every bar of every piece fits its metre.
+- **The soundscape follows season and camera.**
+  - Birdsong (rich in spring, sparse in autumn).
+  - Crickets in summer, rooks in autumn, and a howling wind with far-off wolves in winter.
+  - River babble when the camera is near water, and hearth crackle in a busy village.
+  - Pausing or opening a menu muffles the world.
+- **Volume:** master, music, ambience and effects sliders, plus **Mute all**, available from the speaker button, the M key and Settings. All are persisted.
+- **The ledger: no more decision popups.** Boon choices and Valley Events arrive as sealed letters stacked at the left, with a soft wax-and-bell sound and no interruption.
+  - Each letter shows a ring of the time left: 120 s for a boon and 100 s for an event (previously 60 and 45), after which it is settled sensibly for you.
+  - Open a letter when convenient, or choose "Later".
+  - Only the very first decision of a game opens by itself, to teach where letters live.
+  - Interruptions are kept for exceptional moments: banners for claims, rank-ups, star-fall and the Moot, and the end-of-game report.
+- **Influence previews.** Placing a Lookout or Watchtower shows its reach as a ring and says what it would win, e.g. "+92 land (31 from your rival) · takes 🕯️ Forest Shrine!".
+  - Aiming a Festival or Expedition previews the same way: hover on desktop; on touch, tap to aim and ✓ to confirm.
+  - The preview uses the real border solver (`previewInfluence`, extracted as the pure `settle`), so it never lies.
+- **Dynasties (meta-progression).** Winning a valley remembers your greatest house: its name, its two finest boons and its craft. In New Game you can found a valley with that dynasty: its founders bear its name and gifts, and start more skilled with each generation it wins (up to +320 XP). It's the family system carried across games, and a reason to play the next one.
+- **Council news** now announces only a new deed reaching the council, not families swapping seats.
+
 ---
 
 ## 1. Design guardrails
@@ -871,4 +905,20 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - The Hamlet chapter now teaches deeds with a "Call on a family deed" goal (`objectives.deeds`).
 - Mobile: the top bar wraps to three rows once Market and alerts appear, and the goals panel hid the speed controls. Goals and the race now start below the bar.
 - The Betrothal card keeps "Bless this match" on one line.
+
+### v0.11.0 Sound, the ledger, previews and dynasties (2026-10-28)
+- **Request:** every iteration should make the game significantly more fun. This one also overhauled the audio (an original dynamic soundtrack, ambience, separate volumes and mute) and replaced the interrupting decision popups.
+- **Built:**
+  - the soundtrack engine and four pieces, with stingers;
+  - the seasonal and camera soundscape;
+  - music volume and mute (button, M, Settings);
+  - the ledger in place of the boon tray and event card, with longer decision windows;
+  - influence previews for towers, Festivals and Expeditions;
+  - dynasties;
+  - deed-only council news.
+- **Caught while testing:**
+  - The lute's timing jitter could schedule the first note at a negative time, which throws in WebAudio. Start times are now clamped, and late notes are dropped after a stall.
+  - The wind's broadband noise masked the music (seen on a spectrogram of a headless recording), and the mix sat at about -29 LUFS. Wind is now halved, the music is louder, and a bus compressor is added (about -24 LUFS).
+  - Four council toasts at once.
+- **Tests:** every bar fits its metre, preview equals reality, dynasty founders (102 tests).
 
