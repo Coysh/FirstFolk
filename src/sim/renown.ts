@@ -31,8 +31,6 @@ export function renownRate(world: World, owner: number): { landmarks: number; la
   }
   // The Stone Circle makes held landmarks pay half as much again.
   if (world.hasWork(owner, 'henge')) landmarks = Math.floor((landmarks * 3) / 2);
-  // The Moot: the whole valley gathers for the final stretch, and landmarks pay double.
-  if (mootUnderway(world)) landmarks *= 2;
   let tiles = 0;
   for (let i = 0; i < world.territory.length; i++) if (world.territory[i] === owner) tiles++;
   return { landmarks, land: Math.floor(tiles / BALANCE.renown.landTiles) };
@@ -54,12 +52,9 @@ export function watched(world: World, owner: number, x: number, y: number): '' |
   return out;
 }
 
-export const mootUnderway = (world: World) => !!world.scenario.timeLimit && world.tick >= BALANCE.mootAt;
-
 /** Pay out holdings. Runs every `renownTick`; remainders carry over exactly between payouts. */
 export function updateRenown(world: World): void {
   const minute = 60 * TICK_HZ;
-  if (world.scenario.timeLimit && world.tick >= BALANCE.mootAt && world.tick < BALANCE.mootAt + BALANCE.renownTick) world.emit({ type: 'moot' });
   const top = Math.max(...world.players.map((p) => p.renown));
   for (const p of world.players) {
     p.maxDeficit = Math.max(p.maxDeficit, top - p.renown);

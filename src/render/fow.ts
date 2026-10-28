@@ -117,7 +117,7 @@ export class FogOfWar {
                 : ''
             }
             float lum = dot(gl_FragColor.rgb, vec3(0.3, 0.55, 0.15));
-            gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.86, 0.9, 0.98) * (0.55 + 0.6 * lum), uSnow * 0.62);
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * vec3(0.9, 0.96, 1.06) + vec3(0.04, 0.05, 0.08) * (0.4 + lum), uSnow * 0.55);
             float hidden = (1.0 - smoothstep(0.15, 0.85, fow.r)) * uFowStrength;
             vec3 dim = gl_FragColor.rgb * vec3(0.24, 0.27, 0.34) + vec3(0.02, 0.025, 0.04);
             gl_FragColor.rgb = mix(gl_FragColor.rgb, dim, hidden);

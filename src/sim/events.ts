@@ -1,4 +1,6 @@
-import { BALANCE } from './balance';
+import { BALANCE, secs } from './balance';
+import { starfallTick } from './happenings';
+import { addRenown } from './renown';
 import { BUILDINGS, FOODS, SKILLS, type Good } from './defs';
 import { spawnFamily } from './population';
 import { isWinter, seasonOf } from './seasons';
@@ -31,6 +33,8 @@ export interface ValleyEventDef {
   text: string;
   /** Relative frequency; 0 or a failing condition skips it. */
   weight: number;
+  /** Story events happen once per settlement. */
+  once?: boolean;
   when?(world: World, owner: number): boolean;
   /** Choose what the event is about when it's drawn; null skips it. Stored with the event. */
   setup?(world: World, owner: number): number[] | null;
@@ -189,6 +193,45 @@ export const VALLEY_EVENTS: ValleyEventDef[] = [
     ],
   },
   {
+    id: 'envoy',
+    title: 'An Envoy Under a White Cloth',
+    icon: '🕊️',
+    text: 'A rider in the rival’s colours stops at your border, hands open. “My Thane offers a truce of the road, until the star falls. Or you may send me home with your answer.”',
+    weight: 8,
+    once: true,
+    when: (w, o) => o === 0 && w.players.length > 1 && w.tick >= secs(6 * 60),
+    options: [
+      { label: 'Swear the truce', detail: 'Both folk gain 10 logs and 6 stone; no raids for 2½ minutes', apply: (w) => truce(w) },
+      { label: 'Read his map', detail: 'Reveals the ground round the rival’s camp', apply: (w, o) => mapOfRival(w, o) },
+      { label: 'Spurn him', detail: '+20 renown, and the rival will not forget', apply: (w, o) => spurn(w, o) },
+    ],
+  },
+  {
+    id: 'seer',
+    title: 'The Stargazer’s Warning',
+    icon: '🔭',
+    text: 'An old stargazer begs an audience. “The star that led you here is not done. It will fall again between your folk and theirs, soon. Whoever keeps what it leaves will be crowned.”',
+    weight: 8,
+    once: true,
+    when: (w, o) => o === 0 && w.players.length > 1 && w.scenario.victory === 'crown' && !w.crown && w.tick >= starfallTick(w) - secs(240) && w.tick < starfallTick(w) - secs(45),
+    options: [
+      { label: 'Raise a camp at the hill', detail: 'Reveals the middle of the valley; +8 logs, +4 planks', apply: (w, o) => seerHill(w, o) },
+      { label: 'Keep faith at home', detail: '+12 food and every house power ready', apply: (w, o) => (give(w, o, 'berries', 12), bless(w, o)) },
+    ],
+  },
+  {
+    id: 'deserters',
+    title: 'Deserters at the Gate',
+    icon: '🚶',
+    text: 'Three hungry spearmen creep in from the rival’s camp. “Their Thane keeps the best for himself. We would rather stand with a fairer hall.”',
+    weight: 5,
+    when: (w, o) => w.players.length > 1 && w.players[o].rank >= 1 && w.players.some((p) => p.id !== o && p.renown - w.players[o].renown >= 100),
+    options: [
+      { label: 'Take them in', detail: 'A skilled family arrives (needs a home)', apply: (w, o) => joinFamily(w, o) },
+      { label: 'Turn them away', detail: 'Keep your stores', apply: () => 'They shrug and slip back into the dark.' },
+    ],
+  },
+  {
     id: 'pilgrims',
     title: 'Pilgrims at the Stones',
     icon: '🕯️',
@@ -201,6 +244,45 @@ export const VALLEY_EVENTS: ValleyEventDef[] = [
     ],
   },
 ];
+
+function otherPlayers(world: World, owner: number) {
+  return world.players.filter((p) => p.id !== owner);
+}
+
+/** A truce of the road: gifts both ways, and no raids from either side for a while. */
+function truce(world: World): string {
+  for (const p of world.players) {
+    give(world, p.id, 'logs', 10);
+    give(world, p.id, 'stone', 6);
+    p.raidReady = Math.max(p.raidReady, world.tick + secs(150));
+  }
+  return 'The envoy and your elders clasp hands. For two and a half minutes the road is safe.';
+}
+
+/** The envoy's map: the rival's camp comes into view. */
+function mapOfRival(world: World, owner: number): string {
+  const rival = otherPlayers(world, owner)[0];
+  const hall = rival && [...world.buildings.values()].find((b) => b.owner === rival.id && b.type === 'wagon');
+  if (!hall) return 'The map is a child’s drawing.';
+  revealArea(world, owner, hall.x, hall.y, 9);
+  return 'You copy his map before he rides on. Their camp, and every post round it, is now in view.';
+}
+
+/** The rival is insulted: its next raid comes half again as strong, and you are talked of. */
+function spurn(world: World, owner: number): string {
+  addRenown(world, owner, 20, 'events');
+  for (const p of otherPlayers(world, owner)) p.warhorn = true;
+  return 'He rides off in silence. Your folk cheer (+20 renown), but the rival’s next raid will come with a war-horn.';
+}
+
+/** A camp at the crowning-hill: the middle of the valley is seen, and your builders bring supplies. */
+function seerHill(world: World, owner: number): string {
+  const [a, b] = world.map.starts;
+  revealArea(world, owner, Math.round((a.x + b.x) / 2), Math.round((a.y + b.y) / 2), 12);
+  give(world, owner, 'logs', 8);
+  give(world, owner, 'planks', 4);
+  return 'Your builders pitch tents on the hill and send back word. The middle of the valley is yours to see.';
+}
 
 function feast(world: World, owner: number, xp: number): string {
   for (const k of SKILLS) craftXp(world, owner, k, xp * 3);
@@ -277,12 +359,14 @@ export function updateValleyEvents(world: World): void {
     const ev = p.event;
     if (ev && world.tick >= ev.expires) resolveEvent(world, p.id, ev.id, VALLEY_EVENTS.find((d) => d.id === ev.def)!.options.length - 1);
     if (p.event || world.tick < p.nextEventAt) continue;
-    const pool = VALLEY_EVENTS.filter((d) => d.weight > 0 && d.id !== p.lastEvent && (!d.when || d.when(world, p.id)));
+    const pool = VALLEY_EVENTS.filter((d) => d.weight > 0 && d.id !== p.lastEvent && !(d.once && p.onceEvents.includes(d.id)) && (!d.when || d.when(world, p.id)));
     if (!pool.length) continue;
+    // The story comes first: a story event that is due is always the next one drawn.
+    const story = pool.find((d) => d.once);
     let r = world.rng.int(pool.reduce((a, d) => a + d.weight, 0));
     let i = 0;
     while (r >= pool[i].weight) r -= pool[i++].weight;
-    const def = pool[i];
+    const def = story ?? pool[i];
     const data = def.setup ? def.setup(world, p.id) : [];
     if (!data) {
       // Not possible right now (e.g. no free home for a match): try again shortly.
@@ -291,6 +375,7 @@ export function updateValleyEvents(world: World): void {
     }
     p.event = { id: world.newId(), def: def.id, expires: world.tick + BALANCE.eventTimeout, data };
     p.lastEvent = def.id;
+    if (def.once) p.onceEvents.push(def.id);
     world.emit({ type: 'valleyEvent', owner: p.id, eventId: p.event.id, def: def.id });
   }
 }

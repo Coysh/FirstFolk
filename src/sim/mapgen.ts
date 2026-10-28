@@ -24,6 +24,8 @@ export interface ValleyDef {
   icon: string;
   /** One line a player can act on: what the land offers, and what it asks. */
   blurb: string;
+  /** What it does to play, as short chips for the New Game screen: [text, 'good' | 'bad' | 'key']. */
+  tags: [string, 'good' | 'bad' | 'key'][];
 }
 
 /**
@@ -32,12 +34,12 @@ export interface ValleyDef {
  * valley; every feature is built point-symmetric so both settlements get the same geography.
  */
 export const VALLEYS: Record<ValleyId, ValleyDef> = {
-  riverlands: { name: 'The Riverlands', icon: '🌊', blurb: 'A river splits the valley and only a ford or two cross it. Hold the ford, or bridge the water.' },
-  longlake: { name: 'The Long Lake', icon: '🛶', blurb: 'Rival shores round a great lake. A prize island sits in the narrows: bridge across, or walk the long way round.' },
-  highlands: { name: 'The Highlands', icon: '⛰️', blurb: 'A mountain ridge with a few passes. Rich in stone, thin in timber and berries: fortify the passes.' },
-  threerivers: { name: 'The Three Rivers', icon: '🏞️', blurb: 'Two rivers carve out a rich middle strip. Each side must ford twice to reach the prizes in the centre.' },
-  wildwood: { name: 'The Wildwood', icon: '🌲', blurb: 'Deep forest and narrow streams. Timber for everyone, but berries are scarce: fish, trade, clear the land.' },
-  fens: { name: 'The Fens', icon: '🪷', blurb: 'Ponds and shallows everywhere, with winding dry routes. Fish aplenty; bridges shorten every journey.' },
+  riverlands: { name: 'The Riverlands', icon: '🌊', blurb: 'A river splits the valley and only a ford or two cross it. Hold the ford, or bridge the water.', tags: [['Fords to hold','key'], ['Bridges shorten trade','good'], ['Raids funnel to the fords','key']] },
+  longlake: { name: 'The Long Lake', icon: '🛶', blurb: 'Rival shores round a great lake. A prize island sits in the narrows: bridge across, or walk the long way round.', tags: [['Prize island: bridge it','key'], ['Fish aplenty','good'], ['Long march round the shore','bad']] },
+  highlands: { name: 'The Highlands', icon: '⛰️', blurb: 'A mountain ridge with a few passes. Rich in stone, thin in timber and berries: fortify the passes.', tags: [['Stone-rich','good'], ['Few berries and little timber','bad'], ['Fight at the passes','key']] },
+  threerivers: { name: 'The Three Rivers', icon: '🏞️', blurb: 'Two rivers carve out a rich middle strip. Each side must ford twice to reach the prizes in the centre.', tags: [['Rich middle strip','good'], ['Ford twice to reach it','bad'], ['Contested centre','key']] },
+  wildwood: { name: 'The Wildwood', icon: '🌲', blurb: 'Deep forest and narrow streams. Timber for everyone, but berries are scarce: fish, trade, clear the land.', tags: [['Timber for all','good'], ['Berries scarce: fish and trade','bad'], ['Clear the land to grow','key']] },
+  fens: { name: 'The Fens', icon: '🪷', blurb: 'Ponds and shallows everywhere, with winding dry routes. Fish aplenty; bridges shorten every journey.', tags: [['Fish aplenty','good'], ['Winding dry routes','bad'], ['Bridges change everything','key']] },
 };
 export const VALLEY_IDS = Object.keys(VALLEYS) as ValleyId[];
 /** The valley a seed makes (so the New Game screen can show it before the map is built). */

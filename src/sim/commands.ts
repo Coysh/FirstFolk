@@ -7,8 +7,9 @@ import { resolveEvent } from './events';
 import { TRADES } from './trades';
 import { performDeed } from './deeds';
 import { workOwner } from './works';
-import { launchRaid } from './warfare';
+import { launchRaid, rally } from './warfare';
 import { placeBridge } from './bridges';
+import { sendScout } from './scouts';
 import type { Building, World } from './world';
 
 /** Every player and AI action goes through a Command so games are replayable and the AI cannot cheat. */
@@ -22,6 +23,8 @@ export type Command =
   | { type: 'setTrade'; owner: number; good: Good; keep: number | null }
   | { type: 'setAutoHomes'; owner: number; on: boolean }
   | { type: 'raid'; owner: number; targetId: number }
+  | { type: 'rally'; owner: number }
+  | { type: 'scout'; owner: number; x: number; y: number }
   | { type: 'bridge'; owner: number; x: number; y: number; dir: 0 | 1; len: number };
 
 /** What a locked building is waiting for, e.g. "Hamlet" or "Journeyman Carpenter". */
@@ -203,6 +206,12 @@ export function applyCommand(world: World, cmd: Command): void {
       return;
     case 'raid':
       launchRaid(world, cmd.owner, cmd.targetId);
+      return;
+    case 'rally':
+      rally(world, cmd.owner);
+      return;
+    case 'scout':
+      sendScout(world, cmd.owner, cmd.x, cmd.y);
       return;
     case 'setTrade':
       setTrade(world, cmd.owner, cmd.good, cmd.keep);

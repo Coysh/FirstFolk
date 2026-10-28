@@ -2113,9 +2113,44 @@ button.danger.armed {
   font: 700 10px var(--body);
   color: #e9d3a6;
 }
-.race-moot {
-  color: var(--gold);
-  font-weight: 900;
+.race-status {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 5px 8px;
+  text-align: left;
+  font: 700 12px/1.3 var(--body);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f3e6c4;
+}
+.race-status.mine {
+  background: rgba(242, 193, 78, 0.22);
+  border-color: var(--gold);
+}
+.race-status.theirs {
+  background: rgba(217, 83, 79, 0.28);
+  border-color: #d9534f;
+}
+.race-status.contested {
+  background: rgba(160, 120, 220, 0.28);
+  border-color: #a98be0;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.race-row.crown.keeping .race-track {
+  box-shadow: 0 0 8px rgba(255, 215, 94, 0.85);
+}
+.race-renown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+.race-renown .faint {
+  opacity: 0.6;
 }
 .choices.origins {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -2447,6 +2482,136 @@ button.danger.armed {
   font-size: 12px;
   font-weight: 600;
   opacity: 0.9;
+}
+/* The saga: a story card that never blocks play. */
+.story {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  width: min(560px, calc(100vw - 32px));
+  padding: 14px 16px;
+  z-index: 8;
+  animation: story-in 0.6s ease-out;
+}
+.story-ico {
+  font-size: 40px;
+  line-height: 1;
+}
+.story-body h3 {
+  margin: 0 0 4px;
+  font: 800 20px var(--heading);
+}
+.story-body p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.story-body .story-goal {
+  margin: 8px 0 0;
+  font-weight: 800;
+  color: #7a4a00;
+}
+.story-ok {
+  align-self: center;
+  white-space: nowrap;
+}
+@keyframes story-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+@media (max-width: 720px) {
+  .story {
+    top: 26%;
+    flex-wrap: wrap;
+  }
+}
+/* The clash itself: a tug-of-war bar that reads from your side, and the button that joins in. */
+.threat.clash {
+  padding: 6px 8px 6px 10px;
+  gap: 8px;
+}
+.threat.clash.mine {
+  background: linear-gradient(#b08a2b, #8a6a1c);
+  border-color: #5a430c;
+  animation: none;
+}
+.threat-look {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.tug {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+}
+.tug-bar {
+  position: relative;
+  width: 150px;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(40, 10, 0, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.tug-bar::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.5);
+}
+.tug-bar div {
+  height: 100%;
+  transition: width 0.45s linear;
+}
+.tug-bar .def,
+.tug-bar .atk {
+  background: linear-gradient(#ffe38a, #e0a82e);
+}
+.tug-nums {
+  font-size: 13px;
+}
+.tug-nums small {
+  opacity: 0.7;
+}
+.rally {
+  position: relative;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font: 800 15px var(--body);
+  color: #3a2300;
+  background: linear-gradient(#ffe38a, #e0a82e);
+  border: 2px solid #8a5d0c;
+  box-shadow: 0 2px 0 #8a5d0c;
+  white-space: nowrap;
+}
+.rally:not(:disabled) {
+  animation: rally-pulse 0.8s ease-in-out infinite;
+}
+.rally:disabled {
+  opacity: 0.7;
+  filter: grayscale(0.4);
+}
+@keyframes rally-pulse {
+  50% {
+    transform: scale(1.06);
+  }
 }
 @keyframes threat-pulse {
   50% {
@@ -2982,17 +3147,68 @@ button.danger.armed {
 }
 .valley-pick {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 6px;
   margin-top: 8px;
 }
+.valley-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 640px;
+}
 .valley-pick button {
-  width: 38px;
-  height: 38px;
-  font-size: 20px;
+  min-width: 62px;
+  color: #f6e8c8;
+  padding: 4px 6px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 2px solid rgba(60, 40, 20, 0.35);
+  background: rgba(0, 0, 0, 0.38);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+}
+.vp-ico {
+  font-size: 20px;
+  line-height: 1.1;
+}
+.valley-pick button.on {
+  color: #3a2410;
+}
+.vp-name {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.valley-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 6px;
+}
+.vtag {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: #f6e8c8;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.vtag.good {
+  background: rgba(70, 130, 60, 0.55);
+  border-color: #8fd06a;
+}
+.vtag.bad {
+  background: rgba(160, 70, 40, 0.55);
+  border-color: #f09a6a;
+}
+.vtag.key {
+  background: rgba(170, 130, 30, 0.55);
+  border-color: #f2c14e;
 }
 .valley-pick button.on {
   border-color: var(--accent);

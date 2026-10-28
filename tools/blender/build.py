@@ -75,7 +75,7 @@ ROWS = {
     'h': ('l', ['discovery_cart', 'discovery_ruins', 'discovery_wanderers', 'discovery_stones', 'discovery_starstone']),
     'i': ('l', ['discovery_barrow', 'discovery_hermit', 'discovery_hoard', 'discovery_spring', 'discovery_shrine']),
     'j': ('l', ['discovery_grove', 'discovery_oakwood', 'discovery_outcrop', 'calling_trader']),
-    'k': ('l', ['calling_masons', 'calling_stronghold', 'calling_hearth']),
+    'k': ('l', ['calling_masons', 'calling_stronghold', 'calling_hearth', 'discovery_kingstone']),
 }
 pool = {'b': bobjs, 'l': lobjs}
 for r, (row, (kind, names)) in enumerate(ROWS.items()):

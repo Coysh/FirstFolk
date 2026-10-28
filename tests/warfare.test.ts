@@ -86,7 +86,7 @@ describe('raids', () => {
     return { w, hall, target };
   }
   const march = (w: World) => {
-    for (let i = 0; i < secs(60) && w.warbands.some((b) => b.phase === 'march'); i++) w.step();
+    for (let i = 0; i < secs(60) && w.warbands.some((b) => b.phase !== 'home'); i++) w.step();
   };
 
   it('stronger huscarls burn an unguarded post and win spoils', () => {
@@ -108,6 +108,72 @@ describe('raids', () => {
     w.run(secs(60));
     expect(w.warbands.length).toBe(0);
     expect(raidProblem(w, 0, target.id)).not.toBe('');
+  });
+
+  /** Run until the warband stands at the post (the clash has begun). */
+  const arrive = (w: World) => {
+    for (let i = 0; i < secs(60) && !w.warbands.some((b) => b.phase === 'clash'); i++) w.step();
+  };
+
+  it('a clash takes several seconds, and the line moves while the defender watches', () => {
+    const { w, target } = setup(3);
+    w.enqueue({ type: 'raid', owner: 0, targetId: target.id });
+    w.step();
+    arrive(w);
+    const band = w.warbands[0];
+    expect(band.phase).toBe('clash');
+    expect(w.buildings.has(target.id)).toBe(true);
+    expect(w.drainEvents().some((e) => e.type === 'clashBegan')).toBe(true);
+    const start = band.clash!.t;
+    w.run(secs(2));
+    expect(w.buildings.has(target.id)).toBe(true); // still being fought over
+    expect(band.clash!.t).toBeGreaterThan(start);
+    let t = 0;
+    while (w.warbands.some((b) => b.phase === 'clash') && t++ < secs(30)) w.step();
+    expect(t).toBeGreaterThan(secs(2));
+    expect(t).toBeLessThanOrEqual(BALANCE.clashTicks);
+  });
+
+  it('a rally can save a post that would burn, and only once', () => {
+    const { w, target } = setup(3, 'stockade');
+    target.guarded = 2;
+    const attack = raidStrength(w, 0, 3);
+    // A post a little too strong to be sure of, with townsfolk nearby to call on.
+    expect(defenceOf(w, target)).toBeGreaterThan(attack - 10);
+    expect(defenceOf(w, target)).toBeLessThanOrEqual(attack + 25);
+    for (const s of w.settlers.values()) if (s.owner === 1 && !s.child) { s.x = target.x; s.y = target.y + 2; }
+    w.enqueue({ type: 'raid', owner: 0, targetId: target.id });
+    w.step();
+    arrive(w);
+    w.enqueue({ type: 'rally', owner: 1 });
+    w.step();
+    const c = w.warbands[0].clash!;
+    expect(c.rallied).toBe(true);
+    expect(c.rally).toBeGreaterThan(BALANCE.rallyBase);
+    expect(w.players[1].rallyReady).toBeGreaterThan(w.tick);
+    const rallied = c.rally;
+    w.enqueue({ type: 'rally', owner: 1 });
+    w.step();
+    expect(c.rally).toBe(rallied); // once per clash
+    w.enqueue({ type: 'rally', owner: 0 }); // the raiders surge
+    w.step();
+    expect(c.surged).toBe(true);
+    march(w);
+    expect(w.drainEvents().some((e) => e.type === 'raidResolved')).toBe(true);
+  });
+
+  it('a surge can break a defence that would have held', () => {
+    const { w, target } = setup(3);
+    // Strengthen the post so it just holds.
+    target.guarded = 1;
+    const base = raidStrength(w, 0, 3);
+    while (defenceOf(w, target) < base + 4) target.guarded++;
+    w.enqueue({ type: 'raid', owner: 0, targetId: target.id });
+    w.step();
+    arrive(w);
+    w.enqueue({ type: 'rally', owner: 0 });
+    w.step();
+    expect(w.warbands[0].clash!.surge).toBe(Math.floor((base * BALANCE.surgePct) / 100));
   });
 
   it('a post that is stronger holds the line, and its defenders are honoured', () => {
@@ -200,7 +266,7 @@ describe('reavers', () => {
     const t = w.buildings.get(w.warbands[0].targetId)!;
     w.addBuilding('stockade', 0, t.x + 3, t.y, true).guarded = 3;
     t.guarded = 1;
-    for (let i = 0; i < secs(90) && w.warbands.some((b) => b.phase === 'march'); i++) w.step();
+    for (let i = 0; i < secs(90) && w.warbands.some((b) => b.phase !== 'home'); i++) w.step();
     expect(w.buildings.has(t.id)).toBe(true);
     expect(w.players[0].renownBy.defence).toBe(BALANCE.reaverRepel);
   });

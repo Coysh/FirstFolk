@@ -171,6 +171,8 @@ export class Input {
     else if (k === 'f') this.game.focusSelection();
     else if (k === 'm') toggleMute();
     else if (k === 'r' && hallOf(this.game.world, 0)) this.game.startRaid();
+    else if (k === 'g') this.game.rally();
+    else if (k === 't') this.game.startScout();
     else if (DEED_KEYS.includes(k)) {
       if (this.game.world.players[0].seats[DEED_KEYS.indexOf(k)]) this.game.useDeed(DEED_KEYS.indexOf(k));
     }

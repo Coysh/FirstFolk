@@ -1,6 +1,7 @@
 import { BUILDINGS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Skill } from './defs';
 import { rankSeat } from './houses';
-import { recomputeTerritory } from './territory';
+import { NO_OWNER, recomputeTerritory } from './territory';
+import { crowned, crownLeader } from './crown';
 import { addRenown } from './renown';
 import { BALANCE, secs } from './balance';
 import { TIER_XP, tradeTitle } from './trades';
@@ -29,7 +30,8 @@ export interface Scenario {
   objectives: Objective[];
   /** 'none' = sandbox: objectives are shown as milestones but never end the game. */
   /** 'goal': the first to the final renown objective wins (the chapters on the way are ranks, not requirements). */
-  victory: 'all' | 'any' | 'goal' | 'none';
+  /** 'crown': the first folk to fill the Crown (see crown.ts) wins; at the time limit, the fuller Crown, then renown. */
+  victory: 'all' | 'any' | 'goal' | 'crown' | 'none';
   /** A rival settlement races you from the far side of the valley (first to finish wins). */
   rival?: boolean;
   /** When the clock reaches this tick, the settlement with the most renown wins. */
@@ -105,6 +107,14 @@ export const objectives = {
       evaluate: (w, o) => ({ current: Math.min(n, w.players[o].renown), target: n }),
     };
   },
+  /** The Crown: your progress towards filling it (nothing until the Kingstone falls). */
+  crown(): Objective {
+    return {
+      id: 'crown',
+      label: 'Fill the Crown',
+      evaluate: (w, o) => ({ current: w.crown ? w.crown.progress[o] : 0, target: BALANCE.crownNeed }),
+    };
+  },
   /** Family deeds called on (see deeds.ts). */
   deeds(n: number): Objective {
     return {
@@ -145,12 +155,13 @@ const with_ = (o: Objective, chapter: string, hint: string): Objective => ({ ...
 export const LANDFALL: Scenario = {
   id: 'landfall',
   name: 'The First Valley',
-  description: 'Found a camp, explore the valley and win more renown than your rival.',
-  victory: 'goal',
+  description: 'Found a camp, explore the valley, and keep the Kingstone when the star falls: the first folk to fill its Crown rule the valley.',
+  victory: 'crown',
   rival: true,
   timeLimit: secs(45 * 60),
-  // Landfall teaches the basics; after that each rank is earned with renown, and the first
-  // settlement to 1,400 renown (or the one with most when the clock runs out) wins.
+  // Landfall teaches the basics; after that each rank is earned with renown. Around 14:00 the
+  // Kingstone falls and the valley is won by keeping it: the first folk to fill the Crown rule,
+  // or whoever's Crown is fuller when the clock runs out.
   objectives: [
     with_(objectives.building('woodcutter'), 'Landfall', 'Pick Woodcutter below, then place it beside the trees.'),
     with_(objectives.building('forager'), 'Landfall', 'Foragers feed everyone. Place one near the blue berry bushes.'),
@@ -165,7 +176,7 @@ export const LANDFALL: Scenario = {
     with_(objectives.renown(250), 'Hamlet', 'Renown: watched landmarks, land, raids, discoveries, crafts and Market Day all add to it.'),
     with_(objectives.building('watchtower'), 'Village', 'Watchtowers push hard: build them at the border to take land from your rival.'),
     with_(objectives.renown(650), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
-    with_(objectives.renown(1400), 'Town', 'First to 1,400 renown wins. Landmarks pay only while a manned post watches them, and from 25:00 the Moot doubles them: take them back!'),
+    with_(objectives.crown(), 'The Crowning', 'A star falls about 14:00 and lights the Kingstone. Keep a manned post beside it, with no rival post there, and the Crown fills. Burn their post to freeze it, then take it.'),
   ],
 };
 
@@ -222,21 +233,27 @@ export function evaluateScenario(world: World): void {
         }
       }
     }
-    if (state.winner >= 0 || world.scenario.victory === 'none' || !world.scenario.objectives.length) continue;
+    if (state.winner >= 0 || world.scenario.victory === 'none' || world.scenario.victory === 'crown' || !world.scenario.objectives.length) continue;
     const results = world.scenario.objectives.map((o) => !!done[o.id]);
     const won = world.scenario.victory === 'goal' ? player.renown >= renownGoal(world.scenario) : world.scenario.victory === 'all' ? results.every(Boolean) : results.some(Boolean);
     if (won) winners.push(player.id);
   }
   if (state.winner >= 0 || world.scenario.victory === 'none') return;
-  // The clock runs out: whoever has the most renown wins.
+  // The Crowning: the first folk to fill the Crown rule the valley.
+  const crowning = world.scenario.victory === 'crown' ? crowned(world) : NO_OWNER;
+  if (crowning !== NO_OWNER) winners.push(crowning);
+  // The clock runs out: the fuller Crown wins (then renown), or in a race for renown, whoever has most.
   const timeUp = !!world.scenario.timeLimit && world.tick >= world.scenario.timeLimit;
-  if (timeUp && !winners.length) winners.push(...world.players.map((p) => p.id));
+  if (timeUp && !winners.length) {
+    if (world.scenario.victory === 'crown' && world.crown) winners.push(crownLeader(world));
+    else winners.push(...world.players.map((p) => p.id));
+  }
   if (!winners.length) return;
   // Same-moment finishes (or time) go to the higher renown, never to whoever is first in the list.
   const best = Math.max(...winners.map((o) => world.players[o].renown));
   const top = winners.filter((o) => world.players[o].renown === best);
   state.winner = top.length === 1 ? top[0] : top[world.rng.int(top.length)];
-  world.emit({ type: 'victory', scenario: world.scenario.name, winner: state.winner, byTime: timeUp });
+  world.emit({ type: 'victory', scenario: world.scenario.name, winner: state.winner, byTime: timeUp && crowning === NO_OWNER, crowned: crowning !== NO_OWNER });
 }
 
 /**
@@ -262,7 +279,7 @@ export const PEACEFUL: Scenario = {
   ...LANDFALL,
   id: 'peaceful',
   name: 'The First Valley (peaceful)',
-  description: 'Found a camp, explore the valley and raise it to a renowned town, with no rival.',
+  description: 'Found a camp, explore the valley and raise it to a renowned town, with no rival. Fill the Crown at the Kingstone to finish it.',
   rival: false,
 };
 

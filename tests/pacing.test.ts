@@ -35,3 +35,42 @@ describe('pacing (headless playtests)', () => {
     });
   }
 });
+
+/**
+ * The long game: the endgame is a fight for the Kingstone, not a wait for points. At 20 minutes
+ * there is already something to defend and something to take, and the closing minutes are the
+ * busiest of the game (the opposite of waiting for Renown to add up).
+ */
+describe('the long game (headless playtests)', () => {
+  const seeds = [21, 22, 23, 24, 25, 26];
+  const runs = seeds.map((s) => playtest(s, 40));
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+
+  it('the Crown cannot be won before it is earned: no victory in the first 19 minutes', () => {
+    for (const r of runs) expect(r.victorySec < 0 || r.victorySec > 19 * 60).toBe(true);
+  });
+
+  it('a star falls by 15:40 and someone is fighting for it, in every game', () => {
+    for (const r of runs) {
+      const fall = r.timeline.find((l) => l.includes('a star falls'));
+      expect(fall, `seed ${r.seed}`).toBeDefined();
+      const [m, s] = fall!.slice(0, 5).split(':').map(Number);
+      expect(m * 60 + s).toBeLessThanOrEqual(15 * 60 + 40);
+      expect(r.timeline.some((l) => l.includes('Kingstone')), `seed ${r.seed}`).toBe(true);
+    }
+  });
+
+  it('at 15 to 20 minutes there is always something to do, and the finish is busier than the start', () => {
+    const mid = runs.map((r) => mean(r.actionByMinute.slice(15, 20)));
+    for (const m of mid) expect(m).toBeGreaterThanOrEqual(1);
+    expect(mean(mid)).toBeGreaterThanOrEqual(2.5);
+    const early = mean(runs.map((r) => mean(r.actionByMinute.slice(0, 10))));
+    const late = mean(runs.map((r) => mean(r.actionByMinute.slice(-11, -1))));
+    expect(late).toBeGreaterThan(early * 1.5);
+    expect(late).toBeGreaterThanOrEqual(3.5);
+  });
+
+  it('the clash is a fight, not a die roll: battles happen, and they take time', () => {
+    for (const r of runs) expect(r.battles, `seed ${r.seed}`).toBeGreaterThanOrEqual(2);
+  });
+});

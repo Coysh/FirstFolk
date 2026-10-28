@@ -1,6 +1,6 @@
 import { OpeningBot } from './ai/openingBot';
 import { TICK_HZ } from './balance';
-import { World } from './world';
+import { World, type SimEvent } from './world';
 import { GOODS } from './defs';
 import type { Difficulty } from './rules';
 import type { OriginId } from './origins';
@@ -37,6 +37,8 @@ export interface PlaytestReport {
   winnerDeficit: number;
   /** Landmarks that changed hands between settlements. */
   holdingFlips: number;
+  /** Moments that ask the player to look, decide or act (clashes, Crown swings, raids, story beats, claims, events), per minute. */
+  actionByMinute: number[];
   renownBy: Partial<Record<string, number>>[];
   /** Challenges won by [player, rival]. */
   challenges: number[];
@@ -116,6 +118,11 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const total = minutes * 60 * TICK_HZ;
   let hungryTicks = 0;
   const bridges = [0, 0];
+  const actionByMinute: number[] = [];
+  const isAction = (e: SimEvent) =>
+    e.type === 'clashBegan' || e.type === 'crownKeeper' || e.type === 'crownQuarter' || e.type === 'sagaBeat' || e.type === 'starfall' || e.type === 'challenge' || e.type === 'challengeWon' || e.type === 'razed' ||
+    (e.type === 'raidLaunched' && (e.owner === 0 || e.defender === 0)) || (e.type === 'holdingChanged' && (e.owner === 0 || e.from === 0)) || (e.type === 'scoutSpotted' && (e.owner === 0 || e.seer === 0)) ||
+    ((e.type === 'claimed' || e.type === 'rankUp' || e.type === 'valleyEvent' || e.type === 'scoutHome' || e.type === 'deed' || e.type === 'bridgeBuilt') && e.owner === 0);
   for (let i = 0; i < total; i++) {
     if (victoryTick >= 0 && world.tick > victoryTick + 60 * TICK_HZ) break;
     bot.update(world);
@@ -123,6 +130,10 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     if (world.players[0].hungry) hungryTicks++;
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
+      if (isAction(e)) {
+        const m = Math.floor(world.tick / (60 * TICK_HZ));
+        actionByMinute[m] = (actionByMinute[m] ?? 0) + 1;
+      }
       const n = newsFor(world, e, 0);
       if (n) newsItems.push({ tick: world.tick, news: n });
       if (e.type === 'buildingComplete' && BUILDINGS[e.buildingType].capped) towers[e.owner]++;
@@ -153,7 +164,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       else if (e.type === 'eventResolved' && e.owner === 0) timeline.push(`${t}    → ${e.choice}: ${e.text}`);
       else if (e.type === 'rivalSighted') timeline.push(`${t} ⚔ rival border sighted`);
       else if (e.type === 'starfall') timeline.push(`${t} ☄ a star falls at ${e.x},${e.y}`);
-      else if (e.type === 'moot') timeline.push(`${t} 📯 the Moot: landmarks pay double`);
+      else if (e.type === 'crownKeeper') timeline.push(`${t} 👑 Kingstone: ${e.keeper === 0 ? 'YOU keep it' : e.keeper === 1 ? 'the RIVAL keeps it' : e.keeper === -2 ? 'contested' : 'unkept'}`);
+      else if (e.type === 'crownQuarter') timeline.push(`${t} 👑 ${e.owner === 0 ? 'your' : 'the rival’s'} Crown ${e.quarter * 25}%`);
       else if (e.type === 'challenge') timeline.push(`${t} 🏁 challenge: ${e.def}`);
       else if (e.type === 'challengeWon') {
         (challenges[e.winner] ??= 0), challenges[e.winner]++;
@@ -228,6 +240,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     leadChanges,
     winnerDeficit,
     holdingFlips,
+    actionByMinute: Array.from({ length: Math.floor(world.tick / (60 * TICK_HZ)) + 1 }, (_, m) => actionByMinute[m] ?? 0),
     renownBy: world.players.map((p) => ({ ...p.renownBy })),
     origins: world.players.map((p) => p.origin),
     challenges,

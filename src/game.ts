@@ -2,17 +2,19 @@ import { canBridge, spanAt, type BridgeCheck, type Span } from './sim/bridges';
 import { signal } from '@preact/signals';
 import * as THREE from 'three';
 import { audio, type Sfx } from './audio/audio';
-import { BALANCE, TICK_MS } from './sim/balance';
+import { BALANCE, TICK_HZ, TICK_MS } from './sim/balance';
 import { seasonOf } from './sim/seasons';
 import { canPlace } from './sim/commands';
 import { BUILDINGS, DISCOVERIES, SKILLS, type BuildingType, type Good, type Tool } from './sim/defs';
 import { DEEDS, deedProblem, deedTargetProblem, outpostSpot, type DeedId } from './sim/deeds';
 import { HOUSES, playerMod } from './sim/houses';
 import { NO_OWNER, previewInfluence, previewRemoval } from './sim/territory';
+import { CONTESTED } from './sim/crown';
+import { scoutProblem } from './sim/scouts';
 import { defenceOf, hallOf, huscarls, raidProblem, raidStrength } from './sim/warfare';
 import { ICON } from './render/overlay';
 import { serializeWorld } from './sim/save';
-import { objectiveStatus, renownGoal, type ObjectiveStatus } from './sim/scenario';
+import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
 import { TIER_XP } from './sim/trades';
 import type { SimEvent, World } from './sim/world';
 import type { Overlay } from './render/overlay';
@@ -25,7 +27,7 @@ import { newsFor, type News } from './ui/news';
 
 export const PLAYER = 0;
 
-export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; seat: number; deed: DeedId } | { kind: 'raid' } | { kind: 'bridge' };
+export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; seat: number; deed: DeedId } | { kind: 'raid' } | { kind: 'scout' } | { kind: 'bridge' };
 export type Selection = { kind: 'building'; id: number } | { kind: 'settler'; id: number } | null;
 
 export interface Toast {
@@ -96,7 +98,13 @@ export class Game {
   readonly version = signal(0);
   readonly objectives = signal<ObjectiveStatus[]>([]);
   readonly toasts = signal<Toast[]>([]);
-  readonly victory = signal<{ scenario: string; winner: number; byTime: boolean; acclaim?: boolean } | null>(null);
+  readonly victory = signal<{ scenario: string; winner: number; byTime: boolean; crowned?: boolean; acclaim?: boolean } | null>(null);
+  /** The story card on screen (a beat of the saga, see sim/saga.ts), until it is dismissed or fades. */
+  readonly story = signal<{ beat: number } | null>(null);
+  private storyTimer: ReturnType<typeof setTimeout> | null = null;
+  dismissStory(): void {
+    this.story.value = null;
+  }
   /** The ledger letter being read (see Hud's Ledger), and whether the first one has opened itself. */
   readonly ledgerOpen = signal<string | null>(null);
   readonly deedPreview = signal<DeedPreview | null>(null);
@@ -134,13 +142,13 @@ export class Game {
     if (fresh) {
       // One opening banner: the goal, who you face, and the valley's omens.
       const rival = this.world.players[1];
-      const goal = renownGoal(this.world.scenario);
+      const crown = this.world.scenario.victory === 'crown';
       const rivalName = rival?.origin && rival.origin !== 'dynasty' ? `${ORIGINS[rival.origin as OriginId].icon} ${ORIGINS[rival.origin as OriginId].name}` : rival ? 'a rival house' : '';
       this.notify({
         channel: 'banner',
         priority: 3,
         icon: '/assets/icons/renown.png',
-        text: goal ? `First to ${goal.toLocaleString('en-GB')}★ wins` : 'Your valley awaits',
+        text: crown ? 'Keep the Kingstone, win the Crown' : 'Your valley awaits',
         sub: [rival ? `vs ${rivalName}` : '', this.world.omens.map((o) => `${OMENS[o].icon} ${OMENS[o].name}`).join(' · ')].filter(Boolean).join(' · '),
         tone: 'big',
       });
@@ -213,7 +221,7 @@ export class Game {
   /**
    * The music follows the game: the village theme at work, the long night in winter, banners
    * at the border when the rival is pressing (land or a landmark lost lately, or they lead
-   * late on), and the main theme as the Moot finale. The soundscape follows the camera.
+   * late on), and the main theme as the Crown finale. The soundscape follows the camera.
    */
   private tenseUntil = 0;
   private saidLead = false;
@@ -235,7 +243,7 @@ export class Game {
         this.rivalVoice(gap > 0 ? 'theyLead' : 'youLead');
       }
     }
-    if (w.scenario.timeLimit && w.tick >= BALANCE.mootAt) audio.setMood('moot', 3);
+    if (w.crown && Math.max(...w.crown.progress) * 2 >= BALANCE.crownNeed) audio.setMood('moot', 3);
     else if (pressed) audio.setMood('tension', 2);
     else if (seasonOf(w.tick) === 3) audio.setMood('winter', 1);
     else audio.setMood('village', intensity);
@@ -385,6 +393,14 @@ export class Game {
             if (e.owner !== NO_OWNER) setTimeout(() => this.rivalVoice('raid', { building: BUILDINGS[e.buildingType].name }), 2500);
           } else if (e.owner === PLAYER) audio.play('click');
           break;
+        case 'clashBegan':
+          if (e.defender === PLAYER || e.owner === PLAYER) audio.stinger('clash');
+          // Your own assault: the camera follows your huscarls in.
+          if (e.owner === PLAYER) this.lookAt(e.x, e.y);
+          break;
+        case 'clashRally':
+          if (e.kind === 'rally') audio.stinger('warhorn');
+          break;
         case 'raidResolved':
           if (e.owner === PLAYER) {
             audio.stinger(e.won ? 'clash' : 'loss');
@@ -415,12 +431,26 @@ export class Game {
           setTimeout(() => this.rivalVoice('starfall'), 6500);
           audio.stinger('starfall');
           break;
-        case 'moot':
-          setTimeout(() => this.rivalVoice('moot'), 6000);
-          audio.stinger('moot');
+        case 'sagaBeat':
+          this.story.value = { beat: e.beat };
+          if (this.storyTimer) clearTimeout(this.storyTimer);
+          this.storyTimer = setTimeout(() => {
+            if (this.story.value?.beat === e.beat) this.story.value = null;
+          }, 30000);
+          break;
+        case 'scoutSpotted':
+          if (e.seer === PLAYER) setTimeout(() => this.rivalVoice('scout'), 1500);
+          break;
+        case 'crownKeeper':
+          if (e.keeper >= 0) audio.stinger(e.keeper === PLAYER ? 'landmark' : 'loss');
+          else if (e.keeper === CONTESTED) audio.stinger('warhorn');
+          setTimeout(() => this.rivalVoice('moot'), 5000);
+          break;
+        case 'crownQuarter':
+          if (e.owner === PLAYER) audio.stinger('moot');
           break;
         case 'victory':
-          this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime };
+          this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime, crowned: !!e.crowned };
           audio.stinger(e.winner === PLAYER ? 'victory' : 'defeat');
           if (e.winner === PLAYER) this.rememberHouse();
           if (this.world.label.startsWith('daily-')) recordDaily({ date: this.world.label.slice(6), won: e.winner === PLAYER, renown: this.world.players[PLAYER].renown, time: Math.floor(this.world.tick / 10) });
@@ -534,6 +564,9 @@ export class Game {
       this.mode.value = { kind: 'select' };
       this.bridgeGhost.value = null;
       this.view.setBridgeGhost(null, false);
+    } else if (this.mode.value.kind === 'scout') {
+      this.mode.value = { kind: 'select' };
+      this.view.renderer.domElement.style.cursor = '';
     } else if (this.mode.value.kind === 'raid') {
       this.mode.value = { kind: 'select' };
       this.raidPreview.value = null;
@@ -590,6 +623,11 @@ export class Game {
       this.updateDeedPreview(sx, sy);
       this.touchPlacing.value = touch;
       if (!touch) this.confirmDeed();
+      return;
+    }
+    if (mode.kind === 'scout') {
+      const p = this.view.groundAt(sx, sy);
+      if (p) this.confirmScout(Math.floor(p.x), Math.floor(p.z));
       return;
     }
     if (mode.kind === 'raid') {
@@ -663,6 +701,48 @@ export class Game {
   }
 
   /** Pick a rival post for the huscarls: the map waits for a tap on one. */
+  /** Pick a place for the scout to go (T), then tap the map. */
+  startScout(): void {
+    const w = this.world;
+    audio.play('click');
+    const hall = [...w.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'wagon');
+    const problem = !hall ? 'No hall to send a scout from' : w.scouts.some((s) => s.owner === PLAYER) ? 'Your scout is still out' : w.tick < w.players[PLAYER].scoutReady ? `Your scout is resting (${Math.ceil((w.players[PLAYER].scoutReady - w.tick) / TICK_HZ)}s)` : '';
+    if (problem) {
+      audio.play('warn');
+      this.toast(ICON.shield, problem, 'warn');
+      return;
+    }
+    this.selection.value = null;
+    this.mode.value = { kind: 'scout' };
+    this.view.renderer.domElement.style.cursor = 'crosshair';
+  }
+
+  confirmScout(x: number, y: number): void {
+    const problem = scoutProblem(this.world, PLAYER, x, y);
+    if (problem) {
+      audio.play('warn');
+      this.toast(ICON.shield, problem, 'warn');
+      return;
+    }
+    this.world.enqueue({ type: 'scout', owner: PLAYER, x, y });
+    audio.play('click');
+    this.cancel();
+  }
+
+  /** Call the folk to a besieged post (or, if your huscarls are the besiegers, press the attack). */
+  rally(): void {
+    const w = this.world;
+    const band = w.warbands.find((b) => b.phase === 'clash' && b.clash && (b.owner === PLAYER ? !b.clash.surged : !b.clash.rallied && w.buildings.get(b.targetId)?.owner === PLAYER));
+    if (!band) return;
+    if (band.owner !== PLAYER && w.tick < w.players[PLAYER].rallyReady) {
+      audio.play('warn');
+      this.toast(ICON.shield, `The folk are catching their breath (${Math.ceil((w.players[PLAYER].rallyReady - w.tick) / TICK_HZ)}s)`, 'warn');
+      return;
+    }
+    w.enqueue({ type: 'rally', owner: PLAYER });
+    audio.stinger('warhorn');
+  }
+
   startRaid(): void {
     audio.play('click');
     const problem = raidProblem(this.world, PLAYER, -1);

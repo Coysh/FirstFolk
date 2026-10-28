@@ -6,7 +6,7 @@ import { rebuildDeck } from './bridges';
 import { World, type Building, type Discovery, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
 
 /** Bump when the shape of saved state changes; older saves are refused rather than misread. */
-export const SAVE_VERSION = 19;
+export const SAVE_VERSION = 20;
 
 const KINDS: NodeKind[] = ['tree', 'rock', 'bush', 'fish'];
 
@@ -40,6 +40,9 @@ export interface SaveData {
   warbands: World['warbands'];
   nextReaversAt: number;
   bridges: World['bridges'];
+  crown: World['crown'];
+  scouts: World['scouts'];
+  saga: number;
 }
 
 function rle(a: ArrayLike<number>): number[] {
@@ -88,6 +91,9 @@ export function serializeWorld(w: World): SaveData {
     warbands: clone(w.warbands),
     nextReaversAt: w.nextReaversAt,
     bridges: clone(w.bridges),
+    crown: clone(w.crown),
+    scouts: clone(w.scouts),
+    saga: w.saga,
     lastChallenge: w.lastChallenge,
   };
 }
@@ -123,6 +129,9 @@ export function deserializeWorld(d: SaveData): World {
   w.nextReaversAt = d.nextReaversAt;
   w.lastChallenge = d.lastChallenge;
   w.bridges = d.bridges ?? [];
+  w.crown = d.crown ?? null;
+  w.scouts = d.scouts ?? [];
+  w.saga = d.saga ?? 0;
   rebuildDeck(w);
   if (w.scenario.rival && w.players[1]) w.addRival();
   return w;

@@ -3,6 +3,7 @@ import { BUILDINGS, DISCOVERIES, RANK_NAMES } from '../sim/defs';
 import { DEEDS } from '../sim/deeds';
 import { HOUSES } from '../sim/houses';
 import { NO_OWNER } from '../sim/territory';
+import { CONTESTED } from '../sim/crown';
 import { challengeDef } from '../sim/challenges';
 import { TRADES } from '../sim/trades';
 import type { SimEvent, World } from '../sim/world';
@@ -93,6 +94,20 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
       if (e.owner === me) return { channel: 'toast', priority: 2, icon: ICONS.shield, text: `⚔ Your huscarls march on their ${name}`, tone: 'info' };
       return null;
     }
+    case 'scoutSent':
+      return e.owner === me ? { channel: 'toast', priority: 1, icon: ICONS.lookout, text: '🔭 Your scout sets out', tone: 'info', key: 'scout' } : null;
+    case 'scoutHome':
+      return e.owner === me ? { channel: 'toast', priority: 2, icon: ICONS.lookout, text: e.found ? `🔭 Your scout is back: ${e.found} new ${e.found === 1 ? 'place' : 'places'} in view` : '🔭 Your scout is back with the lie of the land', tone: e.found ? 'good' : 'info' } : null;
+    case 'scoutSpotted':
+      return e.seer === me ? { channel: 'toast', priority: 2, icon: ICONS.lookout, text: '👁 A rival scout is watching your border', tone: 'rival' } : e.owner === me ? { channel: 'toast', priority: 1, icon: ICONS.lookout, text: '👁 Your scout was seen by the rival’s folk', tone: 'info' } : null;
+    case 'clashBegan': {
+      const name = BUILDINGS[e.buildingType].name;
+      if (e.defender === me) return { channel: 'toast', priority: 3, icon: ICONS.shield, text: `⚔ The fight for your ${name} has begun: Rally (G)!`, tone: 'warn' };
+      return null;
+    }
+    case 'clashRally':
+      if (e.owner === me) return { channel: 'toast', priority: 2, icon: ICONS.shield, text: e.kind === 'rally' ? `📯 ${e.n || 'No'} townsfolk answer the call: +${e.strength}` : `🔥 Surge! +${e.strength} strength`, tone: 'good' };
+      return { channel: 'toast', priority: 2, icon: ICONS.shield, text: e.kind === 'rally' ? '📯 The rival rallies their folk!' : '🔥 The raiders surge!', tone: 'warn' };
     case 'raidResolved': {
       const name = BUILDINGS[e.buildingType].name;
       if (e.owner === me) return e.won ? { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🔥 Burned their ${name}: +${e.renown}★`, tone: 'big' } : { channel: 'toast', priority: 3, icon: ICONS.shield, text: `Driven off at their ${name} (${e.attack} vs ${e.defence})`, tone: 'warn' };
@@ -108,9 +123,15 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
       return e.winner === me ? { channel: 'toast', priority: 3, icon: ICONS.renown, text: `${def.icon} You won ${def.title}: +${e.prize}★`, tone: 'big' } : { channel: 'toast', priority: 2, icon: ICONS.renown, text: `Rival won ${def.title}`, tone: 'warn' };
     }
     case 'starfall':
-      return { channel: 'banner', priority: 3, icon: ICONS.renown, text: '☄️ A star has fallen!', sub: 'The Star-Stone lies between you: the richest landmark in the valley', tone: 'big' };
-    case 'moot':
-      return { channel: 'banner', priority: 3, icon: ICONS.renown, text: '📯 The Moot', sub: 'Landmarks pay double until the end', tone: 'big' };
+      return { channel: 'banner', priority: 3, icon: ICONS.renown, text: '☄️ A star has fallen: the Kingstone!', sub: 'Keep a manned post beside it, alone, and the Crown fills. First to fill it rules the valley', tone: 'big' };
+    case 'crownKeeper': {
+      if (e.keeper === me) return { channel: 'banner', priority: 3, icon: ICONS.renown, text: '👑 You keep the Kingstone', sub: 'The Crown is filling. Guard the post beside it!', tone: 'big' };
+      if (e.keeper === CONTESTED) return { channel: 'banner', priority: 3, icon: ICONS.renown, text: '⚔️ The Kingstone is contested', sub: 'Both of you have a post beside it. The Crown is frozen: burn theirs', tone: 'big' };
+      if (e.keeper >= 0) return { channel: 'banner', priority: 3, icon: ICONS.renown, text: '🔥 The rival keeps the Kingstone', sub: 'Your Crown is draining. Burn the post beside it and take it back', tone: 'warn' };
+      return e.was === me ? { channel: 'banner', priority: 3, icon: ICONS.renown, text: '💨 Your hold on the Kingstone is gone', sub: 'Its post burned or was left unmanned', tone: 'warn' } : null;
+    }
+    case 'crownQuarter':
+      return e.quarter >= 4 ? null : { channel: 'toast', priority: 3, icon: ICONS.renown, text: e.owner === me ? `👑 Your Crown is ${e.quarter * 25}% full` : `👑 The rival's Crown is ${e.quarter * 25}% full`, tone: e.owner === me ? 'good' : 'warn' };
     case 'landLost':
       return e.owner === me ? { channel: 'toast', priority: 1, icon: ICONS.lookout, text: `Rival pushing into your land (−${e.tiles})`, tone: 'warn', key: 'landLost' } : null;
     case 'eventResolved':

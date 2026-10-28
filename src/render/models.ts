@@ -503,6 +503,15 @@ export function discoveryGeometry(kind: DiscoveryKind): THREE.BufferGeometry {
       b.add(dodeca(0.42), 0x2b2540, { pos: [0, 0.32, 0], scale: [1, 1.25, 0.9] });
       for (const [x, y, z] of [[0.18, 0.55, 0.12], [-0.2, 0.42, -0.1], [0.05, 0.75, -0.05]] as const) b.add(ico(0.09, 0), 0x9fe8ff, { pos: [x, y, z] });
       break;
+    case 'kingstone':
+      // A tall dark monolith on a stepped plinth, crowned with gold.
+      b.add(cyl(1.05, 1.15, 0.08, 14), C.rockDark, { pos: [0, 0.04, 0] });
+      b.add(cyl(0.8, 0.9, 0.14, 14), C.stoneDark, { pos: [0, 0.15, 0] });
+      b.add(box(0.46, 1.5, 0.42), 0x383348, { pos: [0, 0.95, 0] });
+      b.add(box(0.56, 0.06, 0.52), 0xf2c14e, { pos: [0, 0.95, 0] });
+      b.add(cyl(0.2, 0.22, 0.07, 10), 0xf2c14e, { pos: [0, 1.96, 0] });
+      b.add(ico(0.1, 0), 0xfff2b0, { pos: [0, 2.15, 0], sway: 2.4 });
+      break;
     case 'barrow':
       // A long grassy mound with a dark stone doorway and a capstone.
       b.add(sphere(0.9, 9, 6), C.moss, { pos: [0, -0.15, -0.1], scale: [1.2, 0.55, 0.9] });

@@ -174,7 +174,7 @@ export class Overlay {
       const f = band.progress / 1000;
       const bx = band.x + (next === undefined ? 0 : ((next % world.size) - band.x) * f);
       const by = band.y + (next === undefined ? 0 : (Math.floor(next / world.size) - band.y) * f);
-      const onUs = band.phase === 'march' && world.buildings.get(band.targetId)?.owner === 0;
+      const onUs = band.phase !== 'home' && world.buildings.get(band.targetId)?.owner === 0;
       if (!this.visible || (!onUs && !(world.explored[world.idx(Math.round(bx), Math.round(by))] & 1))) continue;
       bandsSeen.add(band.id);
       let pin = this.warPins.get(band.id);
@@ -184,7 +184,7 @@ export class Overlay {
         this.warPins.set(band.id, pin);
       }
       const side = band.owner === 0 ? 'mine' : 'theirs';
-      const label = `${band.owner === 0 ? 'Your huscarls' : band.owner < 0 ? 'Reavers' : 'Rival raiders'} · ${band.strength}${band.phase === 'home' ? ' · going home' : ''}`;
+      const label = `${band.owner === 0 ? 'Your huscarls' : band.owner < 0 ? 'Reavers' : 'Rival raiders'} · ${band.clash ? `${band.clash.attack} vs ${band.clash.defence} · fighting!` : band.strength}${band.phase === 'home' ? ' · going home' : ''}`;
       if (pin.dataset.label !== label) {
         pin.dataset.label = label;
         pin.className = `pin war ${side}`;

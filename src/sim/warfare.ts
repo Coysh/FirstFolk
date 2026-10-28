@@ -6,6 +6,7 @@ import { callingTier } from './callings';
 import { hasOmen } from './omens';
 import { playerMod } from './houses';
 import { addRenown } from './renown';
+import { crownSite } from './crown';
 import { cheb, setIdle } from './settlers';
 import { NO_OWNER, recomputeTerritory } from './territory';
 import type { Building, World } from './world';
@@ -13,10 +14,29 @@ import type { Building, World } from './world';
 /**
  * Shields and spears: light, automatic warfare. Guard posts hold the land; a post's defence is
  * its guards, the stockades standing near it, the hall's ward close to home and the huscarls
- * at a Mustering Hall nearby. A raid marches a warband to a rival post and the skirmish is
- * settled on arrival, plainly: the stronger side wins. Nobody is ever killed: raids burn posts,
- * and the beaten are sent home.
+ * at a Mustering Hall nearby. A raid marches a warband to a rival post and a clash follows: a
+ * tug-of-war that takes several seconds and leans towards the stronger side, so there is time to
+ * Rally the defence (or Surge the attack). Nobody is ever killed: raids burn posts, and the
+ * beaten are sent home.
  */
+
+/** The fight at a post, while it lasts (see updateClash). */
+export interface Clash {
+  /** Ticks since the warband arrived. */
+  t: number;
+  /** The tug-of-war, 0..1000: 1000 is the post falling, 0 the raiders driven off. Starts level. */
+  line: number;
+  /** Strength added by a rally (the defence) and a surge (the attack), once each. */
+  rally: number;
+  surge: number;
+  /** Townsfolk who turned out for a rally (for the picture). */
+  militia: number;
+  rallied: boolean;
+  surged: boolean;
+  /** Both sides' strength at the last step, for the display. */
+  attack: number;
+  defence: number;
+}
 
 export interface Warband {
   id: number;
@@ -32,7 +52,9 @@ export interface Warband {
   targetId: number;
   /** Where it set out from (the Mustering Hall, or the shore for reavers). */
   homeId: number;
-  phase: 'march' | 'home';
+  phase: 'march' | 'clash' | 'home';
+  /** The fight at the target, while phase is 'clash'. */
+  clash?: Clash;
   x: number;
   y: number;
 }
@@ -78,6 +100,10 @@ export function holdsCrossing(world: World, b: Building): boolean {
 export function defenceOf(world: World, b: Building): number {
   const guard = (100 + playerMod(world, b.owner, 'guard') + 10 * callingTier(world, b.owner, 'stronghold')) + (holdsCrossing(world, b) ? BALANCE.bridgeWard[1] : 0);
   let d = Math.floor((b.guarded * BALANCE.guardStrength * guard) / 100);
+  // The Kingstone shields the one folk who keeps it alone (not a contested stone).
+  const crown = world.crown;
+  const stone = crown && crown.keeper === b.owner ? crownSite(world) : undefined;
+  if (stone && cheb(b.x + 1, b.y + 1, stone.x, stone.y) <= BALANCE.watchRange) d += BALANCE.crownWard;
   const wall = world.players[b.owner]?.shieldWall;
   if (wall && wall.until > world.tick && cheb(wall.x, wall.y, b.x, b.y) <= BALANCE.shieldWall[0]) d += BALANCE.shieldWall[1];
   for (const o of world.buildings.values()) {
@@ -136,6 +162,10 @@ export function launchRaid(world: World, owner: number, targetId: number): void 
 export function updateWarbands(world: World): void {
   if (!world.warbands.length) return;
   for (const band of [...world.warbands]) {
+    if (band.phase === 'clash') {
+      updateClash(world, band);
+      continue;
+    }
     band.progress += BALANCE.adultSpeed;
     while (band.progress >= 1000 && band.step < band.path.length) {
       band.progress -= 1000;
@@ -144,17 +174,75 @@ export function updateWarbands(world: World): void {
       band.y = (i - band.x) / world.size;
     }
     if (band.step < band.path.length) continue;
-    if (band.phase === 'march') skirmish(world, band);
+    if (band.phase === 'march') beginClash(world, band);
     else disband(world, band);
   }
 }
 
-/** The warband reaches its target: the stronger side wins, and the loser goes home. */
-function skirmish(world: World, band: Warband): void {
+/** The warband reaches its target: the fight begins, and the defender can see it happen. */
+function beginClash(world: World, band: Warband): void {
+  const target = world.buildings.get(band.targetId);
+  // A target that burned (or was pulled down) before they arrived: they simply turn for home.
+  if (!target) return finishClash(world, band, false);
+  const defence = defenceOf(world, target);
+  band.phase = 'clash';
+  band.clash = { t: 0, line: 500, rally: 0, surge: 0, militia: 0, rallied: false, surged: false, attack: band.strength, defence };
+  world.emit({ type: 'clashBegan', bandId: band.id, owner: band.owner, defender: target.owner, targetId: target.id, buildingType: target.type, x: target.x, y: target.y, attack: band.strength, defence });
+}
+
+/**
+ * The tug-of-war: every half second the line moves towards the stronger side, a little
+ * unevenly. The post falls when it reaches the end, or the raiders are driven off; if neither
+ * happens in time, whoever is ahead wins. A Rally or a Surge in the meantime changes the odds.
+ */
+function updateClash(world: World, band: Warband): void {
+  const c = band.clash!;
+  const target = world.buildings.get(band.targetId);
+  if (!target) return finishClash(world, band, false);
+  if (++c.t % BALANCE.clashStep) return;
+  c.attack = band.strength + c.surge;
+  c.defence = defenceOf(world, target) + c.rally;
+  const ratio = Math.trunc(((c.attack - c.defence) * 100) / Math.max(1, c.attack + c.defence));
+  c.line = Math.max(0, Math.min(1000, c.line + Math.trunc((ratio * BALANCE.clashPush) / 100) + world.rng.int(17) - 8));
+  if (c.line < 1000 && c.line > 0 && c.t < BALANCE.clashTicks) return;
+  finishClash(world, band, c.line > 500 || (c.line === 500 && world.rng.int(2) === 0));
+}
+
+/** Rally the defence of a besieged post, or surge the attack, once each per clash. Returns false if there is nothing to do. */
+export function rally(world: World, owner: number): boolean {
+  const p = world.players[owner];
+  if (!p) return false;
+  for (const band of world.warbands) {
+    const c = band.clash;
+    const target = world.buildings.get(band.targetId);
+    if (band.phase !== 'clash' || !c || !target) continue;
+    if (band.owner === owner) {
+      if (c.surged) continue;
+      c.surged = true;
+      c.surge = Math.floor((band.strength * BALANCE.surgePct) / 100);
+      world.emit({ type: 'clashRally', owner, bandId: band.id, targetId: target.id, kind: 'surge', n: 0, strength: c.surge, x: target.x, y: target.y });
+      return true;
+    }
+    if (target.owner !== owner || c.rallied || world.tick < p.rallyReady) continue;
+    let n = 0;
+    for (const s of world.settlers.values()) if (s.owner === owner && !s.child && s.job.kind !== 'guard' && cheb(s.x, s.y, target.x, target.y) <= BALANCE.rallyRadius) n++;
+    c.rallied = true;
+    // A hearth town turns out in numbers: two more hands a tier.
+    c.militia = Math.min(BALANCE.rallyMax + 2 * callingTier(world, owner, 'hearth'), n);
+    c.rally = BALANCE.rallyBase + BALANCE.rallyEach * c.militia;
+    p.rallyReady = world.tick + BALANCE.rallyCooldown;
+    world.emit({ type: 'clashRally', owner, bandId: band.id, targetId: target.id, kind: 'rally', n: c.militia, strength: c.rally, x: target.x, y: target.y });
+    return true;
+  }
+  return false;
+}
+
+/** The clash is decided: a post burns or holds, renown is paid, and the warband turns for home. */
+function finishClash(world: World, band: Warband, won: boolean): void {
   const target = world.buildings.get(band.targetId);
   const defender = target?.owner ?? NO_OWNER;
-  const defence = target ? defenceOf(world, target) : 0;
-  const won = !!target && (band.strength > defence || (band.strength === defence && world.rng.int(2) === 0));
+  const defence = band.clash?.defence ?? 0;
+  won = won && !!target;
   let renown = 0;
   if (target && won) {
     // Spoils grow with what the post cost; an unmanned post is a poor prize.
@@ -173,10 +261,10 @@ function skirmish(world: World, band: Warband): void {
     addRenown(world, defender, renown, 'defence', target.x, target.y);
     world.players[defender].repelled++;
   }
-  // A target that burned (or was pulled down) before they arrived: they simply turn for home.
   if (target) world.emit({ type: 'raidResolved', owner: band.owner, defender, won, buildingType: target.type, x: band.x, y: band.y, attack: band.strength, defence, renown });
   // Home again (the way they came).
   band.phase = 'home';
+  band.clash = undefined;
   band.path = band.path.slice(0, -1).reverse();
   const home = world.buildings.get(band.homeId);
   if (home) band.path.push(world.entranceIdx(home));

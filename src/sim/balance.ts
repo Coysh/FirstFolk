@@ -82,6 +82,27 @@ export const BALANCE = {
   raidSpoils: [15, 40] as [number, number],
   repelRenown: 12,
   raidCooldown: secs(90),
+  /**
+   * A clash lasts up to `clashTicks`; the line (0..1000) moves every `clashStep` ticks by the gap in
+   * strength (percent) times `clashPush`. A rally adds `rallyBase` + `rallyEach` per townsperson near
+   * the post (up to `rallyMax`), then rests `rallyCooldown`; a surge adds `surgePct` to a warband.
+   */
+  /** Scouts: a runner a settlement sends across the fog, resting `scoutCooldown` between trips. */
+  scoutCooldown: secs(40),
+  scoutReach: 60,
+  scoutSight: 6,
+  scoutSpotted: 9,
+  scoutLook: secs(3),
+  scoutSpeed: 400,
+  clashTicks: secs(14),
+  clashStep: 5,
+  clashPush: 100,
+  rallyBase: 4,
+  rallyEach: 4,
+  rallyMax: 8,
+  rallyRadius: 14,
+  rallyCooldown: secs(40),
+  surgePct: 30,
   interceptRange: 12,
   /** The Shield Wall: radius and extra defence. */
   shieldWall: [9, 40] as [number, number],
@@ -122,13 +143,22 @@ export const BALANCE = {
     landTiles: 800,
   },
   renownTick: secs(10),
-  /** From this tick (the final stretch) the Moot doubles what landmarks pay. */
-  mootAt: secs(25 * 60),
+  /**
+   * The Crown (see crown.ts): once the Kingstone has fallen, the one folk with a manned post beside it
+   * fills its Crown, `crownRate` a second (`crownTended` with a stockade standing watch). The Crown
+   * is full at `crownNeed`. Rivals' progress drains at `crownDecay` while someone else keeps the stone.
+   */
+  crownNeed: 1200,
+  crownRate: 2,
+  crownTended: 3,
+  crownDecay: 2,
+  /** The Kingstone's light shields whoever keeps it alone: their posts beside it fight this much harder. */
+  crownWard: 40,
   /** Challenges: the first is called at 7:00, then one every 3½–4½ minutes after the last ends. */
   firstChallenge: secs(7 * 60),
   challengeGap: [secs(210), secs(270)] as [number, number],
   /** Star-fall: a new landmark lands between the settlements from this tick (≡ 5 mod 10). */
-  starfallAt: secs(15 * 60) + 5,
+  starfallAt: secs(14 * 60) + 5,
 
   /** Market Day: each lot sold gluts that good by this much (percent), easing 1 point every 2 s. */
   glutPerSale: 25,

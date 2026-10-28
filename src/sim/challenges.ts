@@ -24,7 +24,7 @@ export interface ChallengeDef {
   measure(world: World, owner: number): number;
 }
 
-const starstone = (w: World) => w.sites.find((s) => s.kind === 'starstone');
+const starstone = (w: World) => w.sites.find((s) => s.kind === 'kingstone');
 
 export const CHALLENGES: ChallengeDef[] = [
   {
@@ -92,9 +92,9 @@ export const CHALLENGES: ChallengeDef[] = [
   },
   {
     id: 'star',
-    title: 'Race to the Star-Stone',
+    title: 'Race to the Kingstone',
     icon: '☄️',
-    text: 'Whoever holds the Star-Stone first wins the stargazers’ purse.',
+    text: 'Whoever holds the Kingstone first wins the stargazers’ purse.',
     duration: secs(240),
     target: 1,
     prize: 40,

@@ -1,20 +1,22 @@
 import { BALANCE } from './balance';
 import { isWalkableTerrain } from './mapgen';
+import { newCrown } from './crown';
 import { NO_OWNER, updateHoldings } from './territory';
 import type { World } from './world';
 
 /**
  * Happenings: valley-wide surprises that land mid-game and give both settlements something
  * new to fight over (Battle Drones' supply drops). Star-fall: somewhere between the two
- * settlements a star comes down, leaving a Star-Stone, a rich landmark both sides can see.
+ * settlements a star comes down on the old crowning-hill, leaving the Kingstone. Both sides can
+ * see it, and the Crown (see crown.ts) is won by keeping it.
  */
 export function starfallTick(world: World): number {
-  // Between 15:00 and 16:30 depending on the valley (always ≡ 5 mod 10, when this runs).
+  // Between 14:00 and 15:30 depending on the valley (always ≡ 5 mod 10, when this runs).
   return BALANCE.starfallAt + (world.seed % 7) * 150;
 }
 
 export function updateHappenings(world: World): void {
-  if (world.players.length < 2 || world.tick !== starfallTick(world)) return;
+  if (world.tick !== starfallTick(world) || world.scenario.victory !== 'crown') return;
   const [a, b] = world.map.starts;
   const mx = Math.round((a.x + b.x) / 2) + world.rng.range(-4, 4);
   const my = Math.round((a.y + b.y) / 2) + world.rng.range(-4, 4);
@@ -24,8 +26,9 @@ export function updateHappenings(world: World): void {
   const node = nodeId ? world.nodes.get(nodeId) : undefined;
   if (node) world.removeNode(node);
   const all = (1 << world.players.length) - 1;
-  const site = { id: world.newId(), kind: 'starstone' as const, x: spot.x, y: spot.y, revealed: all, claimedBy: NO_OWNER, heldBy: NO_OWNER };
+  const site = { id: world.newId(), kind: 'kingstone' as const, x: spot.x, y: spot.y, revealed: all, claimedBy: NO_OWNER, heldBy: NO_OWNER };
   world.sites.push(site);
+  world.crown = newCrown(site.id, world.players.length);
   world.emit({ type: 'starfall', siteId: site.id, x: site.x, y: site.y });
   updateHoldings(world);
   // The race to the stone starts at once (unless a challenge is already running).

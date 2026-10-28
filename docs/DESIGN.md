@@ -157,7 +157,7 @@ v0.8 made each game a contest, but every game was the same contest. v0.9 makes e
   - **Buried Hoard:** +20 renown and goods.
   - **Healing Spring:** a landmark whose holder's elders live a year longer.
   - **Forest Shrine:** a landmark that blesses a family with a boon.
-- **The Moot (climax).** From 25:00 every landmark pays double, with a banner and a "Moot ×2" chip. Taking a landmark pays 10 plus 1 per 8 renown you trail by (up to +30), doubled at the Moot. Comebacks are a real plan, not luck.
+- **The Moot (climax; replaced by the Crown in v0.23, see §0h).** From 25:00 every landmark pays double, with a banner and a "Moot ×2" chip. Taking a landmark pays 10 plus 1 per 8 renown you trail by (up to +30), doubled at the Moot. Comebacks are a real plan, not luck.
 - **The goal rises to 1,500** (Town at 750) so the Moot always comes into play.
 - **Daily Valley.** A title-screen entry with today's seed and omens, Normal, against the rival, and you pick an origin. Your best result (won or lost, renown, time) is kept in localStorage.
 
@@ -659,6 +659,59 @@ The serif is gone. Headings use **Bricolage Grotesque** (a warm, slightly quirky
 
 ---
 
+## 0h. The Saga Pass (v0.23+): a game you play to the end, not wait out
+
+**The diagnosis (a playtest after v0.22).** "The game still becomes boring after 15–20 minutes, with the final 10 minutes mostly spent waiting for Renown to accumulate." Right. Renown was mostly passive income (landmarks, land, the hearth stream), the win was "first to 1,400", and the Moot doubled the passive pay at 25:00. Once the borders settled there was nothing left to *do*, only a number to watch. Battles also resolved on arrival, so the most exciting thing in the game was over before the player could look at it.
+
+**The fix in one line:** the valley is won by *keeping a place*, not by accumulating points, and the fight over that place is something you watch, join and swing.
+
+### The Crown (replaces the Moot and the 1,400-renown goal)
+- **The Kingstone falls between 14:00 and 15:30.** A star lands on the old crowning-hill, on the fairest open ground between the two halls (`happenings.ts`). Both sides see it at once. The valley's story (below) has been telling you for ten minutes that it is coming, and a Stargazer's warning (a story event) lets you reveal the hill first.
+- **The Crown fills for the folk who keep the stone, alone.** "Keeping" means a manned post (or the hall) within 9 tiles of the stone, and no rival post there. A stockade tending it fills the Crown faster. 2 points a second (3 tended); full at 1,200, so an uncontested keeper needs 10 minutes (6⅔ tended).
+- **Two posts freeze it.** If both settlements have a post beside the stone it is *contested*: nothing fills, nothing drains, and the HUD says "Burn theirs!". Burn the rival's post and you keep it, so **a raid is now the way to win, not a way to score**.
+- **A lead is never safe.** While someone else keeps the stone your Crown drains 2 points a second, so a comeback is always one good raid away and a lead is a thing to defend.
+- **The Kingstone shields its keeper.** Posts of the sole keeper within 9 tiles fight 40 stronger, so a settled keeper is hard to dislodge (and a contested stone is exactly when to strike).
+- **Renown no longer wins.** It raises your rank (Hamlet 250, Village 650 and so on), pays for Great Works' perks, and breaks a tie. At 45:00 the *fuller Crown* wins, then renown. The final objective in the Goals panel is now "Fill the Crown".
+- **A Crown meter, not a score.** The race panel shows both Crowns with a pace and an ETA, one line saying what is going on at the stone ("You keep it", "Contested", "The rival keeps it, burn the post beside it, then hold it yourself") that you can click to fly there, and renown as a quiet second row. Quarter-marks (25/50/75%) are announced for both sides.
+- **State:** `world.crown` (saved); `crown.ts`.
+
+### Battles you can watch and join (`warfare.ts`)
+- **A raid is now a clash.** When the warband reaches a post it fights for up to 14 seconds. A tug-of-war line (0–1000) moves every half second by the strength gap, a little unevenly; the post falls when the line reaches the end, the raiders are driven off at the other, and if neither happens in time whoever is ahead wins. The stronger side still usually wins, but now it takes time and it can change.
+- **Rally (G), for the defender.** One press calls every free adult within 14 tiles to the post: +4 plus +4 for each person up to 8 (a Hearthfolk town turns out 2 more a tier), then 40 seconds' rest. **Surge (G), for the attacker:** +30% for this clash, once.
+- **You see it.** Two lines of figures (the raiders from the side they came, the guards plus any rallied townsfolk) thrust, shove and spark either side of the post, and the line walks towards whoever is winning. A live battle card shows "36 vs 20" on a bar that reads from your side, with the Rally button; a war pin hangs over the post; the camera follows your own assault in.
+- **Bots do it too:** they Rally once the line turns against them and Surge when they are losing.
+
+### Scouting (`scouts.ts`)
+- **T, then tap the map.** A fleet-footed runner (1.6× a settler's pace) walks out to anywhere you can reach within 60 tiles, looks round for 3 seconds, and comes back, lifting the fog on the way. It finds landmarks, shows the rival's posts (a raid needs to have seen its target) and reports how many places it found. One at a time; 40 seconds' rest.
+- **The rival does the same to you.** A scout that walks within 9 tiles of a building is *spotted*: "A rival scout is watching your border", with a taunt. That is the first meeting with the rival, at around 4–6 minutes instead of at the first raid.
+
+### The saga (`saga.ts`) and story events (`events.ts`)
+A short story, told in beats. Each is a story card (never blocks play, fades in 30 s) saying what happened *and what to do about it*:
+| Beat | When | The goal it gives |
+|---|---|---|
+| The Long Road | the start | Woodcutter, Forager, homes |
+| Smoke on the Far Hills | 5:30, or on first sight of the rival | Scout (T); push towards the middle |
+| Banners at the Border | 10:00 | Man your posts; Mustering Hall; know Rally (G) |
+| The Star Falls | the Kingstone falls | A manned post within 9 tiles; burn theirs |
+| The Crown Fills | someone's Crown is half full | Hold it, or burn the post that does |
+| The Last Light | 80%, or 4 minutes left | Surge, Rally, every house power |
+Three one-off story events come first in the queue: **The Envoy** (6:00+: swear a truce for gifts and 2½ quiet minutes; read his map to see their camp; or spurn him for +20 renown and a stronger rival raid), **The Stargazer's Warning** (before the star falls: camp at the hill to see it, or keep faith), and **Deserters** (when you trail by 100+ renown: a skilled family joins you).
+
+### Usability
+- **New Game explains valleys.** Each valley now shows its blurb and effect chips (green good, red bad, gold key) and a named picker, instead of six unlabelled icons.
+- **The Fisher says fish.** The placement bar said "berry bushes" for any gatherer that was not a woodcutter or quarry.
+- **Winter is readable.** The snow tint was a near-white 62% wash; it is now a cool 55% tint on the ground's own colour, so slopes, trees and borders still read.
+
+### The Kingstone, in Blender
+`discovery_kingstone` in `landmarks.py`: a stepped plinth ringed by eight low pillars with four braziers, a tall faceted monolith with a gold band and glowing runes, and a golden five-point crown over a star that glows at night. It is the tallest landmark in the game so it reads from the far side of the valley.
+
+### Measured (24 duels, 46 minutes; the harness now counts "actions a minute")
+- **Length:** median 30 minutes (was 35–36), min 21, max 45; 5 of 24 end on the clock (the fuller Crown wins).
+- **Things to do, by game minute:** 2.6 / 2.0 / 3.0 / 4.1 / 4.6 / 4.2 / 4.9 (0–5 … 30–45). **First 10 minutes 2.3, the 10 before the last 4.1, the last 10 minutes 4.7.** The end is the busiest part, which was the test.
+- **Battles the player sees:** 13 a game (it was 3.3 with instant raids and nothing to raid for).
+- **Balance** (7 styles, 252 duels a block, two blocks): 36–58%; Raiders' 65% in the first block fell to 49–57% once the Kingstone shielded its keeper and Rally got stronger; Hearthfolk are weakest at 36–44% (they never invest in spears) and got the Rally perk above; a 100-game mirror match is 49:51 by side.
+- **`tests/crown.test.ts`, `scouts.test.ts` and new `pacing.test.ts` contracts** (no victory before 19:00; a star by 15:40 and a fight for it in every game; something to do at 15–20 minutes; the finish at least 1.5× as busy as the start).
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -789,7 +842,7 @@ All trade data lives in `src/sim/trades.ts`: thresholds, model variant ids, gear
 
 ## 5. Victory: a modular scenario system
 
-Victory is data, not hard-coded rules, so the sandbox and other objectives come almost for free.
+Victory is data, not hard-coded rules, so the sandbox and other objectives come almost for free. As of v0.23 the main scenario's `victory` is `'crown'` (first to fill the Crown at the Kingstone; the fuller Crown, then renown, at 45:00); `'goal'` (first to a renown objective) remains for other scenarios. See §0h.
 
 ```ts
 interface Objective {            // pure function of world state for one player
@@ -1561,3 +1614,15 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **End of a game:** the town's calling and valley, how the renown was earned, a road to try next, and **▶ Another valley**.
 - **Harness:** `valley` and `bridges` in the playtest report and a per-valley summary line; `tools/valleys.ts`, `tools/fairness.ts`, `tools/bridge-shot.mjs`, `tools/calling-shot.mjs`.
 - **Tests:** valleys (variety, playability, geography, the island), bridges (spans, rules, laying, the island opened, save/load), callings (thresholds, hysteresis and every effect). 146 pass.
+
+### v0.23.0 The Saga Pass: a Crown to fight for, battles you watch, scouts and a story (2026-10-28)
+- **The Crown replaces the renown race.** The Kingstone falls at 14:00–15:30; the folk who keep it alone fill the Crown (2 a second, 3 tended, 1,200 to fill); two posts there freeze it; a rival's progress drains while you keep it; the keeper's posts fight 40 harder. First to fill it wins, else the fuller Crown at 45:00, then renown. The Moot and the 1,400 goal are gone; renown is for ranks and tie-breaks. New `src/sim/crown.ts`, a new `'crown'` victory in `scenario.ts`, `world.crown`.
+- **Clashes.** A raid arriving at a post is now a 14-second tug-of-war instead of an instant result, with **Rally (G)** for the defender and **Surge (G)** for the attacker, two visible lines of fighters with sparks and dust, a live battle card with a tug bar, a war pin and a camera that follows your own assault. Bots rally and surge.
+- **Scouts.** New `scout` Command, T and tap; the runner lifts the fog, reports finds, and is *spotted* by the rival, who scouts you back (the first meeting is at 4–6 minutes now). `src/sim/scouts.ts`.
+- **The saga.** Six story beats with a goal each, shown as non-blocking story cards (`src/sim/saga.ts`); three story events: the Envoy, the Stargazer's Warning, and Deserters (once-only events now come first in the queue).
+- **Kingstone model** in Blender; the code fallback matches. `tools/clash-shot.mjs`, `tools/saga-shot.mjs`.
+- **Usability:** New Game valley effects and names; the Fisher no longer asks for berry bushes; winter's tint is cooler and half as heavy.
+- **Bots** raise a post beside the Kingstone even with a Great Work under way, scout, strike the post that keeps it, and every style now builds a Mustering Hall once the Crown is in play.
+- **Harness:** `actionByMinute` and an "actions per minute" line (by game minute, and first / middle / last ten minutes). Hearthfolk's Rally perk.
+- **Saves:** `SAVE_VERSION` 20 (`crown`, `scouts`, `saga`, a warband's `clash`, `rallyReady`, `scoutReady`, `onceEvents`).
+- **Tests:** `crown.test.ts`, `scouts.test.ts` (scouts and the saga), clash tests in `warfare.test.ts`, long-game contracts in `pacing.test.ts`, and the art test covers the Kingstone. 164 pass.

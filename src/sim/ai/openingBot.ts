@@ -11,6 +11,9 @@ import { canAfford, eventDef } from '../events';
 import { isHome } from '../population';
 import { bestSite } from './placement';
 import { STYLES, type BotStyle, type StyleDef } from './styles';
+import { crownSite } from '../crown';
+import { scoutProblem } from '../scouts';
+import { watched } from '../renown';
 import { defenceOf, hallOf, huscarls, raidProblem, raidStrength, raidable } from '../warfare';
 import { previewRemoval } from '../territory';
 
@@ -61,6 +64,17 @@ export class OpeningBot {
       const best = offer.choices.reduce((a, h, i) => (rank(h) < rank(offer.choices[a]) ? i : a), 0);
       world.enqueue({ type: 'chooseHouse', owner: this.owner, offerId: offer.id, choice: best });
     }
+    this.scout(world);
+    // A clash at one of our posts, or by our own warband: rally or surge once it turns against us.
+    for (const band of world.warbands) {
+      const c = band.clash;
+      if (band.phase !== 'clash' || !c) continue;
+      const mine = band.owner === this.owner;
+      if (mine ? !c.surged && c.t >= 20 && c.line < 600 : !c.rallied && c.t >= 10 && c.line > 400 && world.buildings.get(band.targetId)?.owner === this.owner) {
+        world.enqueue({ type: 'rally', owner: this.owner });
+        break;
+      }
+    }
     while (this.opening.length && this.opening[0].at <= world.tick) {
       this.place(world, this.opening.shift()!.type);
     }
@@ -68,7 +82,9 @@ export class OpeningBot {
 
     const pop = world.population(this.owner);
     const sites = [...world.buildings.values()].filter((b) => b.owner === this.owner && !b.done).length;
-    if (sites >= 2) return;
+    // A Kingstone with no post of ours beside it is worth putting down a Great Work for.
+    const kingstone = crownSite(world);
+    if (sites >= (kingstone && !watched(world, this.owner, kingstone.x, kingstone.y) ? 4 : 2)) return;
     const emptyHuts = [...world.buildings.values()].filter((b) => b.owner === this.owner && isHome(b.type) && b.familyId === 0).length;
     const count = (t: BuildingType) => world.countBuildings(this.owner, t, true);
 
@@ -102,9 +118,22 @@ export class OpeningBot {
     const muster: Idea = [st.muster && count('musterhall') === 0 && pop >= 24, 'musterhall'];
     const push: Idea = [towerSites === 0 && (!!target || !!want || (!st.towersOnlyWithAim && towers < pop / st.towerPer)), tower, target ?? undefined, want];
 
+    // The Kingstone has fallen: a manned post beside it first, then a stockade to tend it.
+    const ks = crownSite(world);
+    const watch = ks ? watched(world, this.owner, ks.x, ks.y) : '';
+    const nearKs = (t: BuildingType) => !!ks && [...world.buildings.values()].some((b) => b.owner === this.owner && b.type === t && Math.max(Math.abs(b.x - ks.x), Math.abs(b.y - ks.y)) <= BALANCE.watchRange - 2);
+    const crownIdeas: Idea[] = ks
+      ? [
+          [!watch && towerSites === 0, tower, ks],
+          [watch === 'watched' && !nearKs('stockade') && count('stockade') < world.frontierCap(this.owner), 'stockade', ks],
+          [watch !== '' && count('musterhall') === 0 && pop >= 20, 'musterhall'],
+        ]
+      : [];
+
     // Ordered ideas; the first one that is wanted, affordable and has a valid site is done.
     const ideas: Idea[] = [
       [emptyHuts === 0 && pop >= world.housing(this.owner) - 2, home],
+      ...crownIdeas,
       // Masons race for the Great Works from the moment they can.
       [st.focus === 'masons' && !!work, work ?? 'hut'],
       // Like a player following the goals: the first Lookout as soon as there are homes.
@@ -229,7 +258,7 @@ export class OpeningBot {
           break;
         case 'shieldwall': {
           // Where raiders or reavers are heading.
-          const band = world.warbands.find((b) => b.phase === 'march' && world.buildings.get(b.targetId)?.owner === this.owner);
+          const band = world.warbands.find((b) => b.phase !== 'home' && world.buildings.get(b.targetId)?.owner === this.owner);
           const t = band && world.buildings.get(band.targetId);
           at = t ? { x: t.x, y: t.y } : null;
           break;
@@ -276,6 +305,25 @@ export class OpeningBot {
     return true;
   }
 
+  /** Send the scout out whenever it is rested: towards the Kingstone and the rival first, then round the compass. */
+  private scout(world: World): void {
+    if (world.tick < 1800 || world.tick % 50 !== 0) return;
+    const hall = [...world.buildings.values()].find((b) => b.owner === this.owner && b.type === 'wagon');
+    if (!hall) return;
+    const bit = 1 << this.owner;
+    const rival = world.map.starts[world.players.length > 1 ? 1 - this.owner : this.owner];
+    const ks = crownSite(world);
+    const spots: [number, number][] = [];
+    if (ks) spots.push([ks.x, ks.y]);
+    for (const f of [0.35, 0.55, 0.75]) spots.push([Math.round(hall.x + (rival.x - hall.x) * f), Math.round(hall.y + (rival.y - hall.y) * f)]);
+    for (const [dx, dy] of [[30, 0], [21, 21], [0, 30], [-21, 21], [-30, 0], [-21, -21], [0, -30], [21, -21]]) spots.push([hall.x + dx, hall.y + dy]);
+    for (const [x, y] of spots) {
+      if (!world.inBounds(x, y) || world.explored[world.idx(x, y)] & bit || scoutProblem(world, this.owner, x, y)) continue;
+      world.enqueue({ type: 'scout', owner: this.owner, x, y });
+      return;
+    }
+  }
+
   private raid(world: World): boolean {
     const st = this.mood(world);
     if (!st.raids) return false;
@@ -283,13 +331,16 @@ export class OpeningBot {
     const n = huscarls(world, hall);
     if (!hall || n < 2) return false;
     const attack = raidStrength(world, this.owner, n);
+    const ks = crownSite(world);
     let best: { id: number; value: number } | null = null;
     for (const b of world.buildings.values()) {
       if (b.owner === this.owner || !raidable(b) || raidProblem(world, this.owner, b.id)) continue;
       if (defenceOf(world, b) >= attack) continue;
       const pv = previewRemoval(world, b.id, this.owner);
-      if (st.raids === 1 && !pv.sites.length && pv.gained < 25) continue;
-      const value = pv.sites.length * 40 + pv.gained / 8 + (b.guarded ? 10 : 0) - Math.max(Math.abs(b.x - hall.x), Math.abs(b.y - hall.y)) / 4;
+      // The post that keeps the Kingstone is the one that matters.
+      const keeps = !!ks && Math.max(Math.abs(b.x + 1 - ks.x), Math.abs(b.y + 1 - ks.y)) <= BALANCE.watchRange;
+      if (st.raids === 1 && !keeps && !pv.sites.length && pv.gained < 25) continue;
+      const value = (keeps ? 150 : 0) + pv.sites.length * 40 + pv.gained / 8 + (b.guarded ? 10 : 0) - Math.max(Math.abs(b.x - hall.x), Math.abs(b.y - hall.y)) / 4;
       if (!best || value > best.value) best = { id: b.id, value };
     }
     if (!best) return false;
@@ -303,7 +354,8 @@ export class OpeningBot {
    * Mustering Hall, so a war is always possible.
    */
   private mood(world: World): StyleDef {
-    const st = STYLES[this.style];
+    // Once the Crown is in play every rival can fight for it, whatever its character.
+    const st = world.crown ? { ...STYLES[this.style], muster: true, raids: Math.max(STYLES[this.style].raids, 1) as 1 | 2 } : STYLES[this.style];
     const me = world.players[this.owner];
     const others = world.players.filter((p) => p.id !== this.owner);
     if (!others.length) return st;

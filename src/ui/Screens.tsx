@@ -221,12 +221,22 @@ function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void;
             </button>
           )}
         </div>
+      </div>
+      <div class="valley-box">
         <p class="valley-blurb">{VALLEYS[valleyOf(seed)].blurb}</p>
+        <div class="valley-tags">
+          {VALLEYS[valleyOf(seed)].tags.map(([text, tone]) => (
+            <span key={text} class={`vtag ${tone}`}>
+              {text}
+            </span>
+          ))}
+        </div>
         {!daily && (
           <div class="valley-pick" role="group" aria-label="Kind of valley">
             {VALLEY_IDS.map((id) => (
               <button key={id} class={valleyOf(seed) === id ? 'on' : ''} title={VALLEYS[id].name} aria-label={VALLEYS[id].name} aria-pressed={valleyOf(seed) === id} onClick={() => setSeed(seedOfValley(id, seed))}>
-                {VALLEYS[id].icon}
+                <span class="vp-ico">{VALLEYS[id].icon}</span>
+                <span class="vp-name">{VALLEYS[id].name.replace(/^The /, '')}</span>
               </button>
             ))}
           </div>
@@ -293,7 +303,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 export function HowTo({ onClose }: { onClose: () => void }) {
   const steps = [
-    { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,400 renown wins, or the most renown when the clock reaches 45:00. From 25:00 the Moot makes landmarks pay double. Landmarks, land, raids, discoveries, Masters, Great Works and Market Day all count.' },
+    { icon: '/assets/icons/renown.png', title: 'Win the Crown', text: 'Around 14:00 a star falls and wakes the Kingstone. Keep a manned post within 9 tiles of it, with no rival post there, and your Crown fills; the first folk to fill it rule the valley. Burn the rival’s post to freeze it, then hold it yourself. Renown raises your rank and breaks a tie at 45:00.' },
+    { icon: '/assets/icons/lookout.png', title: 'Scout, fight, rally', text: 'Press T and tap the map to send a scout across the fog: it lifts the fog, shows landmarks and the rival’s posts, and the rival’s scouts will do the same to you. When raiders reach one of your posts, the fight takes a few seconds: press G to Rally every free hand nearby to its defence. In your own raids, G is a Surge.' },
     { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Free homes and spare food grow your town. All work fills your crafts (top bar): each new star upgrades every workplace of that craft.' },
     { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Lookouts and Watchtowers push your border, but every banner needs a spear: posts need guards (free adults) to push at full strength, and a landmark pays renown only while a manned post watches it. Guards eat three times as much as anyone, so a town of towers needs a big larder. Your rank limits how many posts you can hold.' },
     { icon: '/assets/icons/stockade.png', title: 'Spears and shields', text: 'Wide or tall? A Stockade holds a little land hard and makes a landmark pay more. From 10:00 a Mustering Hall’s huscarls can raid (R) a rival post: the stronger side wins, and a burned post frees its land. Reavers strike the furthest post of whoever spreads widest.' },

@@ -2,7 +2,7 @@
  * The rival has a voice: their house's head sends word when the race turns, boasting,
  * grumbling or goading. Pure flavour (UI only), so it may pick lines at random.
  */
-export type RivalMoment = 'greet' | 'theyTook' | 'youTook' | 'theyWon' | 'youWon' | 'theirWork' | 'yourWork' | 'starfall' | 'moot' | 'theyLead' | 'youLead' | 'raid' | 'burned' | 'repelled' | 'warMood' | 'wallsMood';
+export type RivalMoment = 'greet' | 'theyTook' | 'youTook' | 'theyWon' | 'youWon' | 'theirWork' | 'yourWork' | 'starfall' | 'moot' | 'theyLead' | 'youLead' | 'raid' | 'burned' | 'repelled' | 'warMood' | 'wallsMood' | 'scout';
 
 const LINES: Record<RivalMoment, string[]> = {
   greet: ['“The valley is wide, neighbour. Not wide enough for two great towns.”', '“Welcome to our valley. Do try to keep up.”'],
@@ -13,7 +13,8 @@ const LINES: Record<RivalMoment, string[]> = {
   theirWork: ['“Behold {work}! Built by {house} hands. Your masons may visit to learn.”'],
   yourWork: ['“So you finished {work}. We meant to build a better one anyway.”'],
   starfall: ['“A star fell between us. The heavens choose {house}, surely?”', '“Did you see the star? It is ours, of course.”'],
-  moot: ['“The whole valley is watching now. Let them see who is greater.”', '“The Moot! Our bards have been practising your lament.”'],
+  scout: ['“Our runner saw your border. Plain walls, plainer plans.”', '“Do wave to our scout. He will be reporting back.”', '“Looking for something? Our scout found it first.”'],
+  moot: ['“The stone is lit, neighbour. Only one of us will stand in its light.”', '“Keep a spear by the Kingstone, if you like. Ours will be there too.”'],
   theyLead: ['“The bards sing of {house} this season. Your name? They forgot it.”'],
   youLead: ['“Renown is fickle, neighbour. The race is not over.”'],
   raid: ['“Your {building} looks lonely. We are coming to keep it company.”', '“Hear that horn? It blows for your {building}.”', '“A tower with no spears is a bonfire waiting for a spark.”'],

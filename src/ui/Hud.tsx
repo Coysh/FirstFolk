@@ -21,10 +21,12 @@ import { describeSettler, formatTime } from './describe';
 import { HowTo, SettingsPanel } from './Screens';
 import { DEED_KEYS, HOTKEYS } from '../input/input';
 import { lockLabel } from '../sim/commands';
-import { renownGoal as scenarioGoal } from '../sim/scenario';
 import { DEEDS, activePowers, deedCooldown, deedProblem, deedWait } from '../sim/deeds';
 import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../sim/market';
-import { mootUnderway, renownRate } from '../sim/renown';
+import { renownRate } from '../sim/renown';
+import { CONTESTED, crownEta, crownPct, crownRate, crownSite, watchers } from '../sim/crown';
+import { starfallTick } from '../sim/happenings';
+import { SAGA } from '../sim/saga';
 import { challengeDef, challengeProgress } from '../sim/challenges';
 import { OMENS } from '../sim/omens';
 import { ORIGINS } from '../sim/origins';
@@ -53,7 +55,8 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       {game.marketOpen.value && <Market game={game} />}
       <Threats game={game} />
       {game.mode.value.kind === 'select' && <Council game={game} />}
-      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : game.mode.value.kind === 'bridge' ? <BridgeBar game={game} /> : <BuildBar game={game} />}
+      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : game.mode.value.kind === 'scout' ? <ScoutBar game={game} /> : game.mode.value.kind === 'bridge' ? <BridgeBar game={game} /> : <BuildBar game={game} />}
+      <StoryCard game={game} />
       <Banner game={game} />
       <Victory game={game} shell={shell} />
       {game.menuOpen.value && <PauseMenu game={game} shell={shell} />}
@@ -276,41 +279,57 @@ function Goals({ game }: { game: Game }) {
   );
 }
 
-/** The renown race at a glance: both scores, their rates, the goal and the clock. */
+/** The race at a glance: the Crown (the win), renown (rank, and the tie-break) and the clock. */
 function RaceBar({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
-  const goal = renownGoal(w);
-  if (!goal) return null;
+  if (w.scenario.victory !== 'crown') return null;
   const limit = w.scenario.timeLimit ?? 0;
   const left = limit ? Math.max(0, limit - w.tick) : Infinity;
-  const row = (owner: number, label: string) => {
-    const p = w.players[owner];
-    const rate = renownRate(w, owner);
-    const perMin = rate.landmarks + rate.land;
-    const held = w.sites.filter((st) => st.heldBy === owner).length;
+  const c = w.crown;
+  const site = crownSite(w);
+  const fallIn = Math.max(0, starfallTick(w) - w.tick);
+  const watching = watchers(w);
+  const crownRow = (owner: number, label: string) => {
+    const pct = crownPct(w, owner);
+    const keeping = !!c && c.keeper === owner;
+    const eta = crownEta(w, owner);
     return (
-      <div class={`race-row ${owner === PLAYER ? 'me' : 'them'}`} title={`${label}: ${p.renown} renown · ${held} landmarks held · +${perMin}/min from landmarks and land`}>
+      <div class={`race-row crown ${owner === PLAYER ? 'me' : 'them'} ${keeping ? 'keeping' : ''}`} title={`${label}: the Crown is ${pct}% full${keeping ? `, full in ${formatTime(eta * TICK_HZ)}` : ''}`}>
         <span class="race-name">{label}</span>
         <div class="race-track">
-          <div style={{ width: `${Math.min(100, (p.renown / goal) * 100)}%` }} />
+          <div style={{ width: `${pct}%` }} />
         </div>
         <span class="race-score">
-          {p.renown}
-          <small>★</small>
+          {pct}
+          <small>%</small>
         </span>
-        <span class="race-rate">+{perMin}/m</span>
-        <span class="race-rank">{RANK_NAMES[p.rank]}</span>
+        <span class="race-rate">{keeping ? `+${crownRate(!!watching.find((x) => x.owner === owner)?.tended)}/s` : ''}</span>
+        <span class="race-rank">{keeping && eta < 99999 ? formatTime(eta * TICK_HZ) : ''}</span>
       </div>
     );
   };
+  const mine = c?.keeper === PLAYER;
+  const status = !c
+    ? `☄️ A star falls in ${formatTime(fallIn)}: the Kingstone, and the Crown with it. Claim land toward the middle now.`
+    : c.keeper === PLAYER
+      ? '👑 You keep the Kingstone: the Crown is filling. Guard that post!'
+      : c.keeper === CONTESTED
+        ? '⚔️ Contested: both have a post beside the stone, so nothing fills. Burn theirs!'
+        : c.keeper >= 0
+          ? '🔥 The rival keeps the Kingstone and your Crown is draining. Burn the post beside it, then hold it yourself.'
+          : '👑 The Kingstone is unkept: raise a manned post within 9 tiles and start filling the Crown.';
+  const rp = (owner: number) => w.players[owner]?.renown ?? 0;
+  const rate = (owner: number) => {
+    const r = renownRate(w, owner);
+    return r.landmarks + r.land;
+  };
   return (
-    <section class="race" aria-label="The renown race">
+    <section class="race" aria-label="The race for the Crown">
       <div class="race-head">
         <span>
-          First to <b>{goal.toLocaleString('en-GB')}★</b> renown
+          <b>👑 The Crown</b>
         </span>
-        {mootUnderway(w) && <span class="race-moot" title="The Valley Moot: landmarks pay double">📯 Moot ×2</span>}
         {left <= secs(5 * 60) ? <span class="race-clock pulse">⏳ {formatTime(left)} left</span> : limit ? <span class="race-clock">ends {formatTime(limit)}</span> : null}
       </div>
       {w.omens.length > 0 && (
@@ -322,8 +341,21 @@ function RaceBar({ game }: { game: Game }) {
           ))}
         </div>
       )}
-      {row(PLAYER, 'You')}
-      {w.players[1] && row(1, 'Rival')}
+      {crownRow(PLAYER, 'You')}
+      {w.players[1] && crownRow(1, 'Rival')}
+      <button class={`race-status ${mine ? 'mine' : c && c.keeper >= 0 ? 'theirs' : c?.keeper === CONTESTED ? 'contested' : ''}`} onClick={() => site && game.lookAt(site.x, site.y)} disabled={!site} title={site ? 'Look at the Kingstone' : undefined}>
+        {status}
+      </button>
+      <div class="race-renown" title="Renown raises your rank, and settles a tie when the clock runs out">
+        <span>★ You {rp(PLAYER)}</span>
+        <span class="faint">+{rate(PLAYER)}/m</span>
+        {w.players[1] && (
+          <>
+            <span>· Rival {rp(1)}</span>
+            <span class="faint">+{rate(1)}/m</span>
+          </>
+        )}
+      </div>
       <Contest game={game} />
     </section>
   );
@@ -356,32 +388,80 @@ function Contest({ game }: { game: Game }) {
   );
 }
 
-const renownGoal = (w: World) => scenarioGoal(w.scenario);
-
-/** Warbands marching on your posts: who, where, and how long until they arrive. */
+/** Raids on your posts: the march (with its odds), then the clash itself, live, with a way to join in. */
 function Threats({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
-  const bands = w.warbands.filter((b) => b.phase === 'march' && w.buildings.get(b.targetId)?.owner === PLAYER);
-  if (!bands.length) return null;
+  const bands = w.warbands.filter((b) => b.phase !== 'home' && w.buildings.get(b.targetId)?.owner === PLAYER);
+  const mine = w.warbands.find((b) => b.owner === PLAYER && b.phase === 'clash');
+  if (!bands.length && !mine) return null;
+  const rest = Math.max(0, w.players[PLAYER].rallyReady - w.tick);
+  const tug = (band: (typeof bands)[number], attackerIsMe: boolean) => {
+    const c = band.clash!;
+    // The bar always reads from your side: gold fills as you win the line.
+    const youPct = Math.round((attackerIsMe ? c.line : 1000 - c.line) / 10);
+    return (
+      <div class="tug" title={`${c.attack} against ${c.defence}`}>
+        <div class="tug-bar">
+          <div class={attackerIsMe ? 'atk' : 'def'} style={{ width: `${youPct}%` }} />
+        </div>
+        <span class="tug-nums">
+          {attackerIsMe ? c.attack : c.defence} <small>vs</small> {attackerIsMe ? c.defence : c.attack}
+        </span>
+      </div>
+    );
+  };
   return (
     <section class="threats" aria-label="Raids under way">
       {bands.map((band) => {
         const t = w.buildings.get(band.targetId)!;
         const secsLeft = Math.ceil(((band.path.length - band.step) * 1000) / BALANCE.adultSpeed / TICK_HZ);
         const def = defenceOf(w, t);
+        const c = band.clash;
+        const who = band.owner === NO_OWNER ? 'Reavers' : 'Rival raiders';
+        if (c)
+          return (
+            <div key={band.id} class={`threat clash ${c.line > 500 ? 'losing' : 'holding'}`}>
+              <button class="threat-look" onClick={() => game.lookAt(t.x, t.y)} title="Look">
+                <span class="threat-icon">⚔</span>
+                <span>
+                  <strong>{who} are at your {BUILDINGS[t.type].name}!</strong>
+                  {tug(band, false)}
+                </span>
+              </button>
+              <button class="rally" disabled={c.rallied || rest > 0} onClick={() => game.rally()} title="Call every free hand near the post to its defence (G)">
+                {c.rallied ? `📯 Called: +${c.rally}` : rest > 0 ? `📯 ${Math.ceil(rest / TICK_HZ)}s` : '📯 Rally!'}
+                {!c.rallied && !rest && <span class="hotkey">G</span>}
+              </button>
+            </div>
+          );
         return (
           <button key={band.id} class={`threat ${band.strength >= def ? 'losing' : 'holding'}`} onClick={() => game.lookAt(t.x, t.y)} title="Look">
             <span class="threat-icon">⚔</span>
             <span>
-              <strong>{band.owner === NO_OWNER ? 'Reavers' : 'Rival raiders'}</strong> → your {BUILDINGS[t.type].name} in {secsLeft}s
+              <strong>{who}</strong> → your {BUILDINGS[t.type].name} in {secsLeft}s
               <span class="threat-odds">
-                {band.strength} against your {def}: {band.strength > def ? 'it will burn unless help comes' : band.strength === def ? 'a coin toss' : 'it should hold'}
+                {band.strength} against your {def}: {band.strength > def ? 'it will burn unless help comes' : band.strength === def ? 'a coin toss' : 'it should hold'}. Be ready to Rally (G)
               </span>
             </span>
           </button>
         );
       })}
+      {mine?.clash && (
+        <div class="threat clash mine">
+          <button class="threat-look" onClick={() => game.lookAt(w.buildings.get(mine.targetId)?.x ?? 0, w.buildings.get(mine.targetId)?.y ?? 0)} title="Look">
+            <span class="threat-icon">⚔</span>
+            <span>
+              <strong>Your huscarls are storming their {BUILDINGS[w.buildings.get(mine.targetId)?.type ?? 'lookout'].name}!</strong>
+              {tug(mine, true)}
+            </span>
+          </button>
+          <button class="rally" disabled={mine.clash.surged} onClick={() => game.rally()} title="Throw everything in: +30% strength for this clash (G)">
+            {mine.clash.surged ? `🔥 Surged: +${mine.clash.surge}` : '🔥 Surge!'}
+            {!mine.clash.surged && <span class="hotkey">G</span>}
+          </button>
+        </div>
+      )}
     </section>
   );
 }
@@ -398,7 +478,7 @@ function Warband({ game }: { game: Game }) {
   const ready = !out && !rest && n > 0 && !early;
   const pct = rest ? 1 - rest / BALANCE.raidCooldown : out ? 0 : 1;
   const band = w.warbands.find((b) => b.owner === PLAYER);
-  const status = band ? (band.phase === 'march' ? `${band.strength} marching` : 'coming home') : early ? 'from 10:00' : rest ? `${Math.ceil(rest / TICK_HZ)}s` : n ? `${n} × ${BALANCE.guardStrength}` : 'no huscarls';
+  const status = band ? (band.phase === 'march' ? `${band.strength} marching` : band.phase === 'clash' ? 'fighting' : 'coming home') : early ? 'from 10:00' : rest ? `${Math.ceil(rest / TICK_HZ)}s` : n ? `${n} × ${BALANCE.guardStrength}` : 'no huscarls';
   return (
     <button
       class={`deed warband ${ready ? 'ready' : ''}`}
@@ -441,6 +521,66 @@ function RaidBar({ game }: { game: Game }) {
         <button onClick={() => game.cancel()}>✕</button>
       </div>
     </div>
+  );
+}
+
+/** A beat of the saga: what has happened, and what to do about it. Never blocks play, fades on its own. */
+function StoryCard({ game }: { game: Game }) {
+  const s = game.story.value;
+  if (!s) return null;
+  const beat = SAGA[s.beat];
+  const origin = game.world.players[1]?.origin;
+  const rival = origin && origin !== 'dynasty' ? `the ${ORIGINS[origin].name}` : 'rival folk';
+  const fill = (t: string) => t.replace(/\{rival\}/g, rival);
+  return (
+    <aside class="story panel" role="note" aria-label={beat.title}>
+      <span class="story-ico">{beat.icon}</span>
+      <div class="story-body">
+        <h3>{beat.title}</h3>
+        {beat.text.map((p) => (
+          <p key={p}>{fill(p)}</p>
+        ))}
+        <p class="story-goal">➤ {fill(beat.goal)}</p>
+      </div>
+      <button class="story-ok" onClick={() => game.dismissStory()}>
+        Onward
+      </button>
+    </aside>
+  );
+}
+
+/** Choosing where the scout goes. */
+function ScoutBar({ game }: { game: Game }) {
+  return (
+    <div class="placebar panel">
+      <span class="deed-icon big">🔭</span>
+      <div class="ptext">
+        <strong>Scout</strong>
+        <span class="ok">Tap the map: your scout runs out to look, then comes home. Range {BALANCE.scoutReach} tiles.</span>
+      </div>
+      <div class="pbtns">
+        <button onClick={() => game.cancel()}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+/** The scout: ready, out, or resting. */
+function ScoutCard({ game }: { game: Game }) {
+  const w = game.world;
+  const out = w.scouts.some((s) => s.owner === PLAYER);
+  const rest = Math.max(0, w.players[PLAYER].scoutReady - w.tick);
+  const ready = !out && !rest;
+  const pct = rest ? 1 - rest / BALANCE.scoutCooldown : out ? 0 : 1;
+  return (
+    <button class={`deed scoutcard ${ready ? 'ready' : ''}`} disabled={!ready} onClick={() => game.startScout()} title="Scout (T): send a runner across the fog. Landmarks come into view, and the rival's posts become things a raid can strike.">
+      <span class="deed-ring" style={{ background: `conic-gradient(var(--gold) ${pct * 360}deg, rgba(0,0,0,0.35) 0)` }}>
+        <span class="deed-icon">🔭</span>
+      </span>
+      <span class="deed-name">Scout</span>
+      <span class="deed-fam">{out ? 'out looking' : 'look beyond'}</span>
+      {ready ? <span class="hotkey">T</span> : <span class="deed-wait">{out ? '…' : `${Math.ceil(rest / TICK_HZ)}s`}</span>}
+    </button>
   );
 }
 
@@ -492,6 +632,7 @@ function Council({ game }: { game: Game }) {
           </button>
         );
       })}
+      <ScoutCard game={game} />
       <Warband game={game} />
     </section>
   );
@@ -893,7 +1034,7 @@ function PlaceBar({ game, type }: { game: Game; type: BuildingType }) {
   const g = game.ghost.value;
   const touch = game.touchPlacing.value;
   const job = def.job;
-  const what = job?.kind === 'gather' ? (job.node === 'tree' ? 'trees' : job.node === 'rock' ? 'rocks' : 'berry bushes') : job?.kind === 'plant' ? 'trees' : '';
+  const what = job?.kind === 'gather' ? (job.node === 'tree' ? 'trees' : job.node === 'rock' ? 'rocks' : job.node === 'fish' ? 'fish shoals' : 'berry bushes') : job?.kind === 'plant' ? 'trees' : '';
   let hint: string | undefined;
   if (!g) hint = touch ? 'Tap the ground to choose a spot' : 'Move over the ground to choose a spot';
   else if (!g.ok) hint = g.reason;
@@ -1201,10 +1342,10 @@ function Victory({ game, shell }: { game: Game; shell: Shell }) {
     <div class="modal-wrap">
       <div class="modal panel celebrate report">
         <img class="modal-icon" src={ICON.hut} alt="" />
-        <h2>{won ? `${v.scenario}: your folk are renowned!` : 'Your rival is the valley’s renowned town'}</h2>
+        <h2>{won ? (v.crowned ? '👑 Crowned! Your folk rule the valley' : `${v.scenario}: your folk are renowned!`) : v.crowned ? 'Your rival is crowned' : 'Your rival is the valley’s renowned town'}</h2>
         <p>
-          {v.byTime ? 'The clock ran out: the valley judged by renown. ' : ''}
-          After {formatTime(w.tick)}: <b>{me.renown}★</b> to your rival’s <b>{them?.renown ?? 0}★</b>.
+          {v.crowned ? `${won ? 'The Kingstone’s light is yours.' : 'The Kingstone’s light is theirs.'} ` : v.byTime ? 'The clock ran out: the valley judged by the fuller Crown, then renown. ' : ''}
+          After {formatTime(w.tick)}: Crown <b>{crownPct(w, PLAYER)}%</b> to your rival’s <b>{crownPct(w, 1)}%</b>, and <b>{me.renown}★</b> to <b>{them?.renown ?? 0}★</b>.
         </p>
         <Awards w={w} won={won} />
         {(() => {

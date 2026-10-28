@@ -91,6 +91,13 @@ export class SettlersView {
   private tools: Record<Tool, THREE.InstancedMesh>;
   private cargo: Record<Good, THREE.InstancedMesh>;
   private anim = new Map<number, Anim>();
+  /** Figures caught in a clash this frame: where they stand, and which way they face (see prepareClashes). */
+  private fighters = new Map<number, { x: number; z: number; dx: number; dz: number; atk: boolean }>();
+  /** Townsfolk who turned out for a rally: made up for the clash, like reavers. */
+  private militia = new Map<number, Settler>();
+  /** Scouts out in the fog, made up the same way: figure id → scout id. */
+  private scoutFigs = new Map<number, Settler>();
+  private scoutOf = new Map<number, number>();
   /** Positions at the previous tick, for interpolation. */
   private prev = new Map<number, { x: number; z: number }>();
   /** Latest rendered positions (for picking / selection). */
@@ -172,7 +179,7 @@ export class SettlersView {
   private marchingOnUs(world: World, s: Settler): boolean {
     const bandId = this.reaverBand.get(s.id);
     const band = bandId === undefined ? world.warbands.find((w) => w.members.includes(s.id)) : world.warbands.find((w) => w.id === bandId);
-    return !!band && band.phase === 'march' && world.buildings.get(band.targetId)?.owner === 0;
+    return !!band && band.phase !== 'home' && world.buildings.get(band.targetId)?.owner === 0;
   }
 
   /** Everyone of yours hops for joy for a few seconds. */
@@ -194,6 +201,31 @@ export class SettlersView {
   private reaverBand = new Map<number, number>();
   private *figures(world: World): Iterable<Settler> {
     yield* world.settlers.values();
+    for (const sc of world.scouts) {
+      const id = -(sc.id * 16 + 15);
+      let s = this.scoutFigs.get(id);
+      if (!s) {
+        s = { id, owner: sc.owner, familyId: 0, name: '', child: false, age: 0, x: sc.x, y: sc.y, next: -1, progress: 0, stepLen: 1000, path: [], job: { kind: 'idle' } as Settler['job'], busy: 0, carry: null, tool: null, anim: 'walk', faceTile: -1, spouseId: 0 };
+        this.scoutFigs.set(id, s);
+        this.scoutOf.set(id, sc.id);
+      }
+      s.anim = sc.phase === 'look' ? 'idle' : 'walk';
+      yield s;
+    }
+    for (const band of world.warbands) {
+      const c = band.clash;
+      const target = c && world.buildings.get(band.targetId);
+      if (!c || !target) continue;
+      for (let k = 0; k < c.militia; k++) {
+        const id = -(band.id * 16 + 8 + k);
+        let s = this.militia.get(id);
+        if (!s) {
+          s = { id, owner: target.owner, familyId: 0, name: '', child: false, age: 0, x: target.x, y: target.y, next: -1, progress: 0, stepLen: 1000, path: [], job: { kind: 'guard', buildingId: 0, phase: 'watch' }, busy: 0, carry: null, tool: 'spear', anim: 'idle', faceTile: -1, spouseId: 0 };
+          this.militia.set(id, s);
+        }
+        yield s;
+      }
+    }
     for (const band of world.warbands) {
       if (band.owner >= 0) continue;
       const n = Math.max(2, Math.min(8, Math.round(band.strength / 10)));
@@ -210,7 +242,71 @@ export class SettlersView {
     }
   }
 
+  /**
+   * Who is fighting where. Each clash draws two lines either side of the post, the raiders on the side
+   * they came from. The line walks towards whoever is winning: raiders crowd the post as it falls,
+   * defenders shove them back as it holds.
+   */
+  private prepareClashes(world: World): void {
+    this.fighters.clear();
+    for (const band of world.warbands) {
+      const c = band.clash;
+      const target = c && world.buildings.get(band.targetId);
+      if (band.phase !== 'clash' || !c || !target) continue;
+      const size = BUILDINGS[target.type].size;
+      const cx = target.x + size / 2;
+      const cz = target.y + size / 2;
+      const prev = band.path[band.path.length - 2] ?? band.path[0];
+      let dx = 1;
+      let dz = 0;
+      if (prev !== undefined) {
+        dx = (prev % world.size) + 0.5 - cx;
+        dz = Math.floor(prev / world.size) + 0.5 - cz;
+      }
+      const len = Math.hypot(dx, dz) || 1;
+      dx /= len;
+      dz /= len;
+      const push = (c.line - 500) / 500;
+      const atkDist = size / 2 + 1.25 - push * 0.55;
+      const defDist = Math.max(size / 2 + 0.3, atkDist - 0.85);
+      const place = (ids: number[], dist: number, atk: boolean) =>
+        ids.forEach((id, k) => {
+          const lateral = (k - (ids.length - 1) / 2) * 0.55;
+          this.fighters.set(id, { x: cx + dx * dist - dz * lateral, z: cz + dz * dist + dx * lateral, dx: atk ? -dx : dx, dz: atk ? -dz : dz, atk });
+        });
+      const attackers = band.owner >= 0 ? band.members : Array.from({ length: Math.max(2, Math.min(8, Math.round(band.strength / 10))) }, (_, k) => -(band.id * 16 + k));
+      place(attackers, atkDist, true);
+      const defenders: number[] = [];
+      for (const s of world.settlers.values()) if (defenders.length < 6 && s.job.kind === 'guard' && s.job.buildingId === target.id && s.job.phase === 'watch') defenders.push(s.id);
+      for (let k = 0; k < c.militia; k++) defenders.push(-(band.id * 16 + 8 + k));
+      place(defenders, defDist, false);
+    }
+    for (const [id, scoutId] of [...this.scoutOf])
+      if (!world.scouts.some((q) => q.id === scoutId)) {
+        this.scoutOf.delete(id);
+        this.scoutFigs.delete(id);
+        this.prev.delete(id);
+        this.anim.delete(id);
+      }
+    // Forget militia whose clash is over.
+    for (const id of [...this.militia.keys()])
+      if (!this.fighters.has(id)) {
+        this.militia.delete(id);
+        this.prev.delete(id);
+        this.anim.delete(id);
+      }
+  }
+
   private simPos(world: World, s: Settler): { x: number; z: number } {
+    const fight = this.fighters.get(s.id);
+    if (fight) return { x: fight.x, z: fight.z };
+    const scoutId = this.scoutOf.get(s.id);
+    const sc = scoutId === undefined ? undefined : world.scouts.find((q) => q.id === scoutId);
+    if (sc) {
+      const next = sc.path[sc.step];
+      const f = sc.progress / 1000;
+      return { x: sc.x + 0.5 + (next === undefined ? 0 : ((next % world.size) - sc.x) * f), z: sc.y + 0.5 + (next === undefined ? 0 : (Math.floor(next / world.size) - sc.y) * f) };
+    }
     if (s.job.kind === 'guard' && s.job.phase === 'away') {
       // Out with a warband: march in a little column around the band's position.
       const bandId = this.reaverBand.get(s.id);
@@ -261,6 +357,7 @@ export class SettlersView {
         this.reavers.delete(id);
         this.prev.delete(id);
       }
+    this.prepareClashes(world);
     for (const s of this.figures(world)) this.prev.set(s.id, this.simPos(world, s));
   }
 
@@ -271,11 +368,12 @@ export class SettlersView {
     let nBadge = 0;
     let nShield = 0;
     let nBanner = 0;
+    this.prepareClashes(world);
     for (const s of this.figures(world)) {
       if (i >= MAX) break;
       const cur = this.simPos(world, s);
       // Warbands marching on us were sighted (we were warned), so they are shown through the fog.
-      const sighted = s.job.kind === 'guard' && s.job.phase === 'away' && this.marchingOnUs(world, s);
+      const sighted = (s.job.kind === 'guard' && s.job.phase === 'away' && this.marchingOnUs(world, s)) || this.fighters.has(s.id);
       if (s.owner !== 0 && !sighted && !(world.explored[world.idx(Math.min(world.size - 1, Math.max(0, Math.floor(cur.x))), Math.min(world.size - 1, Math.max(0, Math.floor(cur.z))))] & 1)) continue;
       const prev = this.prev.get(s.id) ?? cur;
       const x = prev.x + (cur.x - prev.x) * alpha;
@@ -297,6 +395,8 @@ export class SettlersView {
         const fz = Math.floor(s.faceTile / world.size) + 0.5;
         targetYaw = Math.atan2(fx - x, fz - z);
       }
+      const fight = this.fighters.get(s.id);
+      if (fight) targetYaw = Math.atan2(fight.dx, fight.dz);
       let dyaw = targetYaw - a.yaw;
       while (dyaw > Math.PI) dyaw -= Math.PI * 2;
       while (dyaw < -Math.PI) dyaw += Math.PI * 2;
@@ -371,6 +471,25 @@ export class SettlersView {
           crouch = 0.04;
           if (s.tool === 'shovel' && Math.sin(w) > 0.98) this.effects.emit('soil', x + Math.sin(a.yaw) * 0.3, y + 0.05, z + Math.cos(a.yaw) * 0.3, 1);
         }
+      }
+      if (fight) {
+        // A shield-and-spear brawl: thrust, shove, recover, each figure on its own beat.
+        const w = time * 5.5 + seed * 2.1;
+        const thrust = Math.max(0, Math.sin(w));
+        armR = -1.2 - thrust * 0.95;
+        armL = -0.55 + Math.sin(w * 0.5) * 0.25;
+        lean = 0.1 + thrust * 0.2;
+        nod = 0.1;
+        legSwing = Math.sin(w * 2) * 0.22;
+        bob = thrust * 0.03;
+        if (thrust > 0.97 && a.phase <= 0.97) {
+          const ex = x + fight.dx * 0.55;
+          const ez = z + fight.dz * 0.55;
+          this.effects.emit('spark', ex, this.hf.at(ex, ez) + 0.55, ez, 4);
+          if (hash2(s.id, Math.floor(time), 5) > 0.6) this.effects.emit('dust', ex, this.hf.at(ex, ez) + 0.1, ez, 2);
+          this.onStrike?.('hammer', ex, y, ez);
+        }
+        a.phase = thrust;
       }
       if (s.carry === 'logs') {
         armR = -2.9;

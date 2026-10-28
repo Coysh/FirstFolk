@@ -34,7 +34,7 @@ const SETS = {
   ],
   works: [[['henge'], ['meadhall'], ['granary']]],
   wild: [
-    [['cart'], ['ruins'], ['wanderers'], ['stones'], ['starstone'], ['barrow']],
+    [['cart'], ['ruins'], ['wanderers'], ['stones'], ['starstone'], ['kingstone'], ['barrow']],
     [['hermit'], ['hoard'], ['spring'], ['shrine'], ['grove'], ['oakwood'], ['outcrop']],
   ],
 };
@@ -78,7 +78,7 @@ const centre = await page.evaluate(
         const x = x0 + c * gap;
         const y = y0 + r * gap;
         if (set === 'wild') {
-          w.sites.push({ id: id++, kind: type, x, y, revealed: 3, claimedBy: -1, heldBy: ['grove', 'oakwood', 'outcrop', 'stones', 'starstone', 'spring', 'shrine'].includes(type) ? 0 : -1 });
+          w.sites.push({ id: id++, kind: type, x, y, revealed: 3, claimedBy: -1, heldBy: ['grove', 'oakwood', 'outcrop', 'stones', 'starstone', 'kingstone', 'spring', 'shrine'].includes(type) ? 0 : -1 });
         } else {
           const b = w.addBuilding(type, 0, x, y, true);
           if (tier) b.tier = tier;

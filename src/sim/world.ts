@@ -17,6 +17,9 @@ import type { DeedId } from './deeds';
 import { updateMarket } from './market';
 import { emptyCalling, updateCallings, callingTier, type CallingId } from './callings';
 import { updateBridges, type Bridge } from './bridges';
+import { updateCrown, type Crown } from './crown';
+import { updateScouts, type Scout } from './scouts';
+import { updateSaga } from './saga';
 import { updateHappenings } from './happenings';
 import { updateChallenges } from './challenges';
 import { FOUNDING_HOUSES, offerHouse, playerMod, seatHouse, updateHouses, type HouseId, type HouseOffer, type Mod, type Seat } from './houses';
@@ -185,7 +188,14 @@ export type SimEvent =
   | { type: 'landLost'; owner: number; tiles: number }
   | { type: 'renown'; owner: number; amount: number; source: RenownSource; x: number; y: number }
   | { type: 'deed'; owner: number; seat: number; house: HouseId; surname: string; deed: DeedId; x: number; y: number; text: string }
-  | { type: 'moot' }
+  | { type: 'clashBegan'; bandId: number; owner: number; defender: number; targetId: number; buildingType: BuildingType; x: number; y: number; attack: number; defence: number }
+  | { type: 'clashRally'; owner: number; bandId: number; targetId: number; kind: 'rally' | 'surge'; n: number; strength: number; x: number; y: number }
+  | { type: 'sagaBeat'; beat: number }
+  | { type: 'scoutSent'; owner: number; x: number; y: number }
+  | { type: 'scoutSpotted'; owner: number; seer: number; x: number; y: number }
+  | { type: 'scoutHome'; owner: number; found: number }
+  | { type: 'crownKeeper'; keeper: number; was: number; x: number; y: number }
+  | { type: 'crownQuarter'; owner: number; quarter: number }
   | { type: 'challenge'; def: string }
   | { type: 'challengeWon'; def: string; winner: number; prize: number }
   | { type: 'challengeExpired'; def: string }
@@ -196,7 +206,7 @@ export type SimEvent =
   | { type: 'raidLaunched'; owner: number; defender: number; targetId: number; buildingType: BuildingType; x: number; y: number; strength: number; eta: number }
   | { type: 'raidResolved'; owner: number; defender: number; won: boolean; buildingType: BuildingType; x: number; y: number; attack: number; defence: number; renown: number }
   | { type: 'razed'; owner: number; id: number; buildingType: BuildingType; x: number; y: number }
-  | { type: 'victory'; scenario: string; winner: number; byTime: boolean; acclaim?: boolean };
+  | { type: 'victory'; scenario: string; winner: number; byTime: boolean; crowned?: boolean; acclaim?: boolean };
 
 export interface PlayerState {
   id: number;
@@ -223,6 +233,8 @@ export interface PlayerState {
   event: { id: number; def: string; expires: number; data: number[] } | null;
   nextEventAt: number;
   lastEvent: string;
+  /** Story events already told to this settlement (they come once). */
+  onceEvents: string[];
   /** Has this player's exploration reached another settlement's land yet? */
   rivalSeen: boolean;
   /** The score (see renown.ts), where it came from, and payout remainders. */
@@ -259,6 +271,10 @@ export interface PlayerState {
   style: BotStyle;
   /** Raids (see warfare.ts): when the huscarls can march again, raids won, raids driven off. */
   raidReady: number;
+  /** When this settlement can rally a besieged post again (see warfare.ts). */
+  rallyReady: number;
+  /** When this settlement's scout can go out again (see scouts.ts). */
+  scoutReady: number;
   /** The War-Horn has sounded: the next raid strikes half as hard again. */
   warhorn: boolean;
   /** A Shield Wall raised by the House of the Shield. */
@@ -363,6 +379,12 @@ export class World {
   challenge: { def: string; endsAt: number; start: number[] } | null = null;
   nextChallengeAt = BALANCE.firstChallenge;
   lastChallenge = '';
+  /** How many beats of the valley's story have been told (see saga.ts). */
+  saga = 0;
+  /** Scouts out across the fog (see scouts.ts). */
+  scouts: Scout[] = [];
+  /** The Crown (see crown.ts): null until the Kingstone falls. */
+  crown: Crown | null = null;
   /** Raiding parties on the march (see warfare.ts), and when reavers next come ashore. */
   warbands: Warband[] = [];
   nextReaversAt = BALANCE.reaversFrom;
@@ -594,7 +616,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', onceEvents: [], rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, rallyReady: 0, scoutReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -791,12 +813,15 @@ export class World {
     for (const ai of this.ais) ai.update(this);
     updateBridges(this);
     if (this.tick % 20 === 7) updateCallings(this);
+    if (this.tick % 20 === 9) updateSaga(this);
     for (const cmd of this.pendingCommands) {
       this.commandLog.push({ tick: this.tick, cmd });
       applyCommand(this, cmd);
     }
     this.pendingCommands.length = 0;
     updateWarbands(this);
+    updateCrown(this);
+    updateScouts(this);
 
     updateSeasons(this);
     if (this.tick % 10 === 0) this.updateNature();
@@ -882,7 +907,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'challenge', 'challengeWon', 'starfall', 'moot', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'challenge', 'challengeWon', 'starfall', 'crownKeeper', 'crownQuarter', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);

@@ -4,7 +4,7 @@ import type { HeightField } from './terrain';
 
 const MAX_PARTICLES = 1500;
 
-export type ParticleKind = 'chips' | 'stone' | 'leaves' | 'dust' | 'smoke' | 'ember' | 'sparkle' | 'soil' | 'snow';
+export type ParticleKind = 'chips' | 'stone' | 'leaves' | 'dust' | 'smoke' | 'ember' | 'sparkle' | 'soil' | 'snow' | 'spark';
 
 interface Particle {
   x: number;
@@ -31,6 +31,7 @@ const KIND: Record<ParticleKind, { colors: number[]; size: [number, number]; spe
   ember: { colors: [0xffb347, 0xff7a1a], size: [0.025, 0.04], speed: 0.15, up: 0.7, gravity: -0.1, life: [0.4, 0.9], drag: 0.5, grow: -0.6 },
   sparkle: { colors: [0xfff2a8, 0xffffff, 0xffd86b], size: [0.04, 0.07], speed: 1.0, up: 1.8, gravity: 2, life: [0.6, 1.1], drag: 1, grow: -0.5 },
   soil: { colors: [0x6b4f33, 0x8a6a45], size: [0.03, 0.05], speed: 0.9, up: 1.4, gravity: 7, life: [0.4, 0.7], drag: 0.5, grow: 0 },
+  spark: { colors: [0xfff2a8, 0xffffff, 0xffb347], size: [0.025, 0.05], speed: 2.2, up: 1.6, gravity: 6, life: [0.25, 0.5], drag: 0.8, grow: -0.4 },
   snow: { colors: [0xffffff, 0xeef4ff], size: [0.03, 0.05], speed: 0.25, up: -0.6, gravity: 0.15, life: [5, 7], drag: 0.1, grow: 0 },
 };
 

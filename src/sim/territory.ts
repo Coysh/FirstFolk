@@ -1,7 +1,7 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, DISCOVERIES, GOODS, SKILLS, type Good } from './defs';
 import { spawnFamily } from './population';
-import { addRenown, mootUnderway } from './renown';
+import { addRenown } from './renown';
 import { greatWorkDone } from './works';
 import { craftXp } from './settlers';
 import { TRADES } from './trades';
@@ -368,10 +368,10 @@ export function updateHoldings(world: World): void {
       site.heldBy = owner;
       world.emit({ type: 'holdingChanged', siteId: site.id, kind: site.kind, owner, from });
       if (from !== NO_OWNER && !world.quietSeize) {
-        // Taking a landmark is worth more the further behind you are, and double at the Moot.
+        // Taking a landmark is worth more the further behind you are.
         const taker = world.players[owner];
         const behind = Math.max(0, (world.players[from]?.renown ?? 0) - taker.renown);
-        const prize = (BALANCE.renown.seized + Math.min(BALANCE.renown.seizedMax, Math.floor(behind / 8))) * (mootUnderway(world) ? 2 : 1);
+        const prize = (BALANCE.renown.seized + Math.min(BALANCE.renown.seizedMax, Math.floor(behind / 8)));
         taker.taken++;
         addRenown(world, owner, prize, 'landmarks', site.x, site.y);
       }

@@ -67,20 +67,6 @@ describe('omens', () => {
   });
 });
 
-describe('the Moot', () => {
-  it('from 25:00 landmarks pay double, and the valley hears of it', () => {
-    const w = new World({ seed: 2 });
-    const site = w.sites.find((s) => DISCOVERIES[s.kind].renown)!;
-    w.addBuilding('watchtower', 0, site.x - 6, site.y - 1, true);
-    recomputeTerritory(w);
-    const before = renownRate(w, 0).landmarks;
-    w.tick = BALANCE.mootAt;
-    expect(renownRate(w, 0).landmarks).toBe(before * 2);
-    w.run(secs(10));
-    expect(w.drainEvents().some((e) => e.type === 'moot')).toBe(true);
-  });
-});
-
 describe('new discoveries', () => {
   const valleyWith = (kind: string) => {
     for (let seed = 1; seed < 80; seed++) {
@@ -114,15 +100,16 @@ describe('new discoveries', () => {
 });
 
 describe('happenings and matches', () => {
-  it('a star falls between the settlements mid-game: a landmark both can see', async () => {
+  it('a star falls between the settlements mid-game: the Kingstone, a landmark both can see, and the Crown with it', async () => {
     const { starfallTick } = await import('../src/sim/happenings');
     const w = new World({ seed: 6 });
     w.tick = starfallTick(w) - 10;
     w.run(20);
-    const star = w.sites.find((s) => s.kind === 'starstone')!;
+    const star = w.sites.find((s) => s.kind === 'kingstone')!;
     expect(star).toBeDefined();
     expect(star.revealed & 3).toBe(3);
-    expect(DISCOVERIES.starstone.renown).toBeGreaterThan(DISCOVERIES.stones.renown!);
+    expect(w.crown?.siteId).toBe(star.id);
+    expect(DISCOVERIES.kingstone.renown).toBeGreaterThan(DISCOVERIES.starstone.renown!);
     expect(w.drainEvents().some((e) => e.type === 'starfall')).toBe(true);
   });
 
@@ -164,20 +151,6 @@ describe('challenges, acclaim and auto-homes', () => {
     expect(w.challenge).toBeNull();
     expect(w.players[0].challengesWon).toBe(1);
     expect(w.players[0].renown).toBe(before + def.prize);
-  });
-
-  it('the race is won only at the goal (or on the clock), whatever the lead and whatever chapters are left', async () => {
-    const { evaluateScenario, renownGoal } = await import('../src/sim/scenario');
-    const w = new World({ seed: 3 });
-    w.tick = BALANCE.mootAt + 10;
-    w.players[0].renown = renownGoal(w.scenario) - 1;
-    w.players[1].renown = 0;
-    evaluateScenario(w);
-    expect(w.scenarioState.winner).toBe(-1);
-    // Reaching the goal wins at once, even with earlier chapter goals unfinished.
-    w.players[0].renown = renownGoal(w.scenario);
-    evaluateScenario(w);
-    expect(w.scenarioState.winner).toBe(0);
   });
 
   it('with auto-homes on, families put up a hut when every home is full', () => {

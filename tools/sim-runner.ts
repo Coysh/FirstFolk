@@ -74,6 +74,23 @@ if (games > 1) {
       `\nbattles the player saw: avg ${avg((r) => r.battles)} · games with none ${reports.filter((r) => !r.battles).length}` +
       `\navg idle ${avg((r) => r.idleAdultPct)}% · avg hungry ${avg((r) => r.hungryPct)}% (worst ${Math.max(...reports.map((r) => r.hungryPct))}%) · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg stock@20m ${avg((r) => r.stockAt[1] ?? 0)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)}`,
   );
+  // The pacing contract in one line: actions a minute (things to look at, decide or do), by game minute and by minutes before the end.
+  {
+    const bucket = (from: number, to: number, fn: (r: (typeof reports)[0]) => number[]) => {
+      const vals = reports.map((r) => {
+        const a = fn(r).slice(from, to);
+        return a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
+      }).filter((v) => !Number.isNaN(v));
+      return vals.length ? (vals.reduce((x, y) => x + y, 0) / vals.length).toFixed(1) : '-';
+    };
+    const abs = [[0, 5], [5, 10], [10, 15], [15, 20], [20, 25], [25, 30], [30, 45]];
+    console.log('actions/min by game minute: ' + abs.map(([a, b]) => `${a}-${b}m ${bucket(a, b, (r) => r.actionByMinute)}`).join(' · '));
+    const lastTen = (r: (typeof reports)[0]) => r.actionByMinute.slice(-11, -1);
+    const firstTen = (r: (typeof reports)[0]) => r.actionByMinute.slice(0, 10);
+    const rel = (r: (typeof reports)[0], from: number) => r.actionByMinute.slice(Math.max(0, r.actionByMinute.length - from - 10), Math.max(0, r.actionByMinute.length - from));
+    const mean = (xs: number[][]) => (xs.reduce((n, a) => n + a.reduce((x, y) => x + y, 0) / Math.max(1, a.length), 0) / xs.length).toFixed(1);
+    console.log(`actions/min: first 10 min ${mean(reports.map(firstTen))} · the 10 min before the last ${mean(reports.map((r) => rel(r, 10)))} · the LAST 10 min ${mean(reports.map(lastTen))}`);
+  }
   // How each valley plays: length, who wins, and how much bridging the bots chose.
   const byValley: Record<string, typeof reports> = {};
   for (const r of reports) (byValley[r.valley] ??= []).push(r);

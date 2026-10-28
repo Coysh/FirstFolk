@@ -91,6 +91,41 @@ def starstone():
     return m
 
 
+def kingstone():
+    """The crowning-stone: a tall dark monolith on a stepped plinth, a ring of low pillars, a crown of gold and star-light on top."""
+    m = Model('discovery_kingstone')
+    rng = rng_for('kingstone')
+    GOLD = 0xF2C14E
+    m.add(prism(16, 1.1, 1.2, 0.08), C.rockDark, pos=(0, 0.04, 0))
+    m.add(prism(16, 0.88, 0.98, 0.1), C.stoneDark, pos=(0, 0.13, 0))
+    m.add(prism(16, 0.66, 0.76, 0.1), C.stone, pos=(0, 0.23, 0))
+    # eight low pillars around the steps; four carry braziers
+    for i in range(8):
+        a = i / 8 * 2 * PI + 0.2
+        px, pz = math.sin(a) * 1.0, math.cos(a) * 1.0
+        m.add(box(0.2, 0.44, 0.2, top=(0.8, 0.8)), C.stone, pos=(px, 0.22, pz), rot=(0, a, 0))
+        m.add(box(0.24, 0.05, 0.24), C.stoneDark, pos=(px, 0.46, pz), rot=(0, a, 0))
+        if i % 2 == 0:
+            flame(m, px, 0.5, pz, 0.26, 0.06)
+    # the monolith: three tapering blocks, slightly twisted, with a carved band
+    m.add(box(0.5, 0.6, 0.46, top=(0.82, 0.82)), 0x2F2B3C, pos=(0, 0.6, 0), rot=(0, 0.1, 0))
+    m.add(box(0.41, 0.6, 0.38, top=(0.78, 0.78)), 0x383348, pos=(0, 1.2, 0), rot=(0, 0.2, 0))
+    m.add(box(0.32, 0.5, 0.3, top=(0.55, 0.55)), 0x433D56, pos=(0, 1.75, 0), rot=(0, 0.3, 0))
+    m.add(box(0.6, 0.06, 0.56), GOLD, pos=(0, 0.95, 0), rot=(0, 0.15, 0))
+    for sx in (-1, 1):
+        for sz in (0, 1):
+            x, z = (sx * 0.25, 0.0) if sz == 0 else (0.0, sx * 0.23)
+            m.add(box(0.05, 0.3, 0.05), 0x9FE8FF, pos=(x, 0.6, z), sway=GLOW)
+    # the crown: a golden band with five points, and a star hanging over it
+    m.add(prism(10, 0.2, 0.22, 0.07), GOLD, pos=(0, 2.04, 0))
+    for k in range(5):
+        a = k / 5 * 2 * PI
+        m.add(prism(3, 0.05, 0.001, 0.2), GOLD, pos=(math.sin(a) * 0.18, 2.17, math.cos(a) * 0.18))
+        m.add(ico(), 0xFFF2B0, pos=(math.sin(a) * 0.18, 2.29, math.cos(a) * 0.18), scale=(0.03, 0.03, 0.03), sway=GLOW)
+    m.add(ico(), 0xFFF2B0, pos=(0, 2.4, 0), scale=(0.1, 0.13, 0.1), sway=GLOW + 0.4)
+    return m
+
+
 def barrow():
     m = Model('discovery_barrow')
     rng = rng_for('barrow')
@@ -227,4 +262,4 @@ def outcrop():
 
 
 def make_all():
-    return {mm.name: mm for mm in [cart(), ruins(), wanderers(), stones(), starstone(), barrow(), hermit(), hoard(), spring(), shrine(), grove(), oakwood(), outcrop()]}
+    return {mm.name: mm for mm in [cart(), ruins(), wanderers(), stones(), starstone(), kingstone(), barrow(), hermit(), hoard(), spring(), shrine(), grove(), oakwood(), outcrop()]}

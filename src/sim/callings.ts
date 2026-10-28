@@ -62,7 +62,7 @@ export const CALLINGS: Record<CallingId, CallingDef> = {
     titles: ['Farmstead', 'Hearth Town', 'Harvest Hall'],
     color: 0x3f8a4a,
     earned: 'Foragers, fishers, homes and a well-fed town',
-    perks: ['Gatherers 8% faster, births 10% sooner, a little renown for a fed town', '16% faster, 20% sooner, more renown', '24% faster, 30% sooner, the most renown'],
+    perks: ['Gatherers 8% faster, births 10% sooner, a little renown for a fed town; two more hands answer a Rally', '16% faster, 20% sooner, more renown; four more hands answer a Rally', '24% faster, 30% sooner, the most renown; six more hands answer a Rally'],
   },
 };
 
