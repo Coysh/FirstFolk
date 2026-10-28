@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { audio, type Sfx } from './audio/audio';
 import { TICK_MS } from './sim/balance';
 import { canPlace } from './sim/commands';
-import { BUILDINGS, DISCOVERIES, RANK_NAMES, type BuildingType, type Tool } from './sim/defs';
+import { BUILDINGS, DISCOVERIES, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Tool } from './sim/defs';
+import { DEEDS, deedOf, deedTargetProblem, type DeedId } from './sim/deeds';
 import { serializeWorld } from './sim/save';
 import { BOONS } from './sim/boons';
 import { eventDef } from './sim/events';
@@ -17,7 +18,7 @@ import { writeSave } from './settings';
 
 export const PLAYER = 0;
 
-export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType };
+export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; familyId: number; deed: DeedId };
 export type Selection = { kind: 'building'; id: number } | { kind: 'settler'; id: number } | null;
 
 export interface Toast {
@@ -56,7 +57,9 @@ export class Game {
   readonly version = signal(0);
   readonly objectives = signal<ObjectiveStatus[]>([]);
   readonly toasts = signal<Toast[]>([]);
-  readonly victory = signal<{ scenario: string; winner: number } | null>(null);
+  readonly victory = signal<{ scenario: string; winner: number; byTime: boolean } | null>(null);
+  /** The Market Day popover is open. */
+  readonly marketOpen = signal(false);
   readonly banner = signal<{ title: string; sub: string } | null>(null);
   /** True when the last placement interaction came from touch (shows a confirm button). */
   readonly touchPlacing = signal(false);
@@ -67,6 +70,7 @@ export class Game {
   private autosaveTimer = AUTOSAVE_SECONDS;
   private toastId = 0;
   private hovered: { kind: 'building' | 'settler'; id: number } | null = null;
+  private landLostCooldown = 0;
 
   constructor(
     readonly world: World,
@@ -146,7 +150,7 @@ export class Game {
   private handleEvents(events: SimEvent[]): void {
     for (const e of events) {
       // Only news about the rival that we choose to share gets through.
-      if ('owner' in e && e.owner !== PLAYER && e.type !== 'claimed' && e.type !== 'rankUp') continue;
+      if ('owner' in e && e.owner !== PLAYER && !RIVAL_NEWS.has(e.type) && !(e.type === 'holdingChanged' && e.from === PLAYER)) continue;
       switch (e.type) {
         case 'buildingComplete': {
           const p = this.posOf(e.id);
@@ -284,8 +288,64 @@ export class Game {
           this.banner.value = { title: `${e.chapter} complete`, sub: e.next ? `Next chapter: ${e.next}` : 'Your settlement thrives' };
           setTimeout(() => (this.banner.value = null), 4200);
           break;
+        case 'holdingChanged': {
+          const d = DISCOVERIES[e.kind];
+          if (e.owner === PLAYER) {
+            audio.play('tierUp');
+            this.banner.value = { title: `${d.icon} ${d.name} is yours!`, sub: e.from >= 0 ? `Taken from your rival: +${d.renown} renown a minute while you hold it` : `+${d.renown} renown a minute while you hold it` };
+            setTimeout(() => (this.banner.value = null), 3800);
+          } else if (e.from === PLAYER) {
+            audio.play('warn');
+            this.toast('/assets/icons/lookout.png', `Your rival’s border has swallowed the ${d.name}! Push back with Watchtowers or a Festival.`, 'warn');
+          }
+          break;
+        }
+        case 'landLost':
+          if (this.landLostCooldown > this.world.tick) break;
+          this.landLostCooldown = this.world.tick + 300;
+          this.toast('/assets/icons/lookout.png', `Your rival’s influence is pushing into your land (${e.tiles} tiles lost).`, 'warn');
+          break;
+        case 'renown': {
+          if (e.x < 0 || e.amount < 5) break;
+          const y = this.view.groundHeight(e.x + 0.5, e.y + 0.5);
+          this.overlay.renownFloater(new THREE.Vector3(e.x + 0.5, y + 2.2, e.y + 0.5), e.amount);
+          break;
+        }
+        case 'deed': {
+          const d = DEEDS[e.deed];
+          if (e.owner !== PLAYER) {
+            if (e.deed === 'festival' || e.deed === 'expedition') this.toast('/assets/icons/scroll.png', `Your rival’s ${plural(e.surname)} ${e.deed === 'festival' ? 'hold a festival near your border' : 'raise an outpost in the wilds'}.`, 'warn');
+            break;
+          }
+          audio.play('tierUp');
+          this.toast('/assets/icons/people.png', `${d.icon} ${d.name}! ${e.text}`, 'big');
+          break;
+        }
+        case 'sold':
+          audio.play('deliver');
+          this.toast(`/assets/icons/${e.good}.png`, `Market Day: ${e.n} ${GOOD_INFO[e.good].name.toLowerCase()} sold for +${e.renown} renown`, 'good');
+          break;
+        case 'workBegun':
+          if (e.owner === PLAYER) break;
+          audio.play('warn');
+          this.toast(icon(e.buildingType), `Your rival has begun ${BUILDINGS[e.buildingType].name}! Only the first to finish it gets it.`, 'warn');
+          break;
+        case 'workLost':
+          audio.play('warn');
+          this.toast(icon(e.buildingType), `Your rival finished ${BUILDINGS[e.buildingType].name} first. Your site is abandoned; half its materials came home.`, 'warn');
+          break;
+        case 'elder':
+          this.toast('/assets/icons/people.png', `${e.name} ${e.surname} is an elder now: no more hard work, but they teach the family their craft.`, 'info');
+          break;
+        case 'died':
+          if (e.legend) {
+            audio.play('tierUp');
+            this.banner.value = { title: `${e.name} ${e.surname} has died`, sub: `A Master to the last, aged ${e.age}. Their legend lives on: ${SKILLS.includes(e.legend) ? TRADES[e.legend].name.toLowerCase() : ''} is faster for all, and +15 renown` };
+            setTimeout(() => (this.banner.value = null), 5200);
+          } else this.toast('/assets/icons/people.png', `${e.name} ${e.surname} has died, aged ${e.age}. The family mourns.`, 'info');
+          break;
         case 'victory':
-          this.victory.value = { scenario: e.scenario, winner: e.winner };
+          this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime };
           this.save(false);
           break;
       }
@@ -311,7 +371,8 @@ export class Game {
   }
 
   cancel(): void {
-    if (this.mode.value.kind === 'place') {
+    if (this.mode.value.kind === 'deed') this.mode.value = { kind: 'select' };
+    else if (this.mode.value.kind === 'place') {
       this.mode.value = { kind: 'select' };
       this.ghost.value = null;
       this.view.setGhost(null);
@@ -332,6 +393,21 @@ export class Game {
   tap(sx: number, sy: number, touch: boolean, keepPlacing = false): void {
     audio.start();
     const mode = this.mode.value;
+    if (mode.kind === 'deed') {
+      const p = this.view.groundAt(sx, sy);
+      if (!p) return;
+      const x = Math.floor(p.x);
+      const y = Math.floor(p.z);
+      const problem = deedTargetProblem(this.world, PLAYER, mode.deed, x, y);
+      if (problem) {
+        audio.play('warn');
+        this.toast('/assets/icons/scroll.png', problem, 'warn');
+        return;
+      }
+      this.world.enqueue({ type: 'deed', owner: PLAYER, familyId: mode.familyId, x, y });
+      this.mode.value = { kind: 'select' };
+      return;
+    }
     if (mode.kind === 'place') {
       this.touchPlacing.value = touch;
       this.updateGhost(sx, sy);
@@ -372,6 +448,25 @@ export class Game {
   chooseBoon(offerId: number, choice: number): void {
     audio.play('click');
     this.world.enqueue({ type: 'chooseBoon', owner: PLAYER, offerId, choice });
+  }
+
+  /** A council family's deed: instant ones happen now, targeted ones wait for a tap on the map. */
+  useDeed(familyId: number): void {
+    const fam = this.world.families.get(familyId);
+    const id = fam && deedOf(fam);
+    if (!id) return;
+    audio.play('click');
+    if (!DEEDS[id].target) {
+      this.world.enqueue({ type: 'deed', owner: PLAYER, familyId, x: 0, y: 0 });
+      return;
+    }
+    // Raise picks a site: go straight to the one closest to finished, unless the player taps another.
+    this.selection.value = null;
+    this.mode.value = { kind: 'deed', familyId, deed: id };
+  }
+
+  sell(good: Good): void {
+    this.world.enqueue({ type: 'sell', owner: PLAYER, good });
   }
 
   demolish(id: number): void {
@@ -446,6 +541,9 @@ export class Game {
     this.overlay.clear();
   }
 }
+
+/** Rival news the player hears about. */
+const RIVAL_NEWS = new Set<SimEvent['type']>(['claimed', 'rankUp', 'deed', 'workBegun']);
 
 export function icon(type: BuildingType | string): string {
   return `/assets/icons/${type === 'wagon' ? 'hut' : type}.png`;

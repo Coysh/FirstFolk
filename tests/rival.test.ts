@@ -13,7 +13,7 @@ describe('the rival', () => {
     expect(w.commandLog.some((c) => c.cmd.type === 'place' && c.cmd.owner === 1)).toBe(true);
   });
 
-  it('claimed land is final: nobody can take another settlement’s tiles', () => {
+  it('a grant of land never takes another settlement’s tiles (only influence can)', () => {
     const w = new World({ seed: 2 });
     const wagon0 = [...w.buildings.values()].find((b) => b.owner === 0 && b.type === 'wagon')!;
     claimArea(w, 1, wagon0.x, wagon0.y, 6);

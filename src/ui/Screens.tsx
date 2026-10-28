@@ -177,12 +177,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 export function HowTo({ onClose }: { onClose: () => void }) {
   const steps = [
-    { icon: '/assets/icons/woodcutter.png', title: 'Gather', text: 'Place a Woodcutter by the trees, a Forager by the berry bushes and a Quarry by the rocks. Workers fetch, carriers haul everything to your stores.' },
-    { icon: '/assets/icons/hut.png', title: 'Grow', text: 'Families with room and food have children. Empty huts draw in newcomers, and young adults marry into new households.' },
-    { icon: '/assets/icons/lookout.png', title: 'Explore', text: 'You can only build inside your border. Lookouts push it outwards. Golden lights mark discoveries: grow your border over them to claim caches, lore, wanderers and rich land.' },
-    { icon: '/assets/icons/sawpit.png', title: 'Learn a trade', text: 'Work teaches. A woodcutter becomes a Carpenter, a quarrier a Mason. Each tier transforms the workplace and unlocks new buildings.' },
-    { icon: '/assets/icons/people.png', title: 'Shape your families', text: 'When a family masters a craft, choose one of three boons for them. Boons pass to their children and combine when families marry.' },
-    { icon: '/assets/icons/berries.png', title: 'Weather the winter', text: 'In winter bushes sleep and folk eat more. Stockpile food and build Fishers. Each chapter you finish raises your camp a rank.' },
+    { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,200 renown wins, or the most renown when the clock reaches 45:00. Landmarks, land, discoveries, Masters, deeds, Great Works and Market Day all count.' },
+    { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Families with room and food have children; empty huts draw newcomers; young adults marry into new households.' },
+    { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Influence decides the border: Lookouts and Watchtowers push it, and your rival can push back. Landmarks (groves, oakwoods, outcrops, standing stones) pay renown every minute you hold them.' },
+    { icon: '/assets/icons/people.png', title: 'Raise great houses', text: 'Work makes Journeymen and Masters. Pick each family’s boons. Your four greatest houses each lend a Deed (Z X C V): Raise, Expeditions, Festivals and more.' },
+    { icon: '/assets/icons/henge.png', title: 'Race for Great Works', text: 'From Village rank: the Stone Circle, Mead Hall and Great Granary. Only one of each in the valley, so finish first! Sell surplus on Market Day for renown.' },
+    { icon: '/assets/icons/berries.png', title: 'Generations', text: 'Winters bite, so stockpile food. Folk grow old, teach their families and die; a Master who dies becomes a legend that makes their craft faster for all.' },
   ];
   return (
     <Modal title="How to Play" onClose={onClose} wide>
@@ -221,8 +221,13 @@ export function HowTo({ onClose }: { onClose: () => void }) {
           </tr>
           <tr>
             <td>Build</td>
-            <td>1–7, click to place (Shift keeps placing)</td>
+            <td>1–9, 0, − then click to place (Shift keeps placing)</td>
             <td>Tap a card, tap the ground, Build here</td>
+          </tr>
+          <tr>
+            <td>Family deeds</td>
+            <td>Z X C V, or click a Great House</td>
+            <td>Tap a Great House</td>
           </tr>
           <tr>
             <td>Pause / menu</td>

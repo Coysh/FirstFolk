@@ -6,11 +6,15 @@ import { Rng } from './rng';
 import type { Command } from './commands';
 import { applyCommand } from './commands';
 import { updateLogistics } from './logistics';
-import { updateSettler, assignJobs } from './settlers';
+import { updateSettler, assignJobs, grantXp, releaseJob } from './settlers';
+import { TIER_XP } from './trades';
 import { updatePopulation, createFamily } from './population';
 import { evaluateScenario, SCENARIOS, type Scenario, type ScenarioState } from './scenario';
 import { DIFFICULTY, type Difficulty, type Rules } from './rules';
-import { NO_OWNER, onBuildingComplete, updateExploration } from './territory';
+import { NO_OWNER, onBuildingComplete, recomputeTerritory, updateExploration } from './territory';
+import { addRenown, updateRenown, type RenownSource } from './renown';
+import type { DeedId } from './deeds';
+import { updateMarket } from './market';
 import { offerBoon, updateOffers, type BoonId, type Mod } from './boons';
 import { isWinter, updateSeasons, type Season } from './seasons';
 import { updateValleyEvents } from './events';
@@ -63,6 +67,10 @@ export interface Building {
   tier: number;
   /** Family of the settler who finished building it (0 = none). */
   builtBy: number;
+  /** Extra influence radius (a Wanderlust builder's towers reach further). */
+  reach: number;
+  /** Materials this building costs (frontier towers get dearer the more you have). */
+  cost: Partial<Record<Good, number>>;
 }
 
 export interface Discovery {
@@ -72,8 +80,10 @@ export interface Discovery {
   y: number;
   /** Bitmask of players who have seen it. */
   revealed: number;
-  /** Owner who claimed it, or -1. */
+  /** Owner who first claimed it (and got its reward), or -1. */
   claimedBy: number;
+  /** Landmarks: who holds it now (follows the border), or -1. */
+  heldBy: number;
 }
 
 export type BuildingAlert = '' | 'noWorker' | 'noResource' | 'full' | 'noInput' | 'materials';
@@ -93,6 +103,10 @@ export interface Family {
   mods: Partial<Record<Mod, number>>;
   /** Families this household was founded from by marriage. */
   parents: number[];
+  /** Deeds done and legends left: part of the house's prestige (see deeds.ts). */
+  glory: number;
+  /** Tick when the family's deed is next ready. */
+  deedReady: number;
 }
 
 export type Job =
@@ -128,6 +142,8 @@ export interface Settler {
   skills: Skills;
   /** Husband or wife (0 = unmarried). */
   spouseId: number;
+  /** Elders no longer work; they teach their family until they die. */
+  elder: boolean;
 }
 
 export type SimEvent =
@@ -139,6 +155,8 @@ export type SimEvent =
   | { type: 'familyApproaching'; owner: number; familyId: number; surname: string; size: number; skill: Skill }
   | { type: 'cameOfAge'; owner: number; settlerId: number; name: string; surname: string }
   | { type: 'born'; owner: number; settlerId: number; name: string; surname: string }
+  | { type: 'elder'; owner: number; settlerId: number; name: string; surname: string }
+  | { type: 'died'; owner: number; name: string; surname: string; age: number; legend: Skill | null; x: number; y: number }
   | { type: 'hungry'; owner: number }
   | { type: 'fed'; owner: number }
   | { type: 'objectiveComplete'; owner: number; label: string }
@@ -161,7 +179,14 @@ export type SimEvent =
   | { type: 'eventResolved'; owner: number; def: string; choice: string; text: string }
   | { type: 'familySettled'; owner: number; familyId: number; surname: string; buildingId: number }
   | { type: 'rivalSighted'; x: number; y: number }
-  | { type: 'victory'; scenario: string; winner: number };
+  | { type: 'holdingChanged'; siteId: number; kind: DiscoveryKind; owner: number; from: number }
+  | { type: 'landLost'; owner: number; tiles: number }
+  | { type: 'renown'; owner: number; amount: number; source: RenownSource; x: number; y: number }
+  | { type: 'deed'; owner: number; familyId: number; surname: string; deed: DeedId; x: number; y: number; text: string }
+  | { type: 'sold'; owner: number; good: Good; n: number; renown: number }
+  | { type: 'workBegun'; owner: number; buildingType: BuildingType }
+  | { type: 'workLost'; owner: number; buildingType: BuildingType; winner: number }
+  | { type: 'victory'; scenario: string; winner: number; byTime: boolean };
 
 export interface PlayerState {
   id: number;
@@ -189,6 +214,29 @@ export interface PlayerState {
   lastEvent: string;
   /** Has this player's exploration reached another settlement's land yet? */
   rivalSeen: boolean;
+  /** The score (see renown.ts), where it came from, and payout remainders. */
+  renown: number;
+  renownBy: Partial<Record<RenownSource, number>>;
+  renownFrac: [number, number];
+  /** Landmarks taken from another settlement. */
+  taken: number;
+  /** Temporary influence (festivals and the like). */
+  boosts: { x: number; y: number; r: number; p: number; until: number }[];
+  /** Masters who died: each makes the settlement better at their craft, for good. */
+  legends: Legend[];
+  /** Market glut per good (percent) and goods sold, see market.ts. */
+  glut: Stock;
+  sold: number;
+  /** Deed effects running until a tick. */
+  buffs: { timber: number; harvest: number };
+  deedsUsed: number;
+}
+
+export interface Legend {
+  name: string;
+  surname: string;
+  skill: Skill;
+  tick: number;
 }
 
 export interface BoonOffer {
@@ -270,6 +318,9 @@ export class World {
   sites: Discovery[] = [];
   /** AI players (the rival), driven through Commands exactly like a human. */
   ais: OpeningBot[] = [];
+  /** Bumps when buildings are added or removed (runtime only, for path caches). */
+  buildingsVersion = 0;
+  reachCache: { version: number; seen: Uint8Array } | null = null;
   /** Runtime cache for territoryBox(); not saved. */
   boxCache: { version: number; box: { x0: number; y0: number; x1: number; y1: number } }[] = [];
 
@@ -291,7 +342,7 @@ export class World {
 
     if (opts.blank) return;
     for (const n of this.map.nodes) this.addNode(n.kind, n.x, n.y, 0, n.max);
-    for (const site of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER });
+    for (const site of this.map.sites) this.sites.push({ id: this.newId(), ...site, revealed: 0, claimedBy: NO_OWNER, heldBy: NO_OWNER });
     this.setupPlayer(0, this.map.starts[0]);
     if (this.scenario.rival) this.addRival();
   }
@@ -328,7 +379,7 @@ export class World {
   emit(e: SimEvent): void {
     this.events.push(e);
     if (this.events.length > 500) this.events.splice(0, this.events.length - 500);
-    const mine = !('owner' in e) || e.owner === 0;
+    const mine = !('owner' in e) || e.owner === 0 || (e.type === 'holdingChanged' && e.from === 0);
     if (e.type !== 'hungry' && e.type !== 'fed' && mine) {
       this.stats.longestQuiet = Math.max(this.stats.longestQuiet, this.tick - this.stats.lastEventTick);
       this.stats.lastEventTick = this.tick;
@@ -397,8 +448,11 @@ export class World {
       alert: done ? '' : 'materials',
       tier: 0,
       builtBy: 0,
+      reach: 0,
+      cost: this.buildCost(owner, type),
     };
     this.buildings.set(b.id, b);
+    this.buildingsVersion++;
     for (let dy = 0; dy < def.size; dy++)
       for (let dx = 0; dx < def.size; dx++) {
         const i = this.idx(x + dx, y + dy);
@@ -435,13 +489,14 @@ export class World {
       faceTile: -1,
       skills: emptySkills(),
       spouseId: 0,
+      elder: false,
     };
     this.settlers.set(s.id, s);
     return s;
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0 };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -501,6 +556,34 @@ export class World {
     return n;
   }
 
+  /**
+   * What a new building of this type costs a player. Each frontier tower you already have
+   * adds a quarter to the price: borders are pushed with care, not spam.
+   */
+  buildCost(owner: number, type: BuildingType): Partial<Record<Good, number>> {
+    const def = BUILDINGS[type];
+    if (!def.frontier) return { ...def.cost };
+    const pct = 100 + BALANCE.towerCostPct * this.countBuildings(owner, type, true);
+    const out: Partial<Record<Good, number>> = {};
+    for (const g of GOODS) if (def.cost[g]) out[g] = Math.ceil((def.cost[g]! * pct) / 100);
+    return out;
+  }
+
+  canAffordBuilding(owner: number, type: BuildingType): boolean {
+    return Object.entries(this.buildCost(owner, type)).every(([g, n]) => this.stored(owner, g as Good) >= (n ?? 0));
+  }
+
+  /** Does this player own a finished Great Work of this type? */
+  hasWork(owner: number, type: BuildingType): boolean {
+    for (const b of this.buildings.values()) if (b.owner === owner && b.type === type && b.done) return true;
+    return false;
+  }
+
+  /** Winter's bite (hunger, slow building) is lifted by the Great Granary. */
+  winterBites(owner: number): boolean {
+    return isWinter(this) && !this.hasWork(owner, 'granary');
+  }
+
   countBuildings(owner: number, type: BuildingType, includeSites = false): number {
     let n = 0;
     for (const b of this.buildings.values()) if (b.owner === owner && b.type === type && (b.done || includeSites)) n++;
@@ -509,12 +592,12 @@ export class World {
 
   /** Construction materials still needed for a site. */
   siteNeeds(b: Building, good: Good): number {
-    return (BUILDINGS[b.type].cost[good] ?? 0) - b.delivered[good] - b.incoming[good];
+    return (b.cost[good] ?? 0) - b.delivered[good] - b.incoming[good];
   }
 
   /** Work allowed so far given delivered materials (construction rises as goods arrive). */
   siteWorkAllowed(b: Building): number {
-    const cost = BUILDINGS[b.type].cost;
+    const cost = b.cost;
     const total = costTotal(cost);
     if (total === 0) return b.workNeeded;
     let delivered = 0;
@@ -538,6 +621,11 @@ export class World {
 
     updateSeasons(this);
     if (this.tick % 10 === 0) this.updateNature();
+    if (this.tick % 20 === 15) {
+      recomputeTerritory(this);
+      updateMarket(this);
+    }
+    if (this.tick % BALANCE.renownTick === 55) updateRenown(this);
     if (this.tick % 10 === 5) {
       updateExploration(this);
       updateOffers(this);
@@ -553,7 +641,7 @@ export class World {
     if (this.tick % 10 === 0) evaluateScenario(this);
 
     for (const s of this.settlers.values()) {
-      if (s.child) continue;
+      if (s.child || s.elder) continue;
       this.stats.adultTicks++;
       if (s.job.kind === 'idle') this.stats.idleAdultTicks++;
     }
@@ -566,16 +654,47 @@ export class World {
 
   private updateAges(): void {
     const adult = comeOfAgeTicks();
-    for (const s of this.settlers.values()) {
+    const elder = Math.round(BALANCE.elderYears * BALANCE.yearTicks);
+    const teach = this.tick % BALANCE.elderTeachEvery === 0;
+    for (const s of [...this.settlers.values()]) {
       s.age += 10;
+      const fam = this.families.get(s.familyId);
       if (s.child && s.age >= adult) {
         s.child = false;
-        const fam = this.families.get(s.familyId);
         // Inheritance: a new adult starts with part of the family's knowledge.
         const pct = BALANCE.inheritPct + (fam?.mods.teach ?? 0);
         if (fam) for (const k of SKILLS) s.skills[k] = Math.max(s.skills[k], Math.floor((fam.skills[k] * pct) / 100));
         this.emit({ type: 'cameOfAge', owner: s.owner, settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
+      } else if (!s.elder && s.age >= elder) {
+        s.elder = true;
+        releaseJob(this, s);
+        this.emit({ type: 'elder', owner: s.owner, settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
+      } else if (s.elder && s.age >= lifespan(s)) {
+        this.die(s);
+      } else if (s.elder && teach) {
+        // Elders pass their best craft on to the family's working adults.
+        const best = SKILLS.reduce((a, k) => (s.skills[k] > s.skills[a] ? k : a), SKILLS[0]);
+        if (s.skills[best] > 0)
+          for (const o of this.settlers.values()) if (o.familyId === s.familyId && !o.child && !o.elder) grantXp(this, o, best, BALANCE.elderTeachXp + Math.floor((fam?.mods.teach ?? 0) / 10));
       }
+    }
+  }
+
+  /** A settler dies of old age. A Master becomes a legend: renown, and their craft lives on. */
+  die(s: Settler): void {
+    const fam = this.families.get(s.familyId);
+    const best = SKILLS.reduce((a, k) => (s.skills[k] > s.skills[a] ? k : a), SKILLS[0]);
+    const legend = s.skills[best] >= TIER_XP[2] ? best : null;
+    releaseJob(this, s);
+    this.settlers.delete(s.id);
+    const spouse = this.settlers.get(s.spouseId);
+    if (spouse) spouse.spouseId = 0;
+    const p = this.players[s.owner];
+    this.emit({ type: 'died', owner: s.owner, name: s.name, surname: fam?.surname ?? '', age: Math.floor(s.age / BALANCE.yearTicks), legend, x: s.x, y: s.y });
+    if (legend && p) {
+      p.legends.push({ name: s.name, surname: fam?.surname ?? '', skill: legend, tick: this.tick });
+      if (fam) fam.glory += 3;
+      addRenown(this, s.owner, BALANCE.renown.legend, 'legends', s.x, s.y);
     }
   }
 
@@ -583,6 +702,11 @@ export class World {
     const def = BUILDINGS[type];
     if (def.rank && this.players[owner].rank < def.rank) return false;
     return !def.requires || this.players[owner].unlocked.includes(type);
+  }
+
+  private granaryLand(node: ResourceNode): boolean {
+    const t = this.territory[this.idx(node.x, node.y)];
+    return t >= 0 && this.hasWork(t, 'granary');
   }
 
   private updateNature(): void {
@@ -600,7 +724,7 @@ export class World {
           node.stump = Math.max(0, node.stump - 10);
           if (node.stump === 0) this.removeNode(node);
         }
-      } else if ((node.kind === 'fish' || (node.kind === 'bush' && !winter)) && node.amount < node.max) {
+      } else if ((node.kind === 'fish' || (node.kind === 'bush' && (!winter || this.granaryLand(node)))) && node.amount < node.max) {
         node.regrow -= 10;
         if (node.regrow <= 0) {
           node.amount++;
@@ -612,9 +736,12 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 export const comeOfAgeTicks = () => Math.round(BALANCE.comeOfAgeYears * BALANCE.yearTicks);
+
+/** Each settler's own span of years (deterministic from their id): somewhere in a year and a half. */
+export const lifespan = (s: Settler) => Math.round((BALANCE.lifespanYears + (((s.id * 2654435761) >>> 0) % 150) / 100) * BALANCE.yearTicks);
 
 export const FIRST_NAMES = [
   'Alfric', 'Edith', 'Osric', 'Hilda', 'Wulf', 'Edyth', 'Godwin', 'Mildred', 'Oswin', 'Elfgiva',

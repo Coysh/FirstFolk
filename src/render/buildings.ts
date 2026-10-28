@@ -187,7 +187,7 @@ export class BuildingsView {
       counts.fish = Math.min(9, Math.ceil(b.stock.fish / 2));
     } else if (!b.done) {
       spots = PILE_SPOTS.site;
-      let used = Math.floor(progress * costTotal(def.cost));
+      let used = Math.floor(progress * costTotal(b.cost));
       for (const g of GOODS) {
         const take = Math.min(b.delivered[g], used);
         used -= take;

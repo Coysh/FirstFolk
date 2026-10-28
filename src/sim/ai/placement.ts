@@ -19,7 +19,7 @@ export function bestSite(world: World, owner: number, type: BuildingType, target
   const cands: { x: number; y: number; score: number }[] = [];
   for (let y = box.y0; y <= box.y1; y++)
     for (let x = box.x0; x <= box.x1; x++) {
-      if (world.territory[world.idx(x, y)] !== owner || world.buildingAt[world.idx(x, y)]) continue;
+      if (!footprintFree(world, owner, x, y, def.size)) continue;
       const dist = cheb(x, y, wagon.x, wagon.y);
       let score: number;
       if (job?.kind === 'gather') {
@@ -29,7 +29,7 @@ export function bestSite(world: World, owner: number, type: BuildingType, target
       } else if (job?.kind === 'plant') {
         score = countNodes(world, x, y + def.size, 'tree', 5) - dist * 0.4;
       } else if (def.claim) {
-        score = target ? -cheb(x, y, target.x, target.y) * 4 + newLand(world, x + 1, y + 1, def.claim) * 0.02 : newLand(world, x + 1, y + 1, def.claim) - dist * 0.5;
+        score = target ? -cheb(x, y, target.x, target.y) * 4 + newLand(world, owner, x + 1, y + 1, def.claim) * 0.02 : newLand(world, owner, x + 1, y + 1, def.claim) - dist * 0.5;
         // Short of stone or wood? Head for land with rocks or trees.
         if (opts.want) score += countNodes(world, x + 1, y + 1, opts.want, def.claim) * (target ? 0.3 : 1.5);
       } else if (def.storage) {
@@ -45,13 +45,26 @@ export function bestSite(world: World, owner: number, type: BuildingType, target
   return null;
 }
 
-/** Unclaimed walkable-ish tiles a claim of radius r would gain (sampled every other tile). */
-function newLand(world: World, cx: number, cy: number, r: number): number {
+/** Cheap pre-check (own land, nothing built) so the costly `canPlace` only sees plausible spots. */
+function footprintFree(world: World, owner: number, x: number, y: number, size: number): boolean {
+  for (let dy = 0; dy <= size; dy++)
+    for (let dx = 0; dx < size; dx++) {
+      if (!world.inBounds(x + dx, y + dy)) return false;
+      const i = world.idx(x + dx, y + dy);
+      if (world.territory[i] !== owner || world.buildingAt[i]) return false;
+    }
+  return true;
+}
+
+/** Land a claim of radius r could gain (sampled every other tile); a rival's land counts half, being harder to take. */
+function newLand(world: World, owner: number, cx: number, cy: number, r: number): number {
   let n = 0;
   for (let y = cy - r; y <= cy + r; y += 2)
     for (let x = cx - r; x <= cx + r; x += 2) {
       if (!world.inBounds(x, y) || (x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
-      if (world.territory[world.idx(x, y)] === NO_OWNER && world.map.terrain[world.idx(x, y)] !== 0) n++;
+      const t = world.territory[world.idx(x, y)];
+      if (t === owner || world.map.terrain[world.idx(x, y)] === 0) continue;
+      n += t === NO_OWNER ? 1 : 0.5;
     }
   return n;
 }

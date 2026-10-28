@@ -38,7 +38,7 @@ const give = (world: World, owner: number, good: Good, n: number) => {
 };
 
 /** Take goods from stores (food draws on any edible good). Assumes `canAfford` passed. */
-function pay(world: World, owner: number, cost: EventOption['cost']): void {
+export function pay(world: World, owner: number, cost: EventOption['cost']): void {
   for (const [k, n] of Object.entries(cost ?? {})) {
     let left = n ?? 0;
     const goods: readonly Good[] = k === 'food' ? FOODS : [k as Good];

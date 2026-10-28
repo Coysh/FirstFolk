@@ -1,7 +1,6 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, FOODS, SKILLS, type BuildingType, type Good, type Skill } from './defs';
 import { addBoon, drawBoons, offerBoon } from './boons';
-import { isWinter } from './seasons';
 import { walkTo } from './settlers';
 import { emptySkills, type Building, type Family, type PlayerState, type Settler, type World } from './world';
 
@@ -23,7 +22,7 @@ export function createFamily(world: World, owner: number, homeId: number, inheri
   const used = new Set([...world.families.values()].map((f) => f.surname));
   const free = SURNAMES.filter((n) => !used.has(n));
   const surname = inherit ?? (free.length ? world.rng.pick(free) : world.rng.pick(SURNAMES));
-  const fam: Family = { id: world.newId(), owner, surname, color: world.families.size % CREST_COLORS.length, homeId, skills: emptySkills(), birthCooldown: BALANCE.birthInterval, boons: [], mods: {}, parents: [] };
+  const fam: Family = { id: world.newId(), owner, surname, color: world.families.size % CREST_COLORS.length, homeId, skills: emptySkills(), birthCooldown: BALANCE.birthInterval, boons: [], mods: {}, parents: [], glory: 0, deedReady: world.tick + BALANCE.deedFirstWait };
   world.families.set(fam.id, fam);
   return fam;
 }
@@ -34,7 +33,7 @@ export function updatePopulation(world: World): void {
     let appetite = 0;
     for (const s of world.settlers.values()) if (s.owner === player.id) appetite += 100 - (world.families.get(s.familyId)?.mods.appetite ?? 0);
     // Winter cold: everyone eats a quarter more.
-    player.mealAccum += Math.floor((appetite * (isWinter(world) ? 100 + BALANCE.winterAppetitePct : 100)) / 10000);
+    player.mealAccum += Math.floor((appetite * (world.winterBites(player.id) ? 100 + BALANCE.winterAppetitePct : 100)) / 10000);
     while (player.mealAccum >= world.rules.mealInterval) {
       player.mealAccum -= world.rules.mealInterval;
       eat(world, player);
@@ -66,7 +65,7 @@ function checkBirths(world: World, player: PlayerState): void {
     for (const s of world.settlers.values())
       if (s.familyId === fam.id) {
         members++;
-        if (!s.child) adults++;
+        if (!s.child && !s.elder) adults++;
       }
     const room = (BUILDINGS[home.type].housing ?? 0) - members;
     if (adults < 2 || room <= 0) continue;
@@ -148,7 +147,7 @@ function checkNewcomers(world: World, player: PlayerState): void {
  * the player's lever for breeding lineages.
  */
 function marry(world: World, player: PlayerState, hut: Building): boolean {
-  const single = [...world.settlers.values()].filter((s) => s.owner === player.id && !s.child && s.spouseId === 0);
+  const single = [...world.settlers.values()].filter((s) => s.owner === player.id && !s.child && !s.elder && s.spouseId === 0);
   for (let i = 0; i < single.length; i++)
     for (let j = i + 1; j < single.length; j++) {
       const a = single[i];

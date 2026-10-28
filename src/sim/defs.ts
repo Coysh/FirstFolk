@@ -7,7 +7,7 @@ export const FOODS: readonly Good[] = ['berries', 'fish'];
 
 export type NodeKind = 'tree' | 'rock' | 'bush' | 'fish';
 
-export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'sawpit' | 'storehouse';
+export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary';
 
 export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw';
 
@@ -68,8 +68,22 @@ export interface BuildingDef {
   requires?: { skill: Skill; tier: number };
   /** Locked until the settlement reaches this rank (1 Hamlet, 2 Village, 3 Town). */
   rank?: number;
-  /** Land claimed (radius in tiles) when finished; claimed land is final. */
+  /**
+   * Influence radius (tiles) when finished. Land goes to whoever's influence is strongest,
+   * so borders push and pull; land nobody contests stays with its holder.
+   */
   claim?: number;
+  /** Influence strength at the centre (falls to 0 at the edge of `claim`). Default 60. */
+  power?: number;
+  /** Towers: a builder family's Wanderlust widens their reach, and each one makes the next dearer. */
+  frontier?: boolean;
+  /** Builders who can work on the site at once (default 1). */
+  crew?: number;
+  /**
+   * Great Works: one of each in the whole valley. The first settlement to finish it gets the
+   * renown and the perk; anyone else's site is abandoned.
+   */
+  great?: { renown: number; perk: string };
   /** Fog lifted (radius in tiles) when finished. */
   reveal?: number;
 }
@@ -87,6 +101,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     storage: true,
     buildable: false,
     claim: 11,
+    power: 100,
     reveal: 15,
   },
   woodcutter: {
@@ -155,6 +170,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     size: 2,
     housing: 4,
     buildable: true,
+    claim: 4,
+    power: 30,
   },
   lookout: {
     type: 'lookout',
@@ -167,6 +184,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     size: 2,
     buildable: true,
     claim: 8,
+    power: 60,
+    frontier: true,
     reveal: 14,
   },
   watchtower: {
@@ -180,6 +199,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildable: true,
     rank: 1,
     claim: 12,
+    power: 100,
+    frontier: true,
     reveal: 20,
   },
   longhouse: {
@@ -193,6 +214,70 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     housing: 8,
     buildable: true,
     rank: 2,
+    claim: 5,
+    power: 40,
+  },
+  outpost: {
+    type: 'outpost',
+    name: 'Outpost',
+    icon: '🏕️',
+    blurb: 'A camp raised in the wilds by an Expedition: it holds the land around it.',
+    cost: {},
+    buildTicks: 1,
+    size: 2,
+    buildable: false,
+    claim: 7,
+    power: 70,
+    reveal: 12,
+  },
+  henge: {
+    type: 'henge',
+    name: 'The Stone Circle',
+    icon: '🗿',
+    blurb: 'A Great Work: a ring of raised stones. Only one in the valley: race to finish it first.',
+    cost: { stone: 80, planks: 12 },
+    buildTicks: secs(75),
+    size: 3,
+    crew: 6,
+    buildable: true,
+    rank: 2,
+    claim: 10,
+    power: 120,
+    reveal: 14,
+    great: { renown: 100, perk: 'Landmarks you hold pay half as much renown again.' },
+  },
+  meadhall: {
+    type: 'meadhall',
+    name: 'The Mead Hall',
+    icon: '🍺',
+    blurb: 'A Great Work: a carved hall where the houses feast. Only one in the valley: race to finish it first.',
+    cost: { planks: 40, logs: 40, stone: 15 },
+    buildTicks: secs(75),
+    size: 3,
+    crew: 6,
+    buildable: true,
+    rank: 2,
+    claim: 12,
+    power: 140,
+    reveal: 14,
+    great: { renown: 100, perk: 'Family deeds recharge 30% faster.' },
+  },
+  granary: {
+    type: 'granary',
+    name: 'The Great Granary',
+    icon: '🌾',
+    blurb: 'A Great Work: a raised store for the whole valley’s harvest. Only one in the valley: race to finish it first.',
+    cost: { planks: 25, stone: 30, berries: 40 },
+    buildTicks: secs(75),
+    size: 3,
+    crew: 6,
+    buildable: true,
+    rank: 2,
+    storage: true,
+    claim: 10,
+    power: 120,
+    reveal: 14,
+    great: { renown: 100, perk: 'Winter loses its bite: no extra hunger, no slower building, and bushes keep fruiting.' },
   },
   sawpit: {
     type: 'sawpit',
@@ -220,7 +305,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
 };
 
-export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse', 'watchtower', 'longhouse'];
+export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse', 'watchtower', 'longhouse', 'henge', 'meadhall', 'granary'];
+
+export const GREAT_WORKS: BuildingType[] = ['henge', 'meadhall', 'granary'];
 
 export const GOOD_INFO: Record<Good, { name: string; icon: string }> = {
   logs: { name: 'Logs', icon: '🪵' },
@@ -248,12 +335,25 @@ export function outputGood(type: BuildingType): Good | undefined {
 /** Points of interest hidden in the fog. Whoever's border covers one first claims it. */
 export type DiscoveryKind = 'cart' | 'ruins' | 'wanderers' | 'grove' | 'oakwood' | 'outcrop' | 'stones';
 
-export const DISCOVERIES: Record<DiscoveryKind, { name: string; icon: string; blurb: string }> = {
+export interface DiscoveryDef {
+  name: string;
+  icon: string;
+  blurb: string;
+  /**
+   * Landmarks are held, not spent: whoever's land covers one earns this much renown a minute,
+   * and loses it when a rival's influence pushes the border over it.
+   */
+  renown?: number;
+  /** A held landmark radiates influence of its own (radius, power), so it is easier to keep. */
+  aura?: [number, number];
+}
+
+export const DISCOVERIES: Record<DiscoveryKind, DiscoveryDef> = {
   cart: { name: 'Abandoned Cart', icon: '🛞', blurb: 'A broken-down cart, still loaded with supplies.' },
   ruins: { name: 'Old Ruins', icon: '🏛️', blurb: 'Carvings left by an older folk. Studying them teaches everyone a craft.' },
   wanderers: { name: 'Wanderers’ Camp', icon: '⛺', blurb: 'A skilled family camping in the wilds, looking for a place to belong.' },
-  grove: { name: 'Berry Grove', icon: '🫐', blurb: 'A sheltered meadow thick with laden bushes.' },
-  oakwood: { name: 'Old-Growth Oakwood', icon: '🌳', blurb: 'Ancient trees that each give three logs.' },
-  outcrop: { name: 'Rich Outcrop', icon: '🪨', blurb: 'Deep seams of stone that take an age to work out.' },
-  stones: { name: 'Standing Stones', icon: '🗿', blurb: 'A ring of old stones. Folk feel braver near them, and the land around becomes yours.' },
+  grove: { name: 'Berry Grove', icon: '🫐', blurb: 'A sheltered meadow thick with laden bushes. A landmark: renown while you hold it.', renown: 2 },
+  oakwood: { name: 'Old-Growth Oakwood', icon: '🌳', blurb: 'Ancient trees that each give three logs. A landmark: renown while you hold it.', renown: 2 },
+  outcrop: { name: 'Rich Outcrop', icon: '🪨', blurb: 'Deep seams of stone that take an age to work out. A landmark: renown while you hold it.', renown: 4 },
+  stones: { name: 'Standing Stones', icon: '🗿', blurb: 'A ring of old stones. The land around them follows whoever holds them. A great landmark.', renown: 5, aura: [7, 70] },
 };

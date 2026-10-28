@@ -24,6 +24,7 @@ export const ICON: Record<string, string> = {
   storehouse: '/assets/icons/storehouse.png',
   wagon: '/assets/icons/hut.png',
   lookout: '/assets/icons/lookout.png',
+  renown: '/assets/icons/renown.png',
 };
 
 interface Floater {
@@ -49,6 +50,16 @@ export class Overlay {
     this.root = document.createElement('div');
     this.root.className = 'overlay';
     parent.appendChild(this.root);
+  }
+
+  /** A golden "+n renown" that rises from where it was earned. */
+  renownFloater(pos: THREE.Vector3, n: number): void {
+    if (!this.visible) return;
+    const el = document.createElement('div');
+    el.className = 'floater renown';
+    el.textContent = `+${n} ★`;
+    this.root.appendChild(el);
+    this.floaters.push({ el, pos: pos.clone(), t: 0 });
   }
 
   /** Queue a "+n" floater; repeated events at the same place within half a second merge. */
@@ -106,7 +117,9 @@ export class Overlay {
     // Discovery pins: seen but unclaimed sites, labelled so the player knows what's out there.
     if (sites) {
       for (const site of world.sites) {
-        const show = this.visible && site.revealed & 1 && site.claimedBy === NO_OWNER;
+        const d = DISCOVERIES[site.kind];
+        // Unclaimed finds, and every landmark (labelled with who holds it).
+        const show = this.visible && site.revealed & 1 && (site.claimedBy === NO_OWNER || !!d.renown);
         let pin = this.pins.get(site.id);
         if (!show) {
           if (pin) {
@@ -116,13 +129,19 @@ export class Overlay {
           continue;
         }
         if (!pin) {
-          const d = DISCOVERIES[site.kind];
           pin = document.createElement('div');
           pin.className = 'pin';
-          pin.innerHTML = `<span class="pin-icon">${d.icon}</span><span class="pin-name">${d.name}</span>`;
+          pin.innerHTML = `<span class="pin-icon">${d.icon}</span><span class="pin-name">${d.name}</span><span class="pin-rate"></span>`;
           pin.title = `${d.name}: ${d.blurb} Extend your border over it to claim it.`;
           this.root.appendChild(pin);
           this.pins.set(site.id, pin);
+        }
+        const state = site.heldBy === 0 ? 'mine' : site.heldBy > 0 ? 'theirs' : 'open';
+        if (pin.dataset.state !== state) {
+          pin.dataset.state = state;
+          pin.className = `pin ${state} ${d.renown ? 'landmark' : ''}`;
+          const rate = pin.querySelector('.pin-rate') as HTMLElement;
+          rate.textContent = d.renown ? (state === 'mine' ? `yours · +${d.renown}★/min` : state === 'theirs' ? `rival’s · +${d.renown}★/min` : `+${d.renown}★/min`) : '';
         }
         const p = sites.position(world, site.id);
         if (!p) continue;
@@ -152,7 +171,7 @@ export class Overlay {
         this.floaters.splice(i, 1);
         continue;
       }
-      const s = project(f.pos, 1.3 + f.t * 0.9);
+      const s = project(f.pos, (f.el.classList.contains('renown') ? 0.4 : 1.3) + f.t * 0.9);
       f.el.style.opacity = String(Math.min(1, (1.4 - f.t) * 2.5));
       f.el.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -50%) scale(${scale})`;
       f.el.style.display = s.on ? '' : 'none';

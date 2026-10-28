@@ -1,6 +1,7 @@
 import { secs } from './balance';
 import { SKILLS, type Skill } from './defs';
 import type { Family, World } from './world';
+import type { DeedId } from './deeds';
 
 /**
  * Family Boons: Spore-style "pick your evolution" choices. When a family first reaches a
@@ -57,6 +58,8 @@ export interface BoonDef {
   mods: Partial<Record<Mod, number>>;
   /** Adjective for the family's title, e.g. "the Thornes, Fleet-footed Masons". */
   epithet: string;
+  /** The family deed this boon brings (see deeds.ts); otherwise the deed follows the family's craft. */
+  deed?: DeedId;
 }
 
 export const BOONS: Record<BoonId, BoonDef> = {
@@ -64,17 +67,17 @@ export const BOONS: Record<BoonId, BoonDef> = {
   heartwood: { id: 'heartwood', name: 'Heartwood', icon: '🌳', blurb: '+25% chance of a bonus log or plank.', skill: 'woodcraft', mods: { 'bonus.woodcraft': 25 }, epithet: 'Heartwood' },
   stoneSworn: { id: 'stoneSworn', name: 'Stone-Sworn', icon: '⛏️', blurb: 'Quarrying is 30% faster.', skill: 'stonework', mods: { 'speed.stonework': 30 }, epithet: 'Stone-sworn' },
   deepSeams: { id: 'deepSeams', name: 'Deep Seams', icon: '🪨', blurb: '+25% chance of bonus stone.', skill: 'stonework', mods: { 'bonus.stonework': 25 }, epithet: 'Deep-delving' },
-  masterBuilders: { id: 'masterBuilders', name: 'Master Builders', icon: '🔨', blurb: 'They raise buildings 40% faster.', skill: 'stonework', mods: { build: 40 }, epithet: 'Builder' },
+  masterBuilders: { id: 'masterBuilders', name: 'Master Builders', icon: '🔨', blurb: 'They raise buildings 40% faster.', skill: 'stonework', mods: { build: 40 }, epithet: 'Builder', deed: 'raise' },
   brambleWise: { id: 'brambleWise', name: 'Bramble-Wise', icon: '🫐', blurb: 'Foraging is 30% faster.', skill: 'husbandry', mods: { 'speed.husbandry': 30 }, epithet: 'Bramble-wise' },
   bountiful: { id: 'bountiful', name: 'Bountiful', icon: '🧺', blurb: '+30% chance of bonus berries.', skill: 'husbandry', mods: { 'bonus.husbandry': 30 }, epithet: 'Bountiful' },
   hearthKeepers: { id: 'hearthKeepers', name: 'Hearth-Keepers', icon: '🍲', blurb: 'The family eats 35% less.', skill: 'husbandry', mods: { appetite: 35 }, epithet: 'Hearth-keeping' },
-  bigHearts: { id: 'bigHearts', name: 'Big Hearts', icon: '❤️', blurb: 'Children are born twice as often.', mods: { birth: 50 }, epithet: 'Big-hearted' },
-  twins: { id: 'twins', name: 'Twins Run in the Family', icon: '👶', blurb: 'A 40% chance that a birth brings twins.', mods: { twins: 40 }, epithet: 'Twin-blessed' },
-  fleetFooted: { id: 'fleetFooted', name: 'Fleet-Footed', icon: '👣', blurb: 'They walk and carry 25% faster.', mods: { walk: 25 }, epithet: 'Fleet-footed' },
-  keenEyes: { id: 'keenEyes', name: 'Keen Eyes', icon: '👁️', blurb: 'They see 4 tiles further through the fog.', mods: { sight: 4 }, epithet: 'Keen-eyed' },
-  wanderlust: { id: 'wanderlust', name: 'Wanderlust', icon: '🗺️', blurb: 'Lookouts they build claim 4 tiles more land.', mods: { claim: 4 }, epithet: 'Wandering' },
-  quickLearners: { id: 'quickLearners', name: 'Quick Learners', icon: '📜', blurb: 'They learn every craft 50% faster.', mods: { xp: 50 }, epithet: 'Quick-witted' },
-  goodTeachers: { id: 'goodTeachers', name: 'Good Teachers', icon: '🎓', blurb: 'Children inherit 80% of the family’s craft, not 40%.', mods: { teach: 40 }, epithet: 'Learned' },
+  bigHearts: { id: 'bigHearts', name: 'Big Hearts', icon: '❤️', blurb: 'Children are born twice as often.', mods: { birth: 50 }, epithet: 'Big-hearted', deed: 'festival' },
+  twins: { id: 'twins', name: 'Twins Run in the Family', icon: '👶', blurb: 'A 40% chance that a birth brings twins.', mods: { twins: 40 }, epithet: 'Twin-blessed', deed: 'festival' },
+  fleetFooted: { id: 'fleetFooted', name: 'Fleet-Footed', icon: '👣', blurb: 'They walk and carry 25% faster.', mods: { walk: 25 }, epithet: 'Fleet-footed', deed: 'expedition' },
+  keenEyes: { id: 'keenEyes', name: 'Keen Eyes', icon: '👁️', blurb: 'They see 4 tiles further through the fog.', mods: { sight: 4 }, epithet: 'Keen-eyed', deed: 'expedition' },
+  wanderlust: { id: 'wanderlust', name: 'Wanderlust', icon: '🗺️', blurb: 'Lookouts they build claim 4 tiles more land.', mods: { claim: 4 }, epithet: 'Wandering', deed: 'expedition' },
+  quickLearners: { id: 'quickLearners', name: 'Quick Learners', icon: '📜', blurb: 'They learn every craft 50% faster.', mods: { xp: 50 }, epithet: 'Quick-witted', deed: 'lessons' },
+  goodTeachers: { id: 'goodTeachers', name: 'Good Teachers', icon: '🎓', blurb: 'Children inherit 80% of the family’s craft, not 40%.', mods: { teach: 40 }, epithet: 'Learned', deed: 'lessons' },
   hardy: { id: 'hardy', name: 'Hardy', icon: '💪', blurb: 'Hunger never slows them down.', mods: { hardy: 1 }, epithet: 'Hardy' },
 };
 

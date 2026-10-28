@@ -1,17 +1,22 @@
-import { BUILDINGS, GOODS, RANK_NAMES, type BuildingType } from './defs';
+import { BUILDINGS, GOODS, RANK_NAMES, type BuildingType, type Good } from './defs';
+import { sell } from './market';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
 import { owns, territoryBox } from './territory';
 import { chooseBoon } from './boons';
 import { resolveEvent } from './events';
 import { tradeTitle } from './trades';
-import type { World } from './world';
+import { performDeed } from './deeds';
+import { workOwner } from './works';
+import type { Building, World } from './world';
 
 /** Every player and AI action goes through a Command so games are replayable and the AI cannot cheat. */
 export type Command =
   | { type: 'place'; owner: number; building: BuildingType; x: number; y: number }
   | { type: 'demolish'; owner: number; id: number }
   | { type: 'chooseBoon'; owner: number; offerId: number; choice: number }
-  | { type: 'chooseEvent'; owner: number; eventId: number; option: number };
+  | { type: 'chooseEvent'; owner: number; eventId: number; option: number }
+  | { type: 'deed'; owner: number; familyId: number; x: number; y: number }
+  | { type: 'sell'; owner: number; good: Good };
 
 /** What a locked building is waiting for, e.g. "Hamlet" or "Journeyman Carpenter". */
 export function lockLabel(world: World, owner: number, type: BuildingType): string {
@@ -32,6 +37,11 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
   const def = BUILDINGS[type];
   if (!def.buildable) return { ok: false, reason: 'Cannot be built' };
   if (!world.isUnlocked(owner, type)) return { ok: false, reason: `Needs a ${lockLabel(world, owner, type)}` };
+  if (def.great) {
+    const holder = workOwner(world, type);
+    if (holder >= 0) return { ok: false, reason: holder === owner ? 'Already yours' : 'Your rival raised it first' };
+    if (world.countBuildings(owner, type, true)) return { ok: false, reason: 'Already begun' };
+  }
   const size = def.size;
   const ex = x;
   const ey = y + size;
@@ -70,8 +80,53 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
     const e = world.entrance(b);
     if (e.x >= x && e.x < x + size && e.y >= y && e.y < y + size) return { ok: false, reason: 'Blocks an entrance' };
   }
-  if (home && !entrancesStayReachable(world, owner, home, x, y, size)) return { ok: false, reason: 'Would cut off a path' };
+  if (home && !(reachableFrom(world, home)[ei] && ringConnected(world, x, y, size)) && !entrancesStayReachable(world, owner, home, x, y, size))
+    return { ok: false, reason: 'Would cut off a path' };
   return { ok: true };
+}
+
+/**
+ * Fast exact check: if the walkable tiles in the ring around a footprint are connected to one
+ * another along the ring, any path through the footprint can go round it instead, so placing
+ * it cannot cut anything off.
+ */
+function ringConnected(world: World, x: number, y: number, size: number): boolean {
+  const ring: [number, number][] = [];
+  for (let tx = x - 1; tx <= x + size; tx++) ring.push([tx, y - 1]);
+  for (let ty = y; ty <= y + size; ty++) ring.push([x + size, ty]);
+  for (let tx = x + size - 1; tx >= x - 1; tx--) ring.push([tx, y + size]);
+  for (let ty = y + size - 1; ty >= y; ty--) ring.push([x - 1, ty]);
+  const open = ring.map(([tx, ty]) => world.inBounds(tx, ty) && world.walkable(world.idx(tx, ty)));
+  // Walking round the ring (corners included), count the separate runs of open tiles.
+  let runs = 0;
+  for (let i = 0; i < ring.length; i++) if (open[i] && !open[(i + ring.length - 1) % ring.length]) runs++;
+  return runs <= 1;
+}
+
+/** Tiles reachable from the hall's entrance, cached until a building is added or removed. */
+function reachableFrom(world: World, home: Building): Uint8Array {
+  const c = world.reachCache;
+  if (c && c.version === world.buildingsVersion) return c.seen;
+  const seen = new Uint8Array(world.size * world.size);
+  const start = world.entranceIdx(home);
+  const queue = [start];
+  seen[start] = 1;
+  for (let q = 0; q < queue.length; q++) {
+    const i = queue[q];
+    const cx = i % world.size;
+    const cy = (i - cx) / world.size;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (!world.inBounds(nx, ny)) continue;
+      const k = world.idx(nx, ny);
+      if (seen[k] || !world.walkable(k)) continue;
+      seen[k] = 1;
+      queue.push(k);
+    }
+  }
+  world.reachCache = { version: world.buildingsVersion, seen };
+  return seen;
 }
 
 /**
@@ -125,8 +180,15 @@ export function applyCommand(world: World, cmd: Command): void {
       if (!canPlace(world, cmd.owner, cmd.building, cmd.x, cmd.y).ok) return;
       const b = world.addBuilding(cmd.building, cmd.owner, cmd.x, cmd.y);
       world.emit({ type: 'buildingPlaced', owner: b.owner, id: b.id, buildingType: b.type });
+      if (BUILDINGS[b.type].great) world.emit({ type: 'workBegun', owner: b.owner, buildingType: b.type });
       return;
     }
+    case 'sell':
+      sell(world, cmd.owner, cmd.good);
+      return;
+    case 'deed':
+      performDeed(world, cmd.owner, cmd.familyId, cmd.x, cmd.y);
+      return;
     case 'chooseEvent':
       resolveEvent(world, cmd.owner, cmd.eventId, cmd.option);
       return;
@@ -151,6 +213,7 @@ export function demolish(world: World, id: number): void {
     for (const g of GOODS) store.stock[g] += (b.done ? 0 : b.delivered[g]) + b.stock[g] - b.reserved[g];
   }
   world.buildings.delete(id);
+  world.buildingsVersion++;
   const size = BUILDINGS[b.type].size;
   for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) world.buildingAt[world.idx(b.x + dx, b.y + dy)] = 0;
 

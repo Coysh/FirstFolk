@@ -67,6 +67,7 @@ export class GameRenderer {
   private ring!: THREE.Mesh;
   private hoverRing!: THREE.Mesh;
   private rangeRing!: THREE.Mesh;
+  private boostRings: THREE.Mesh[] = [];
   readonly fow: FogOfWar;
   private borderGlow = 0;
   private borderGoal = 0;
@@ -198,7 +199,15 @@ export class GameRenderer {
       else if (e.type === 'rankUp' && e.owner === 0) {
         const wagon = [...this.world.buildings.values()].find((b) => b.owner === 0 && b.type === 'wagon');
         if (wagon) this.effects.emit('sparkle', wagon.x + 1, this.hf.at(wagon.x + 1, wagon.y + 1) + 1.5, wagon.y + 1, 60);
-      } else if (e.type === 'saplingPlanted') this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 6);
+      } else if (e.type === 'deed' && seen(Math.max(0, e.x), Math.max(0, e.y)) && e.deed !== 'timber' && e.deed !== 'harvest' && e.deed !== 'lessons') {
+        const y = this.hf.at(e.x + 0.5, e.y + 0.5);
+        this.effects.emit('sparkle', e.x + 0.5, y + 1.2, e.y + 0.5, 70);
+        this.effects.emit('dust', e.x + 0.5, y + 0.2, e.y + 0.5, 24);
+      } else if (e.type === 'holdingChanged') {
+        const p = this.sites.position(this.world, e.siteId);
+        if (p && seen(Math.floor(p.x), Math.floor(p.z))) this.effects.emit('sparkle', p.x, p.y + 1.5, p.z, 50);
+      } else if (e.type === 'died' && e.legend && seen(e.x, e.y)) this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 1, e.y + 0.5, 40);
+      else if (e.type === 'saplingPlanted') this.effects.emit('sparkle', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 6);
     }
   }
 
@@ -250,6 +259,35 @@ export class GameRenderer {
       this.hoverRing.position.set(pos.x, pos.y + 0.04, pos.z);
       this.hoverRing.scale.setScalar(radius / 0.4);
     }
+  }
+
+  groundHeight(x: number, z: number): number {
+    return this.hf.at(x, z);
+  }
+
+  /**
+   * Festivals: a ring of light on the ground showing where influence surges, in the colour
+   * of whoever holds it, pulsing until it ends.
+   */
+  private updateBoostRings(): void {
+    let i = 0;
+    for (const p of this.world.players)
+      for (const b of p.boosts) {
+        if (b.until <= this.world.tick || !(this.world.explored[this.world.idx(b.x, b.y)] & 1)) continue;
+        let ring = this.boostRings[i];
+        if (!ring) {
+          ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 72).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.6, depthWrite: false }));
+          ring.renderOrder = 2;
+          this.scene.add(ring);
+          this.boostRings.push(ring);
+        }
+        (ring.material as THREE.MeshBasicMaterial).color.setHex(p.id === 0 ? 0xffd75e : 0xff6b5e);
+        ring.position.set(b.x + 0.5, this.hf.at(b.x + 0.5, b.y + 0.5) + 0.25, b.y + 0.5);
+        ring.scale.setScalar(b.r * (0.96 + Math.sin(this.time * 3) * 0.04));
+        ring.visible = true;
+        i++;
+      }
+    for (; i < this.boostRings.length; i++) this.boostRings[i].visible = false;
   }
 
   /** Ground point under a screen position (CSS pixels relative to the canvas). */
@@ -315,6 +353,7 @@ export class GameRenderer {
     fog.far = this.rig.distance * 3.4 + 35;
 
     this.fow.update(this.world);
+    this.updateBoostRings();
     this.fow.uniforms.uFowStrength.value = this.cinematic ? 0.55 : 1;
     // Frost creeps in with winter and thaws with spring.
     const snowGoal = isWinter(this.world) ? 1 : 0;

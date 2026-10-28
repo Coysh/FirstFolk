@@ -47,7 +47,43 @@ export const BALANCE = {
   /** Discovery rewards. */
   ruinsXp: 120,
   wandererSkill: 220,
-  stonesClaim: 7,
+  /** A challenger needs this much more influence than the holder to take a tile. */
+  influenceMargin: 10,
+  /** Each frontier tower a player already has makes the next this much (percent) dearer. */
+  towerCostPct: 25,
+  /** Extra home influence per Master in the household (up to four). */
+  masterPull: 15,
+  /** Losing at least this many tiles at once is news. */
+  landLostNotice: 12,
+  /**
+   * Renown is the score: the first settlement to the scenario's goal wins. One-off sums, plus
+   * landmarks (see DISCOVERIES) and land paying out every `renownTick`.
+   */
+  renown: {
+    discovery: 8,
+    /** Taking a landmark from another settlement. */
+    seized: 10,
+    objective: 5,
+    /** A family's first Master in a craft. */
+    master: 10,
+    legend: 15,
+    festival: 5,
+    /** Per minute, per this many tiles of land. */
+    landTiles: 800,
+  },
+  renownTick: secs(10),
+
+  /** Market Day: each lot sold gluts that good by this much (percent), easing 1 point every 2 s. */
+  glutPerSale: 25,
+
+  /** Family deeds: how many houses sit on the council, and how far an Expedition may reach past the border. */
+  councilSize: 4,
+  /** A new household's deed is ready this long after it forms. */
+  deedFirstWait: secs(30),
+  expeditionReach: 18,
+  /** A settlement this far behind in renown recharges its deeds this much (percent) faster. */
+  underdogGap: 120,
+  underdogPct: 30,
   /** When nothing new has been seen or claimed for this long, a rumour reveals the nearest discovery. */
   rumourDelay: secs(45),
 
@@ -60,6 +96,15 @@ export const BALANCE = {
   firstEvent: secs(150),
   eventGap: [secs(80), secs(140)] as [number, number],
   eventTimeout: secs(45),
+
+  /** Lineage: settlers become elders (stop working, teach the family), then die somewhere past `lifespanYears`. */
+  elderYears: 6,
+  lifespanYears: 7.4,
+  elderTeachEvery: secs(10),
+  elderTeachXp: 4,
+  /** Each legend (a Master who died) makes their craft this much (percent) faster, up to `legendCap` legends. */
+  legendPct: 10,
+  legendCap: 3,
 
   /** Share of the family's best skill XP a child inherits on coming of age. */
   inheritPct: 40,

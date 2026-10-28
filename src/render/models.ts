@@ -309,6 +309,86 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       b.add(cyl(0.1, 0.1, 0.22, 8), C.wood, { pos: [0.7, 0.11, -0.45] });
       break;
     }
+    case 'outpost': {
+      // A scouts' camp: two tents, a fire, and a tall pole flying the family's banner.
+      for (const [x, z, r] of [[-0.35, -0.3, 0.5], [0.4, -0.1, 0.42]] as const) {
+        b.add(cone(r, r * 1.5, 4), C.cloth, { pos: [x, r * 0.75, z], rot: [0, Math.PI / 4, 0] });
+        b.add(box(0.12, r * 0.9, 0.04), C.clothShade, { pos: [x, r * 0.45, z + r * 0.62] });
+      }
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        b.add(dodeca(0.05), C.stoneDark, { pos: [0.1 + Math.cos(a) * 0.14, 0.03, 0.55 + Math.sin(a) * 0.14] });
+      }
+      b.add(cone(0.07, 0.16, 5), C.ember, { pos: [0.1, 0.08, 0.55] });
+      b.add(cyl(0.035, 0.04, 2.4, 5), C.wood, { pos: [-0.75, 1.2, 0.35] });
+      b.add(box(0.03, 0.34, 0.5), opts.crest ?? 0xc0392b, { pos: [-0.75, 2.2, 0.6] });
+      logPile(b, 0.62, 0.62, 2);
+      break;
+    }
+    case 'henge': {
+      // The Stone Circle: a ring of great standing stones with lintels, around an altar stone.
+      b.add(cyl(1.4, 1.45, 0.06, 20), C.moss, { pos: [0, 0.02, 0] });
+      const n = 10;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const h = 0.95 + (i % 3) * 0.12;
+        b.add(box(0.28, h, 0.18), i % 2 ? C.stone : C.rock, { pos: [Math.cos(a) * 1.15, h / 2, Math.sin(a) * 1.15], rot: [0, -a, 0] });
+        if (i % 2 === 0) {
+          const a2 = ((i + 1) / n) * Math.PI * 2;
+          const mid = (a + a2) / 2;
+          b.add(box(0.75, 0.13, 0.2), C.stoneDark, { pos: [Math.cos(mid) * 1.13, 1.12, Math.sin(mid) * 1.13], rot: [0, -mid + Math.PI / 2, 0] });
+        }
+      }
+      b.add(box(0.7, 0.22, 0.4), C.stoneDark, { pos: [0, 0.11, 0] });
+      b.add(cone(0.07, 0.18, 5), C.ember, { pos: [0, 0.3, 0] });
+      b.add(cyl(0.03, 0.03, 1.8, 5), C.wood, { pos: [1.3, 0.9, 1.25] });
+      b.add(box(0.03, 0.3, 0.45), opts.crest ?? 0xf2c14e, { pos: [1.3, 1.6, 1.48] });
+      break;
+    }
+    case 'meadhall': {
+      // The Mead Hall: a long carved hall with dragon-head gables and a feasting yard.
+      b.add(box(2.7, 0.18, 1.9), C.stoneDark, { pos: [0, 0.05, -0.25] });
+      b.add(box(2.5, 0.8, 1.55), C.wood, { pos: [0, 0.54, -0.25] });
+      for (let i = 0; i < 7; i++) b.add(box(0.08, 0.8, 1.6), C.timber, { pos: [-1.2 + i * 0.4, 0.54, -0.25] });
+      b.add(gableRoof(1.95, 2.8, 1.05), C.thatchDark, { pos: [0, 0.94, -0.25] });
+      b.add(box(2.85, 0.09, 0.09), C.timber, { pos: [0, 2.0, -0.25] });
+      for (const x of [-1.42, 1.42]) {
+        b.add(cone(0.08, 0.5, 4), C.darkTimber, { pos: [x, 2.15, -0.25], rot: [0, 0, x > 0 ? -0.6 : 0.6] });
+        b.add(sphere(0.09), C.darkTimber, { pos: [x * 1.12, 2.35, -0.25] });
+      }
+      b.add(box(0.5, 0.6, 0.06), C.door, { pos: [0, 0.4, 0.54] });
+      for (const x of [-0.9, 0.9]) b.add(box(0.26, 0.18, 0.06), C.darkTimber, { pos: [x, 0.65, 0.54] });
+      // Feasting yard: trestle tables and a roaring fire.
+      for (const x of [-0.85, 0.85]) {
+        b.add(box(0.7, 0.05, 0.22), C.lightWood, { pos: [x, 0.24, 1.05] });
+        for (const sx of [-0.28, 0.28]) b.add(box(0.05, 0.22, 0.05), C.wood, { pos: [x + sx, 0.11, 1.05] });
+      }
+      b.add(cone(0.12, 0.28, 5), C.ember, { pos: [0, 0.14, 1.15] });
+      for (const x of [-1.25, 1.25]) {
+        b.add(cyl(0.03, 0.03, 2.1, 5), C.wood, { pos: [x, 1.05, 0.75] });
+        b.add(box(0.03, 0.42, 0.34), opts.crest ?? 0xc0392b, { pos: [x, 1.85, 0.58] });
+      }
+      break;
+    }
+    case 'granary': {
+      // The Great Granary: a store raised on staddle stones under a vast thatch, with sacks and baskets.
+      for (const sx of [-0.95, 0, 0.95])
+        for (const sz of [-0.85, 0.25]) {
+          b.add(cyl(0.07, 0.1, 0.4, 6), C.stone, { pos: [sx, 0.2, sz - 0.2] });
+          b.add(cyl(0.2, 0.16, 0.08, 8), C.stone, { pos: [sx, 0.44, sz - 0.2] });
+        }
+      b.add(box(2.3, 0.1, 1.5), C.lightWood, { pos: [0, 0.52, -0.5] });
+      b.add(box(2.1, 0.75, 1.3), C.wood, { pos: [0, 0.94, -0.5] });
+      for (let i = 0; i < 6; i++) b.add(box(0.07, 0.75, 1.34), C.timber, { pos: [-1.05 + i * 0.42, 0.94, -0.5] });
+      b.add(gableRoof(1.8, 2.5, 1.1), C.thatch, { pos: [0, 1.31, -0.5] });
+      b.add(box(2.55, 0.08, 0.08), C.thatchDark, { pos: [0, 2.42, -0.5] });
+      b.add(box(0.36, 0.5, 0.06), C.door, { pos: [0, 0.98, 0.17] });
+      for (let i = 0; i < 4; i++) b.add(box(0.36, 0.04, 0.12), C.lightWood, { pos: [0, 0.1 + i * 0.13, 0.35 + i * 0.05], rot: [0.3, 0, 0] });
+      for (const [x, z] of [[-0.9, 0.95], [-0.62, 1.05], [0.75, 1.0], [1.0, 0.82]] as const) b.add(sphere(0.16), C.cloth, { pos: [x, 0.15, z], scale: [1, 1.2, 1] });
+      b.add(cyl(0.18, 0.14, 0.25, 8), C.wood, { pos: [0.5, 0.12, 1.15] });
+      for (const x of [-0.42, -0.3, 0.42]) b.add(sphere(0.06), C.berry, { pos: [x + 0.92, 0.28, 1.15] });
+      break;
+    }
     default:
       b.add(box(1.2, 0.8, 1.2), C.wood, { pos: [0, 0.4, 0] });
   }

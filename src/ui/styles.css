@@ -1658,3 +1658,375 @@ button.danger.armed {
     height: 28px;
   }
 }
+
+/* ---------- the renown race ---------- */
+.race {
+  width: 340px;
+  padding: 5px 10px 6px;
+}
+.race-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: 800 10.5px var(--body);
+  color: #f3dfb0;
+  margin-bottom: 2px;
+}
+.race-head b {
+  color: var(--gold);
+}
+.race-clock.pulse {
+  color: #ffb4a8;
+}
+.race-score {
+  min-width: 42px;
+  text-align: right;
+  font: 900 13px var(--body);
+  color: #fff;
+}
+.race-score small {
+  color: var(--gold);
+  margin-left: 1px;
+}
+.race-rate {
+  min-width: 34px;
+  font-size: 10px;
+  color: #d8c49a;
+}
+.race-rank {
+  min-width: 46px;
+  font-size: 10px;
+  text-align: right;
+  color: #e9d3a6;
+}
+
+/* ---------- the council of great houses: family deeds ---------- */
+.council {
+  position: absolute;
+  left: 50%;
+  bottom: calc(146px + var(--safe-b));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 4px 8px 6px;
+  border-radius: 14px;
+  background: rgba(40, 26, 14, 0.62);
+  border: 1.5px solid var(--wood-light);
+}
+.council-label {
+  position: absolute;
+  top: -9px;
+  left: 12px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--wood-dark);
+  color: var(--gold);
+  font: 800 9.5px var(--body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.deed {
+  position: relative;
+  width: 86px;
+  padding: 4px 4px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  border-radius: 12px;
+  background: linear-gradient(#fffaf0, #e9d6ad);
+  opacity: 0.86;
+}
+.deed.ready {
+  opacity: 1;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(242, 193, 78, 0.5), 0 0 16px rgba(242, 193, 78, 0.55);
+  animation: deed-glow 1.8s ease-in-out infinite;
+}
+@keyframes deed-glow {
+  50% {
+    box-shadow: 0 0 0 3px rgba(242, 193, 78, 0.7), 0 0 22px rgba(242, 193, 78, 0.8);
+  }
+}
+.deed-ring {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.deed-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  background: var(--paper);
+}
+.deed-icon.big {
+  width: 44px;
+  height: 44px;
+  font-size: 26px;
+  flex: none;
+}
+.deed-name {
+  font: 800 11.5px var(--body);
+  line-height: 1.1;
+}
+.deed-fam {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+}
+.deed-fam b {
+  color: #b8860b;
+}
+.deed-fam .crest {
+  width: 8px;
+  height: 8px;
+}
+.deed-wait {
+  font: 800 10px var(--body);
+  color: var(--warn);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.deed .hotkey {
+  position: static;
+  font-size: 9px;
+}
+.fam-deed b {
+  color: var(--ink);
+}
+
+/* ---------- Market Day ---------- */
+.market-btn {
+  height: 38px;
+  padding: 0 10px;
+  font: 800 13px var(--body);
+  border-radius: 999px;
+  background: linear-gradient(#fff6dc, #f0d9a5);
+}
+.market-btn.on {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(242, 193, 78, 0.5);
+}
+.market {
+  position: absolute;
+  top: calc(64px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 70px;
+  width: 270px;
+  padding: 8px 12px 10px;
+  z-index: 3;
+}
+.market header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.market .close {
+  padding: 0 6px;
+}
+.mk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.mk-row img {
+  width: 26px;
+  height: 26px;
+}
+.mk-have {
+  min-width: 36px;
+  font-weight: 800;
+}
+.mk-price {
+  flex: 1;
+  font-weight: 900;
+  color: #8a6510;
+}
+.mk-price.low {
+  color: var(--warn);
+}
+.mk-row button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+/* ---------- landmarks ---------- */
+.pin.landmark .pin-rate {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #ffe6a3;
+}
+.pin.mine {
+  border-color: #ffd75e;
+  background: rgba(70, 52, 14, 0.82);
+}
+.pin.theirs {
+  border-color: #d9534f;
+  box-shadow: 0 0 14px rgba(217, 83, 79, 0.5);
+}
+.pin.theirs .pin-rate {
+  color: #ffb4a8;
+}
+.pin.mine,
+.pin.theirs {
+  animation: none;
+}
+.frontier-row.theirs .fr-name small {
+  color: var(--warn);
+}
+.frontier-row .fr-name small {
+  font-weight: 700;
+  color: #8a6510;
+}
+.frontier h3 .held {
+  font: 700 11px var(--body);
+  color: #8a6510;
+}
+.floater.renown {
+  color: var(--gold);
+  font-size: 19px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 10px rgba(242, 193, 78, 0.7);
+}
+
+/* ---------- Great Works ---------- */
+.card.great {
+  border-color: var(--gold);
+  background: linear-gradient(#fff6d6, #ecd193);
+}
+.card.great .card-name {
+  font-size: 11px;
+}
+.great-perk {
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(242, 193, 78, 0.22);
+  font-size: 12.5px;
+}
+.bc-deed {
+  font: 800 11px var(--body);
+  color: #8a6510;
+}
+
+/* ---------- the after-action report ---------- */
+.modal.report {
+  width: min(640px, calc(100vw - 20px));
+}
+.report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  text-align: left;
+  margin: 8px 0;
+}
+.report-grid h4 {
+  margin: 0 0 4px;
+  font: 700 15px var(--heading);
+}
+.rep-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.rep-row span {
+  width: 86px;
+}
+.rep-bar {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.12);
+}
+.rep-bar div {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--gold);
+}
+.chronicle {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12.5px;
+}
+
+/* Event cards, boon choices and the wild list sit above the council; toasts below the race. */
+.event-card,
+.boon-tray,
+.frontier {
+  bottom: calc(240px + var(--safe-b));
+}
+.toasts {
+  top: calc(136px + var(--safe-t));
+}
+.card {
+  min-width: 86px;
+  width: 86px;
+}
+
+@media (max-width: 720px) {
+  .race {
+    top: calc(142px + var(--safe-t));
+    bottom: auto;
+    left: auto;
+    right: 6px;
+    transform: none;
+    width: 128px;
+    padding: 4px 7px;
+  }
+  .race-rate,
+  .race-rank,
+  .race-track,
+  .race-head span:first-child,
+  .race-head .race-clock:not(.pulse) {
+    display: none;
+  }
+  .race-row {
+    justify-content: space-between;
+  }
+  .goals {
+    width: calc(100vw - 146px);
+  }
+  .council {
+    left: 6px;
+    right: 6px;
+    transform: none;
+    bottom: calc(134px + var(--safe-b));
+    gap: 4px;
+    justify-content: center;
+  }
+  .deed {
+    width: 23%;
+    min-width: 0;
+  }
+  .deed-fam {
+    display: none;
+  }
+  .event-card,
+  .boon-tray,
+  .frontier {
+    bottom: calc(228px + var(--safe-b));
+  }
+  .toasts {
+    top: auto;
+    bottom: calc(228px + var(--safe-b));
+  }
+  .report-grid {
+    grid-template-columns: 1fr;
+  }
+  .market {
+    margin-top: 40px;
+  }
+}

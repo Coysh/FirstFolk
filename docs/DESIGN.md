@@ -14,6 +14,15 @@ FirstFolk is a fast, single-player browser settlement builder. It combines Settl
 - **Family features in the MVP:** skills, inheritance, apprenticeship, **marriage between families** and **trade surnames**. Inherited traits and the family chronicle are deferred.
 - **Default scenario:** *The First Valley*, a race against the rival through four chapters that are also the settlement's age-ups (Camp → Hamlet → Village → Town → Renown). *Peaceful* is the same valley with no rival. Victory runs on a modular scenario system (§5).
 - **Fun Pass additions (v0.2–v0.7):** the frontier (fog, a growing border, discoveries and rumours), births, Family Boons, marriage that merges lineages, Fishers, seasons, settlement ranks, Valley Events and the rival. See §0 and the build log.
+- **The Renown Pass (v0.8+), superseding some of the above:**
+  - **Victory is a renown race:** first to 1,200 renown, or the most renown at 45:00.
+  - **Borders are living:** influence decides who holds each tile, so land can be lost. This replaces "claimed land is final".
+  - **Landmarks are held:** they pay renown every minute and can be taken.
+  - **The family system is your arsenal:** Family Deeds are call-down powers.
+  - **Lineage:** elders, deaths and legends replace "lore at 50%".
+  - **New sinks:** Great Works and Market Day.
+
+  See §0b.
 
 ---
 
@@ -41,6 +50,81 @@ A playtest of the M1 build said it plainly: *after 10–15 minutes it gets borin
 - No event drought over 20 s.
 - The border is still moving in the last third of the game.
 - Idle adults under 15%.
+
+---
+
+## 0b. The Renown Pass (v0.8): from a checklist to a contest
+
+The second playtest verdict: *better, but at about 20 minutes it turns repetitive. Resources pile up, workers go idle, and progress is just population and territory targets.* We revisited the Battle Drones v4 lesson: "make it a LOT more fun" worked because the fun was **measured** over thousands of AI-vs-AI games, and because the changes added *decisions with stakes*: openers, call-down powers, contested objectives and comebacks. The diagnosis, measured with fair AI-vs-AI duels (both bots at the same think rate):
+
+| Why minute 20 got boring | Evidence (v0.7.1 duel, seed 1) | The fix |
+|---|---|---|
+| **The map froze.** Claimed land was final, so once the two borders met there was nothing left to push. | Territory flat from 18:00 to 40:00 at 6,247 tiles. | **Living borders.** Influence decides each tile, so towers, homes of great families and festivals push and pull the line all game. |
+| **The race was a checklist.** Chapters ticked off population and land targets; the bot "won" at about 20 min and nothing changed after. | Victory at 19:35, then 20 minutes of births and marriages. | **A renown race.** Renown comes from many sources, so there are many ways to win, with a 45:00 clock. |
+| **Nothing to spend on.** Goods only fed construction and stomachs. | About 900 goods idle in stores at 20:00, 2,000 logs at 30:00. | **Sinks with stakes.** Great Works (unique, raced, a crew of six), Market Day (sell for renown, with a glut that recovers), frontier towers that get dearer, and deed costs. |
+| **Idle hands.** Population outgrew the jobs. | 55 of 90 adults idle at 30:00. | **Family businesses** (workplaces take a crew as their trade grows), Great Work crews, and elders who retire. |
+| **Families were passive.** Boons were small stat bonuses; marriages scrolled past in the log. | 20 "a new household is founded" lines and no family decisions after 15:00. | **Family Deeds.** Your four greatest houses each lend a call-down power, shaped by their craft and boons. **Lineage:** founders grow old, teach, die and become legends. |
+
+### The systems (all data-driven, all through Commands)
+- **Living borders** (`territory.ts`). Every finished building with a `claim` radius radiates influence with a `power` that falls off with distance:
+
+  | Source | Influence |
+  |---|---|
+  | The hall | Grows with rank: radius +4 and power +30 per rank |
+  | Lookout | 8 tiles, power 60 |
+  | Watchtower | 12 tiles, power 100 |
+  | Outpost | 7 tiles, power 70 |
+  | Homes | 4–5 tiles, power 30–40, +15 per Master living there |
+  | Great Works | 10–12 tiles, power 120–140 |
+  | Festivals | Temporary |
+  | Standing Stones | Their holder gets an aura |
+
+  How it plays out:
+  - **Who holds a tile:** each tile goes to the strongest influence. A challenger needs a margin of 10 to take a held tile, and land nobody contests stays with its holder.
+  - **Footprints are safe:** a building's footprint and entrance can never be lost.
+  - **Price of pushing:** each frontier tower costs 25% more than the last.
+  - **When it updates:** borders are recomputed every 2 s and whenever a claim building finishes.
+- **Landmarks and renown** (`renown.ts`, `DISCOVERIES[].renown`). Grove and oakwood pay +2★/min, outcrops +4 and Standing Stones +5 while you hold them. Taking one from the rival pays +10 once.
+  - **Other sources:** discoveries 8, objectives 5, a family's first Master in a craft 10, legends 15, Great Works 100, Market Day lots 2–6, festivals 5, and 1★/min per 800 tiles of land.
+  - **Ranks:** Landfall (the tutorial) gives Hamlet, 300 renown gives Village, 700 gives Town, and **1,200 wins**. At 45:00 the most renowned settlement wins.
+- **Family Deeds** (`deeds.ts`). The council is each deed's most prestigious family, the top four by prestige. Prestige counts members, their tiers, deeds done and legends left.
+
+  | Deed | Comes from | Effect |
+  |---|---|---|
+  | Raise | Masons, Master Builders | Finishes a site, or a quarter of a Great Work |
+  | Timber Drive | Carpenters | Woodcraft 3× for 45 s, saplings grow instantly |
+  | Harvest Home | Gatherers | Food burst, husbandry 2× |
+  | Expedition | Wanderlust, Keen Eyes, Fleet-footed | Plants an Outpost up to 18 tiles past the border; each one makes the next dearer |
+  | Festival | Big Hearts, Twins | Influence surge for 60 s at your border |
+  | Lessons | Good Teachers, Quick Learners | Every adult who knows the craft gains 60–90 XP |
+
+  Rules:
+  - **Strength:** a Master in the family makes its deed stronger.
+  - **Cooldowns:** 110–170 s.
+  - **Comeback lever:** a settlement 120+ renown behind recharges 30% faster.
+  - **Mead Hall perk:** a further 30% faster.
+
+  Breeding families is now how you pick your powers.
+- **Great Works** (`works.ts`). The Stone Circle (held landmarks pay 1.5×), the Mead Hall (deeds recharge faster) and the Great Granary (winter loses its bite).
+  - **One of each per valley:** the first to finish gets 100 renown and the perk. The other's site is abandoned and half its goods come home.
+  - **Size:** 3×3 with a crew of six builders, so they soak up the late game's goods and idle hands.
+- **Market Day** (`market.ts`, from Hamlet). Sell 20 of anything for 2–6 renown. Each sale gluts that good by 25%, recovering 1% every 2 s, so it's a trickle and never a tap. Over-production always has a use.
+- **Family businesses.** A workplace takes 1 + its tier workers (up to 3), preferring the head worker's kin. Mastering a craft visibly grows the business.
+- **Lineage.** At 6 years old settlers become elders: they stop working and teach their family's adults their best craft (4 XP every 10 s). They die between 7.4 and 8.9 years. A Master's death leaves a **legend**: +10% speed in that craft for the whole settlement (up to 3 legends per craft), +15 renown and glory for the family. The founders die around 30 minutes in, a mid-to-late-game drama beat.
+
+### Measured (16 fair AI-vs-AI duels, `npm run sim -- --seed 1 --minutes 46 --games 16 --think 160`)
+
+| Metric | v0.7.1 | v0.8.0 | Target |
+|---|---|---|---|
+| Game length (median, min–max) | about 20 min, then nothing | 29.9 (22.4–33.9) min | 30–40 |
+| Player : rival wins | (no duel mode) | 8 : 8 | fair |
+| Lead changes per game | 0 | 2.0 | ≥ 2 |
+| Comeback wins (winner was ≥ 100 behind) | 0 | 3 of 16 | 25%+ |
+| Landmarks changing hands per game | 0 | 2.2 | ≥ 3 |
+| Idle adults | 11% (55% late) | 13% | < 15% |
+| Longest gap between major beats | 75 s | 61 s | < 90 s |
+
+Player renown by source (average): landmarks 386, masters 191, Great Works 163, Market Day 159, legends 82, discoveries 72, land 71, goals 50, deeds 11. No single source dominates.
 
 ---
 
@@ -628,3 +712,35 @@ Previously queued offers could also expire unseen; that's fixed too. Plural surn
 | Average population | about 130 | about 148 |
 
 Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player about 31%, Normal (160) about 56% and Relaxed (240) about 81%.
+
+### v0.8.0 The Renown Pass: living borders, landmarks, Family Deeds, Great Works, lineage (2026-10-28)
+- **Why:** the second playtest said minute 20+ was repetitive: stuff piled up, workers idled, and progress was population and land targets. See §0b for the measured diagnosis.
+- **Built:**
+  - influence borders;
+  - landmarks that pay renown and can be taken;
+  - the renown race with a 45:00 clock and a winner on the higher score (never on player order);
+  - Family Deeds and the council of Great Houses;
+  - Outposts;
+  - the Great Works race;
+  - Market Day;
+  - family-business crews;
+  - elders, deaths and legends;
+  - escalating tower costs.
+- **UI:**
+  - a renown race bar with rates and the clock;
+  - a Great Houses deed bar (Z/X/C/V) with cooldown rings and a targeting bar;
+  - the Market popover;
+  - landmark pins and banners in the holder's colour;
+  - festival rings on the ground;
+  - "+N ★" floaters;
+  - an after-action report (renown by source, the chronicle, legends).
+- **New art:** models for the Outpost, Stone Circle, Mead Hall and Great Granary, and five icons generated with the asset pipeline.
+- **Harness:** `npm run sim` takes `--think` for fair duels and reports the length distribution, lead changes, comebacks, landmark flips, stock at 10/20/30 min and renown by source.
+- **Bugs and stalls the duels caught:**
+  - **Ranks too fast:** every Master paid renown, so Hamlet came at 5 min. Now only a family's first Master in a craft pays.
+  - **Expedition spam:** a rival raised 11 outposts. Now the council holds each deed once and outposts get dearer.
+  - **The bot's tower spam was useless** (25 Watchtowers that could never take a landmark). It now gives up a target after 3 towers.
+  - **The player bot never built a Lookout on seed 3:** with a wider border, the top 400 placement candidates were all edge tiles that failed. Candidates are now pre-filtered.
+  - **Placement was 7× slower** because a flood fill ran per candidate. It now uses an exact ring-connectivity fast path with a cached reachability map.
+  - **Outposts could be wasted inside your own land.** The tap is now checked, with a reason shown.
+

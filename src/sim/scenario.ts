@@ -1,6 +1,8 @@
 import { BUILDINGS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Skill } from './defs';
 import { offerBoon } from './boons';
-import { claimArea } from './territory';
+import { recomputeTerritory } from './territory';
+import { addRenown } from './renown';
+import { BALANCE, secs } from './balance';
 import { TIER_XP, tradeTitle } from './trades';
 import type { World } from './world';
 
@@ -29,6 +31,8 @@ export interface Scenario {
   victory: 'all' | 'any' | 'none';
   /** A rival settlement races you from the far side of the valley (first to finish wins). */
   rival?: boolean;
+  /** When the clock reaches this tick, the settlement with the most renown wins. */
+  timeLimit?: number;
 }
 
 export const SCENARIOS: Record<string, Scenario> = {};
@@ -93,6 +97,22 @@ export const objectives = {
       },
     };
   },
+  /** The score: renown from landmarks, land, discoveries, Masters, deeds and works. */
+  renown(n: number): Objective {
+    return {
+      id: `renown-${n}`,
+      label: `Earn ${n.toLocaleString('en-GB')} renown`,
+      evaluate: (w, o) => ({ current: Math.min(n, w.players[o].renown), target: n }),
+    };
+  },
+  /** Landmarks held at the same moment. */
+  landmarks(n: number): Objective {
+    return {
+      id: `landmarks-${n}`,
+      label: n === 1 ? 'Hold a landmark' : `Hold ${n} landmarks at once`,
+      evaluate: (w, o) => ({ current: w.sites.filter((s) => s.heldBy === o).length, target: n }),
+    };
+  },
   discoveries(n: number): Objective {
     return {
       id: `claim-${n}`,
@@ -119,10 +139,12 @@ const with_ = (o: Objective, chapter: string, hint: string): Objective => ({ ...
 export const LANDFALL: Scenario = {
   id: 'landfall',
   name: 'The First Valley',
-  description: 'Found a camp, explore the valley and raise it to a renowned town before your rival does.',
+  description: 'Found a camp, explore the valley and win more renown than your rival.',
   victory: 'all',
   rival: true,
-  // Each chapter is an age-up: finishing Landfall makes the camp a Hamlet, and so on.
+  timeLimit: secs(45 * 60),
+  // Landfall teaches the basics; after that each rank is earned with renown, and the first
+  // settlement to 1,000 renown (or the one with most when the clock runs out) wins.
   objectives: [
     with_(objectives.building('woodcutter'), 'Landfall', 'Pick Woodcutter below, then place it beside the trees.'),
     with_(objectives.building('forager'), 'Landfall', 'Foragers feed everyone. Place one near the blue berry bushes.'),
@@ -131,21 +153,12 @@ export const LANDFALL: Scenario = {
     with_(objectives.building('lookout'), 'Landfall', 'Build a Lookout near your border to push it outwards.'),
     with_(objectives.discoveries(1), 'Landfall', 'See the golden light? Grow your border over it to claim what lies there.'),
     with_(objectives.population(12), 'Landfall', 'Keep food stocked and huts free, and families will come.'),
-    with_(objectives.trade('woodcraft', 1), 'Hamlet', 'Your woodcutter learns with every log. Keep them chopping.'),
-    with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: it turns logs into planks.'),
-    with_(objectives.winters(1), 'Hamlet', 'Winter: bushes sleep and folk eat more. Stockpile food; Fishers work all year.'),
-    with_(objectives.building('watchtower'), 'Hamlet', 'Watchtowers claim far more land than Lookouts.'),
-    with_(objectives.discoveries(3), 'Hamlet', 'Chain towers across the valley. Each discovery is a big boost.'),
-    with_(objectives.population(25), 'Hamlet', 'Marriages found new households; free huts let families grow.'),
-    with_(objectives.masters(1), 'Village', 'Boons like Quick Learners, and inherited skill, make Masters sooner.'),
-    with_(objectives.building('longhouse'), 'Village', 'A Longhouse lets one family grow to eight.'),
-    with_(objectives.winters(2), 'Village', 'Another winter: keep the larder full.'),
-    with_(objectives.discoveries(5), 'Village', 'The richest prizes lie far out: oakwoods, outcrops, standing stones.'),
-    with_(objectives.population(50), 'Village', 'Grow your village to fifty souls.'),
-    with_(objectives.masters(4), 'Renown', 'Four Masters make a town famous.'),
-    with_(objectives.land(3000), 'Renown', 'Out-build your rival’s border: Watchtowers claim the most land.'),
-    with_(objectives.discoveries(7), 'Renown', 'Race your rival for the prizes in the middle of the valley.'),
-    with_(objectives.population(90), 'Renown', 'Ninety folk: a true town.'),
+    with_(objectives.landmarks(1), 'Hamlet', 'Landmarks (grove, oakwood, outcrop, stones) pay renown every minute you hold them.'),
+    with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: planks build Watchtowers.'),
+    with_(objectives.renown(300), 'Hamlet', 'Renown: landmarks, land, discoveries, Masters, deeds and Market Day all add to it.'),
+    with_(objectives.building('watchtower'), 'Village', 'Watchtowers push hard: build them at the border to take land from your rival.'),
+    with_(objectives.renown(700), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
+    with_(objectives.renown(1200), 'Town', 'First to 1,200 renown wins. Take landmarks back if your rival has them!'),
   ],
 };
 
@@ -175,6 +188,7 @@ export function objectiveStatus(world: World, owner: number): ObjectiveStatus[] 
 
 export function evaluateScenario(world: World): void {
   const state = world.scenarioState;
+  const winners: number[] = [];
   for (const player of world.players) {
     const done = (state.done[player.id] ??= {});
     for (const o of world.scenario.objectives) {
@@ -183,6 +197,7 @@ export function evaluateScenario(world: World): void {
       if (p.current >= p.target) {
         done[o.id] = true;
         world.emit({ type: 'objectiveComplete', owner: player.id, label: o.label });
+        if (!o.id.startsWith('renown')) addRenown(world, player.id, BALANCE.renown.objective, 'goals');
         const chapter = o.chapter;
         const rest = world.scenario.objectives.filter((x) => x.chapter === chapter);
         if (chapter && rest.every((x) => done[x.id])) {
@@ -196,12 +211,18 @@ export function evaluateScenario(world: World): void {
     }
     if (state.winner >= 0 || world.scenario.victory === 'none' || !world.scenario.objectives.length) continue;
     const results = world.scenario.objectives.map((o) => !!done[o.id]);
-    const won = world.scenario.victory === 'all' ? results.every(Boolean) : results.some(Boolean);
-    if (won) {
-      state.winner = player.id;
-      world.emit({ type: 'victory', scenario: world.scenario.name, winner: player.id });
-    }
+    if (world.scenario.victory === 'all' ? results.every(Boolean) : results.some(Boolean)) winners.push(player.id);
   }
+  if (state.winner >= 0 || world.scenario.victory === 'none') return;
+  // The clock runs out: whoever has the most renown wins.
+  const timeUp = !!world.scenario.timeLimit && world.tick >= world.scenario.timeLimit;
+  if (timeUp && !winners.length) winners.push(...world.players.map((p) => p.id));
+  if (!winners.length) return;
+  // Same-moment finishes (or time) go to the higher renown, never to whoever is first in the list.
+  const best = Math.max(...winners.map((o) => world.players[o].renown));
+  const top = winners.filter((o) => world.players[o].renown === best);
+  state.winner = top.length === 1 ? top[0] : top[world.rng.int(top.length)];
+  world.emit({ type: 'victory', scenario: world.scenario.name, winner: state.winner, byTime: timeUp });
 }
 
 /**
@@ -216,7 +237,8 @@ export function rankUp(world: World, owner: number, rank: number): void {
   world.emit({ type: 'rankUp', owner, rank, unlocks });
   if (!wagon) return;
   wagon.tier = rank;
-  claimArea(world, owner, wagon.x + 1, wagon.y + 1, (BUILDINGS.wagon.claim ?? 0) + rank * 4);
+  // The hall's influence grows with the rank (see influenceSources).
+  recomputeTerritory(world);
   // The household with the most folk is honoured with a boon.
   const counts = new Map<number, number>();
   for (const s of world.settlers.values()) if (s.owner === owner) counts.set(s.familyId, (counts.get(s.familyId) ?? 0) + 1);

@@ -4,9 +4,8 @@ import { ICON } from '../render/overlay';
 import { BUILDINGS, BUILD_MENU, DISCOVERIES, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
 import { BOONS, BOON_TIMEOUT, familyTitle } from '../sim/boons';
-import { BALANCE, TICK_HZ } from '../sim/balance';
+import { BALANCE, TICK_HZ, secs } from '../sim/balance';
 import { canAfford, eventDef } from '../sim/events';
-import { objectiveStatus } from '../sim/scenario';
 import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
 import type { Family, World } from '../sim/world';
 import { CREST_COLORS, plural } from '../sim/population';
@@ -15,8 +14,13 @@ import { settings } from '../settings';
 import type { Shell } from '../shell';
 import { ageYears, describeSettler, formatTime } from './describe';
 import { HowTo, SettingsPanel } from './Screens';
-import { HOTKEYS } from '../input/input';
+import { DEED_KEYS, HOTKEYS } from '../input/input';
 import { lockLabel } from '../sim/commands';
+import { DEEDS, council, deedCost, deedOf, deedPower, deedWait, prestige } from '../sim/deeds';
+import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../sim/market';
+import { renownRate } from '../sim/renown';
+import { workOwner } from '../sim/works';
+import { workSlots } from '../sim/settlers';
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
@@ -34,7 +38,9 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       <EventCard game={game} />
       <Toasts game={game} />
       <InfoPanel game={game} />
-      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : <BuildBar game={game} />}
+      {game.marketOpen.value && <Market game={game} />}
+      {game.mode.value.kind === 'select' && <Council game={game} />}
+      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : <BuildBar game={game} />}
       <Banner game={game} />
       <Victory game={game} />
       {game.menuOpen.value && <PauseMenu game={game} shell={shell} />}
@@ -82,6 +88,11 @@ function TopBar({ game }: { game: Game }) {
           <b>{pop}</b>
           <small>/{housing}</small>
         </span>
+        {marketOpen(w, PLAYER) && (
+          <button class={`market-btn ${game.marketOpen.value ? 'on' : ''}`} onClick={() => (game.marketOpen.value = !game.marketOpen.value)} title="Market Day: sell what piles up for renown">
+            ⚖️ <span>Market</span>
+          </button>
+        )}
         {hungry && <span class="hungry pulse">Hungry!</span>}
         {idle >= 3 && (
           <span class="idle-chip" title={`${idle} adults have nothing to do. Build workplaces (or more homes for families to grow).`}>
@@ -199,33 +210,171 @@ function FamilyLine({ w, fam }: { w: World; fam: Family }) {
         </p>
       )}
       {parents.length === 2 && <p class="muted small">A household joining the {parents[0]} and {parents[1]} lines.</p>}
+      <FamilyDeed w={w} fam={fam} />
     </div>
   );
 }
 
-/** Both settlements' progress through the chapters: the race at a glance. */
+/** The deed a family would lend the council, and whether it sits there. */
+function FamilyDeed({ w, fam }: { w: World; fam: Family }) {
+  const id = deedOf(fam);
+  const seated = council(w, fam.owner).includes(fam);
+  return (
+    <p class="muted small fam-deed">
+      Prestige {prestige(w, fam)}
+      {id ? (
+        <>
+          {' · '}Deed: {DEEDS[id].icon} <b>{DEEDS[id].name}</b> {seated ? '(on the council)' : '(another house lends it)'}
+        </>
+      ) : (
+        ' · No deed yet: a Journeyman in the family, or a boon, brings one'
+      )}
+    </p>
+  );
+}
+
+/** The renown race at a glance: both scores, their rates, the goal and the clock. */
 function RaceBar({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
-  if (!w.players[1]) return null;
-  const total = w.scenario.objectives.length;
+  const goal = renownGoal(w);
+  if (!goal) return null;
+  const limit = w.scenario.timeLimit ?? 0;
+  const left = limit ? Math.max(0, limit - w.tick) : Infinity;
   const row = (owner: number, label: string) => {
-    const st = objectiveStatus(w, owner);
-    const done = st.filter((o) => o.done).length;
+    const p = w.players[owner];
+    const rate = renownRate(w, owner);
+    const perMin = rate.landmarks + rate.land;
+    const held = w.sites.filter((st) => st.heldBy === owner).length;
     return (
-      <div class={`race-row ${owner === PLAYER ? 'me' : 'them'}`} title={`${label}: ${done}/${total} goals`}>
+      <div class={`race-row ${owner === PLAYER ? 'me' : 'them'}`} title={`${label}: ${p.renown} renown · ${held} landmarks held · +${perMin}/min from landmarks and land`}>
         <span class="race-name">{label}</span>
         <div class="race-track">
-          <div style={{ width: `${(done / total) * 100}%` }} />
+          <div style={{ width: `${Math.min(100, (p.renown / goal) * 100)}%` }} />
         </div>
-        <span class="race-rank">{RANK_NAMES[w.players[owner].rank]}</span>
+        <span class="race-score">
+          {p.renown}
+          <small>★</small>
+        </span>
+        <span class="race-rate">+{perMin}/m</span>
+        <span class="race-rank">{RANK_NAMES[p.rank]}</span>
       </div>
     );
   };
   return (
-    <section class="race" aria-label="The race">
+    <section class="race" aria-label="The renown race">
+      <div class="race-head">
+        <span>
+          First to <b>{goal.toLocaleString('en-GB')}★</b> renown
+        </span>
+        {left <= secs(5 * 60) ? <span class="race-clock pulse">⏳ {formatTime(left)} left</span> : limit ? <span class="race-clock">ends {formatTime(limit)}</span> : null}
+      </div>
       {row(PLAYER, 'You')}
-      {row(1, 'Rival')}
+      {w.players[1] && row(1, 'Rival')}
+    </section>
+  );
+}
+
+const renownGoal = (w: World) => {
+  const o = [...w.scenario.objectives].reverse().find((x) => x.id.startsWith('renown-'));
+  return o ? Number(o.id.slice(7)) : 0;
+};
+
+/** The council of great houses: each lends its deed, a call-down power with a cooldown. */
+function Council({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const w = game.world;
+  const seats = council(w, PLAYER);
+  if (!seats.length) return null;
+  return (
+    <section class="council" aria-label="Great Houses">
+      <span class="council-label">Great Houses</span>
+      {seats.map((fam, i) => {
+        const id = deedOf(fam)!;
+        const d = DEEDS[id];
+        const wait = deedWait(w, fam);
+        const cost = deedCost(w, PLAYER, id);
+        const ok = canAfford(w, PLAYER, cost);
+        const ready = wait === 0 && ok;
+        const pct = wait ? 1 - wait / Math.max(1, d.cooldown) : 1;
+        const costText = Object.entries(cost).map(([g, n]) => `${n} ${g}`).join(', ');
+        return (
+          <button
+            key={fam.id}
+            class={`deed ${ready ? 'ready' : ''}`}
+            disabled={!ready}
+            onClick={() => game.useDeed(fam.id)}
+            title={`${d.name} (${DEED_KEYS[i].toUpperCase()}), lent by the ${plural(fam.surname)}: ${d.blurb}${costText ? ` Costs ${costText}.` : ''}${wait ? ` Ready in ${Math.ceil(wait / TICK_HZ)}s.` : ''}`}
+          >
+            <span class="deed-ring" style={{ background: `conic-gradient(var(--gold) ${pct * 360}deg, rgba(0,0,0,0.35) 0)` }}>
+              <span class="deed-icon">{d.icon}</span>
+            </span>
+            <span class="deed-name">{d.name}</span>
+            <span class="deed-fam">
+              <span class="crest" style={{ background: hex(CREST_COLORS[fam.color]) }} />
+              {fam.surname}
+              {deedPower(fam) > 1 && <b title="A Master's deed: stronger"> ★</b>}
+            </span>
+            {wait > 0 ? <span class="deed-wait">{Math.ceil(wait / TICK_HZ)}s</span> : !ok ? <span class="deed-wait">{costText}</span> : <span class="hotkey">{DEED_KEYS[i].toUpperCase()}</span>}
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+/** Choosing where a targeted deed lands. */
+function DeedBar({ game }: { game: Game }) {
+  const mode = game.mode.value;
+  if (mode.kind !== 'deed') return null;
+  const d = DEEDS[mode.deed];
+  const hint =
+    mode.deed === 'expedition'
+      ? 'Tap a spot beyond your border (up to 18 tiles out) for the outpost'
+      : mode.deed === 'festival'
+        ? 'Tap a spot at your border: your influence surges there for a minute'
+        : 'Tap the construction site to raise';
+  return (
+    <div class="placebar panel">
+      <span class="deed-icon big">{d.icon}</span>
+      <div class="ptext">
+        <strong>{d.name}</strong>
+        <span class="ok">{hint}</span>
+      </div>
+      <div class="pbtns">
+        <button onClick={() => game.cancel()}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+/** Market Day: sell a lot of anything for renown; prices drop as you sell and recover. */
+function Market({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const w = game.world;
+  return (
+    <section class="market panel" aria-label="Market Day">
+      <header>
+        <strong>⚖️ Market Day</strong>
+        <button class="close" onClick={() => (game.marketOpen.value = false)} aria-label="Close">
+          ✕
+        </button>
+      </header>
+      <p class="muted small">Traders take {FAIR_LOT} at a time. Each sale floods the market for a while.</p>
+      {GOODS.map((g) => {
+        const price = fairPrice(w, PLAYER, g);
+        const have = w.stored(PLAYER, g);
+        return (
+          <div class="mk-row" key={g}>
+            <img src={ICON[g]} alt="" />
+            <span class="mk-have">{have}</span>
+            <span class={`mk-price ${price < FAIR_VALUE[g] ? 'low' : ''}`}>{price}★</span>
+            <button disabled={have < FAIR_LOT || price <= 0} onClick={() => game.sell(g)}>
+              Sell {FAIR_LOT}
+            </button>
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -290,6 +439,11 @@ function BoonTray({ game }: { game: Game }) {
             <span class="bc-icon">{BOONS[id].icon}</span>
             <strong>{BOONS[id].name}</strong>
             <span class="bc-blurb">{BOONS[id].blurb}</span>
+            {BOONS[id].deed && (
+              <span class="bc-deed">
+                Deed: {DEEDS[BOONS[id].deed!].icon} {DEEDS[BOONS[id].deed!].name}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -300,36 +454,45 @@ function BoonTray({ game }: { game: Game }) {
   );
 }
 
-/** Discoveries seen but not yet claimed, nearest first: the "where next?" list. */
+/** The "where next?" list: unclaimed discoveries and landmarks you don't hold, nearest first. */
 function Frontier({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
-  const open = w.sites.filter((s) => s.revealed & 1 && s.claimedBy === NO_OWNER);
-  if (!open.length) return null;
+  const open = w.sites.filter((s) => s.revealed & 1 && (s.claimedBy === NO_OWNER || (DISCOVERIES[s.kind].renown && s.heldBy !== PLAYER)));
+  const mine = w.sites.filter((s) => s.heldBy === PLAYER).length;
+  if (!open.length && !mine) return null;
   const box = territoryBox(w, PLAYER);
   const gap = (x: number, y: number) => {
     let best = Infinity;
     for (let ty = box.y0; ty <= box.y1; ty += 1)
-      for (let tx = box.x0; tx <= box.x1; tx += 1) if (w.territory[w.idx(tx, ty)] === PLAYER) best = Math.min(best, Math.max(Math.abs(tx - x), Math.abs(ty - y)));
+      for (let tx = box.x0; tx <= box.x1; tx += 1) if (w.territory[w.idx(tx, ty)] === PLAYER) best = Math.max(0, Math.min(best, Math.max(Math.abs(tx - x), Math.abs(ty - y))));
     return best;
   };
   const rows = open.map((s) => ({ s, d: gap(s.x, s.y) })).sort((a, b) => a.d - b.d).slice(0, 4);
   return (
     <section class="frontier panel" aria-label="Out in the wild">
-      <h3>Out in the wild</h3>
-      {rows.map(({ s, d }) => (
-        <button key={s.id} class="frontier-row" onClick={() => game.focusSite(s.id)} title={DISCOVERIES[s.kind].blurb}>
-          <span class="fr-icon">{DISCOVERIES[s.kind].icon}</span>
-          <span class="fr-name">{DISCOVERIES[s.kind].name}</span>
-          <span class="fr-dist">{d} tiles out</span>
-        </button>
-      ))}
+      <h3>
+        Out in the wild {mine > 0 && <small class="held">· you hold {mine} landmark{mine > 1 ? 's' : ''}</small>}
+      </h3>
+      {rows.map(({ s, d }) => {
+        const def = DISCOVERIES[s.kind];
+        return (
+          <button key={s.id} class={`frontier-row ${s.heldBy > 0 ? 'theirs' : ''}`} onClick={() => game.focusSite(s.id)} title={def.blurb}>
+            <span class="fr-icon">{def.icon}</span>
+            <span class="fr-name">
+              {def.name}
+              {def.renown ? <small> +{def.renown}★/m{s.heldBy > 0 ? ' · rival’s' : ''}</small> : null}
+            </span>
+            <span class="fr-dist">{d} tiles out</span>
+          </button>
+        );
+      })}
     </section>
   );
 }
 
-function costChips(type: BuildingType) {
-  return Object.entries(BUILDINGS[type].cost).map(([g, n]) => (
+function costChips(type: BuildingType, cost = BUILDINGS[type].cost) {
+  return Object.entries(cost).map(([g, n]) => (
     <span class="cost" key={g}>
       <img src={ICON[g]} alt={GOOD_INFO[g as Good].name} />
       {n}
@@ -345,21 +508,27 @@ function BuildBar({ game }: { game: Game }) {
       {BUILD_MENU.map((t, i) => {
         const def = BUILDINGS[t];
         const unlocked = w.isUnlocked(PLAYER, t);
-        const affordable = Object.entries(def.cost).every(([g, n]) => w.stored(PLAYER, g as Good) >= (n ?? 0));
+        // Great Works appear once the settlement can raise them, marked with who has them.
+        if (def.great && !unlocked) return null;
+        const holder = def.great ? workOwner(w, t) : -1;
+        const begun = def.great && w.countBuildings(PLAYER, t, true) > 0;
+        const affordable = w.canAffordBuilding(PLAYER, t);
         const lock = unlocked ? '' : lockLabel(w, PLAYER, t);
         const reqText = `Needs a ${lock}`;
         return (
           <button
             key={t}
-            class={`card ${affordable ? '' : 'short'} ${unlocked ? '' : 'locked'}`}
-            onClick={() => unlocked && game.startPlacing(t)}
-            aria-disabled={!unlocked}
-            title={unlocked ? `${def.name} (${HOTKEYS[i]}): ${def.blurb}` : `${def.name}: ${reqText}`}
+            class={`card ${affordable || def.great ? '' : 'short'} ${unlocked && holder < 0 && !begun ? '' : 'locked'} ${def.great ? 'great' : ''}`}
+            onClick={() => unlocked && holder < 0 && !begun && game.startPlacing(t)}
+            aria-disabled={!unlocked || holder >= 0 || begun}
+            title={def.great ? `${def.name}: ${def.blurb} Perk: ${def.great.perk} +${def.great.renown} renown.` : unlocked ? `${def.name} (${HOTKEYS[i]}): ${def.blurb}` : `${def.name}: ${reqText}`}
           >
-            <span class="hotkey">{HOTKEYS[i]}</span>
+            {HOTKEYS[i] && <span class="hotkey">{HOTKEYS[i]}</span>}
             <img class="card-icon" src={icon(t)} alt="" />
-            <span class="card-name">{def.name}</span>
-            <span class="card-cost">{unlocked ? costChips(t) : <span class="lock">🔒 {lock.replace(/^Journeyman /, '')}</span>}</span>
+            <span class="card-name">{def.name.replace(/^The /, '')}</span>
+            <span class="card-cost">
+              {holder === PLAYER ? <span class="lock">✓ Yours</span> : holder >= 0 ? <span class="lock">✗ Rival’s</span> : begun ? <span class="lock">Under way</span> : unlocked ? costChips(t, w.buildCost(PLAYER, t)) : <span class="lock">🔒 {lock.replace(/^Journeyman /, '')}</span>}
+            </span>
           </button>
         );
       })}
@@ -439,7 +608,7 @@ function InfoPanel({ game }: { game: Game }) {
           {s.name} {fam?.surname}
         </h3>
         <p class="sub">
-          {s.child ? 'Child' : 'Adult'} · age {ageYears(s)}
+          {s.child ? 'Child' : s.elder ? 'Elder (teaches the family)' : 'Adult'} · age {ageYears(s)}
         </p>
         <p class="doing">{describeSettler(w, s)}</p>
         {fam && <FamilyLine w={w} fam={fam} />}
@@ -468,13 +637,18 @@ function InfoPanel({ game }: { game: Game }) {
         {trade && b.tier > 0 && <span class={`tier-badge t${b.tier}`}>{trade.titles[b.tier]}</span>}
       </h3>
       <p class={`sub ${b.alert ? 'alert' : ''}`}>{b.done ? b.status || def.blurb : 'Construction site'}</p>
+      {def.great && (
+        <p class="great-perk">
+          {b.done ? 'Perk' : 'When finished'}: {def.great.perk} {!b.done && `+${def.great.renown} renown, if your rival doesn’t finish theirs first.`}
+        </p>
+      )}
       {!b.done && (
         <>
           <div class="bar">
             <div style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
           <p class="mats">
-            {Object.entries(def.cost).map(([g, n]) => (
+            {Object.entries(b.cost).map(([g, n]) => (
               <span key={g}>
                 <img src={ICON[g]} alt="" /> {b.delivered[g as Good]}/{n}
               </span>
@@ -489,6 +663,10 @@ function InfoPanel({ game }: { game: Game }) {
             <>
               <p>
                 Worker: <strong>{worker.name} {w.families.get(worker.familyId)?.surname ?? ''}</strong>
+                <span class="muted small">
+                  {' '}
+                  · crew {[...w.settlers.values()].filter((o) => o.job.kind === 'work' && o.job.buildingId === b.id).length}/{workSlots(b)}
+                </span>
               </p>
               {trade && (
                 <div class="skill">
@@ -583,32 +761,75 @@ function Banner({ game }: { game: Game }) {
   );
 }
 
+const SOURCE_NAMES: Record<string, string> = {
+  landmarks: 'Landmarks',
+  land: 'Land',
+  discoveries: 'Discoveries',
+  masters: 'Masters',
+  goals: 'Goals',
+  events: 'Events',
+  deeds: 'Deeds',
+  legends: 'Legends',
+  works: 'Great Works',
+  trade: 'Market Day',
+};
+
 function Victory({ game }: { game: Game }) {
   useWorldRefresh(game);
   const v = game.victory.value;
   if (!v) return null;
   const w = game.world;
+  const me = w.players[PLAYER];
+  const them = w.players[1];
+  const won = v.winner === PLAYER;
+  const fams = [...w.families.values()].filter((f) => f.owner === PLAYER);
+  const greatest = fams.sort((a, b) => prestige(w, b) - prestige(w, a))[0];
+  const sources = Object.entries(me.renownBy).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+  const works = BUILD_MENU.filter((t) => BUILDINGS[t].great && workOwner(w, t) === PLAYER);
   return (
     <div class="modal-wrap">
-      <div class="modal panel celebrate">
+      <div class="modal panel celebrate report">
         <img class="modal-icon" src={ICON.hut} alt="" />
-        {v.winner === PLAYER ? (
-          <>
-            <h2>{v.scenario}: you win!</h2>
-            <p>
-              In {formatTime(w.tick)} your folk turned a lone wagon into a town of {w.population(PLAYER)} across {[...w.families.values()].filter((f) => f.owner === PLAYER).length} families, and
-              won renown before your rival.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2>The rival town won renown first</h2>
-            <p>
-              After {formatTime(w.tick)}, the settlement across the valley completed every chapter before you. Your {w.population(PLAYER)} folk carry on. Try a bolder frontier next time.
-            </p>
-          </>
-        )}
-        <p class="muted">Keep building as long as you like.</p>
+        <h2>{won ? `${v.scenario}: your folk are renowned!` : 'Your rival is the valley’s renowned town'}</h2>
+        <p>
+          {v.byTime ? 'The valley gathered at the end of the season to judge. ' : ''}
+          After {formatTime(w.tick)}: <b>{me.renown}★</b> to your rival’s <b>{them?.renown ?? 0}★</b>.
+        </p>
+        <div class="report-grid">
+          <div>
+            <h4>Where your renown came from</h4>
+            {sources.map(([k, n]) => (
+              <div class="rep-row" key={k}>
+                <span>{SOURCE_NAMES[k] ?? k}</span>
+                <div class="rep-bar">
+                  <div style={{ width: `${Math.round(((n ?? 0) / Math.max(1, me.renown)) * 100)}%` }} />
+                </div>
+                <b>{n}</b>
+              </div>
+            ))}
+          </div>
+          <div>
+            <h4>The chronicle</h4>
+            <ul class="chronicle">
+              {greatest && (
+                <li>
+                  Greatest house: the {plural(greatest.surname)} ({familyTitle(greatest, 'folk')})
+                </li>
+              )}
+              <li>
+                {w.population(PLAYER)} folk in {fams.length} households · {me.deedsUsed} deeds done
+              </li>
+              <li>{me.taken} landmarks taken from your rival</li>
+              {works.length > 0 && <li>Raised {works.map((t) => BUILDINGS[t].name).join(' and ')}</li>}
+              {me.legends.slice(0, 4).map((l) => (
+                <li key={l.tick}>
+                  Legend: {l.name} {l.surname}, Master of {TRADES[l.skill].name.toLowerCase()}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <p class="muted">{won ? 'Keep building as long as you like.' : 'Your folk carry on. A new valley awaits whenever you want a rematch.'}</p>
         <button class="primary big" onClick={() => (game.victory.value = null)}>
           Keep playing
         </button>
