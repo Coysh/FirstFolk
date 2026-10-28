@@ -30,25 +30,26 @@ const real = args.includes('--real');
 const useOrigins = real || args.includes('--origins');
 const useOmens = real || args.includes('--omens');
 const style = (str('style', '') || undefined) as BotStyle | undefined;
+const ablate = str('ablate', '') ? str('ablate', '').split(',') : undefined;
 const rivalStyle = (str('rival-style', '') || undefined) as BotStyle | undefined;
 
 if (args.includes('--duel')) {
   // One game for the matrix: a compact report on stdout.
-  const r = playtest(seed, minutes, { think, difficulty, origin: useOrigins ? ORIGIN_IDS[arg('game', 0) % ORIGIN_IDS.length] : undefined, omens: useOmens, style, rivalStyle });
+  const r = playtest(seed, minutes, { think, difficulty, origin: useOrigins ? ORIGIN_IDS[arg('game', 0) % ORIGIN_IDS.length] : undefined, omens: useOmens, style, rivalStyle, ablate });
   const { timeline: _t, populationByMinute: _p, territoryByMinute: _tr, ...rest } = r;
   console.log('JSON:' + JSON.stringify(rest));
   process.exit(0);
 }
 if (args.includes('--matrix')) {
   const styles = (str('styles', '') ? str('styles', '').split(',') : BOT_STYLES) as BotStyle[];
-  await runMatrix({ styles, seed, games, minutes, think, real, jobs: arg('jobs', 12), passthrough: args.filter((a) => a === '--origins' || a === '--omens') });
+  await runMatrix({ styles, seed, games, minutes, think, real, jobs: arg('jobs', 12), passthrough: [...args.filter((a) => a === '--origins' || a === '--omens'), ...(ablate ? ['--ablate', ablate.join(',')] : [])] });
   process.exit(0);
 }
 
 const reports: ReturnType<typeof playtest>[] = [];
 for (let g = 0; g < games; g++) {
   const t0 = performance.now();
-  const r = playtest(seed + g, minutes, { think, difficulty, origin: useOrigins ? ORIGIN_IDS[g % ORIGIN_IDS.length] : undefined, omens: useOmens, style, rivalStyle });
+  const r = playtest(seed + g, minutes, { think, difficulty, origin: useOrigins ? ORIGIN_IDS[g % ORIGIN_IDS.length] : undefined, omens: useOmens, style, rivalStyle, ablate });
   reports.push(r);
   if (games === 1) {
     console.log(r.timeline.join('\n'));
@@ -90,6 +91,14 @@ if (games > 1) {
     const rel = (r: (typeof reports)[0], from: number) => r.actionByMinute.slice(Math.max(0, r.actionByMinute.length - from - 10), Math.max(0, r.actionByMinute.length - from));
     const mean = (xs: number[][]) => (xs.reduce((n, a) => n + a.reduce((x, y) => x + y, 0) / Math.max(1, a.length), 0) / xs.length).toFixed(1);
     console.log(`actions/min: first 10 min ${mean(reports.map(firstTen))} · the 10 min before the last ${mean(reports.map((r) => rel(r, 10)))} · the LAST 10 min ${mean(reports.map(lastTen))}`);
+  }
+  // Decisions, settledness and boredom: are there choices all game, and is the game still open?
+  {
+    const mean = (xs: number[]) => (xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length)).toFixed(1);
+    const slice = (r: (typeof reports)[0], a: number, b: number) => mean(r.decisionsByMinute.slice(a, b));
+    const mid = (a: number, b: number) => mean(reports.map((r) => Number(slice(r, a, b))));
+    console.log(`decisions/min (player choices): 0-5m ${mid(0, 5)} · 5-15m ${mid(5, 15)} · 15-30m ${mid(15, 30)} · last 10 min ${mean(reports.map((r) => Number(mean(r.decisionsByMinute.slice(-11, -1)))))}`);
+    console.log(`crown lead changes ${avg((r) => r.crownLeadChanges)} (games with none ${reports.filter((r) => !r.crownLeadChanges).length}) · crown comebacks after 20:00 (winner ≥150 behind) ${reports.filter((r) => r.crownComeback >= 150).length} · settledness ${avg((r) => r.settledness)} · longest bored stretch ${avg((r) => r.longestBoredMinutes)} min (worst ${Math.max(...reports.map((r) => r.longestBoredMinutes))})`);
   }
   // How each valley plays: length, who wins, and how much bridging the bots chose.
   const byValley: Record<string, typeof reports> = {};

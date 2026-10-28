@@ -39,6 +39,18 @@ export interface PlaytestReport {
   holdingFlips: number;
   /** Moments that ask the player to look, decide or act (clashes, Crown swings, raids, story beats, claims, events), per minute. */
   actionByMinute: number[];
+  /** Choices the player made (Commands that were decisions, not chores), per minute. */
+  decisionsByMinute: number[];
+  /** The player's Crown minus the rival's, per minute (0 until the Crown has anything in it). */
+  scoreByMinute: number[];
+  /** Times the Crown lead changed hands (from minute 5, once someone has progress). */
+  crownLeadChanges: number;
+  /** Largest Crown deficit (points) the winner came back from after minute 20. */
+  crownComeback: number;
+  /** When the winner took the lead for good, as a share of the game (1 = never settled until the end). */
+  settledness: number;
+  /** The longest run of whole minutes with no decision from the player and nothing happening to them. */
+  longestBoredMinutes: number;
   renownBy: Partial<Record<string, number>>[];
   /** Challenges won by [player, rival]. */
   challenges: number[];
@@ -89,6 +101,8 @@ export interface PlaytestOptions {
   /** Bot personalities for the player and the rival (see ai/styles.ts). */
   style?: BotStyle;
   rivalStyle?: BotStyle;
+  /** Decision kinds the scripted player never takes (see OpeningBot.ablate). */
+  ablate?: string[];
 }
 
 /** Headless playtest: the scripted bot plays one game and we measure the pacing beats. */
@@ -96,6 +110,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const world = new World({ seed, difficulty: opts.difficulty, origin: opts.origin, omens: opts.omens ? rollOmens(seed) : [], rivalStyle: opts.rivalStyle });
   const bot = new OpeningBot(0, opts.think ?? 100, 0, opts.style);
   world.players[0].style = bot.style;
+  for (const a of opts.ablate ?? []) bot.ablate.add(a);
   const towers = [0, 0];
   const raids = [0, 0];
   let battles = 0;
@@ -119,8 +134,13 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   let hungryTicks = 0;
   const bridges = [0, 0];
   const actionByMinute: number[] = [];
+  const decisionsByMinute: number[] = [];
+  const scoreByMinute: number[] = [];
+  let logged = 0;
+  const isDecision = (c: { type: string; building?: string }) =>
+    ['raid', 'scout', 'bridge', 'deed', 'chooseEvent', 'chooseHouse', 'rally'].includes(c.type) || (c.type === 'place' && ['stockade', 'musterhall', 'watchtower', 'lookout', 'outpost', 'henge', 'meadhall', 'granary'].includes(c.building ?? ''));
   const isAction = (e: SimEvent) =>
-    e.type === 'clashBegan' || e.type === 'crownKeeper' || e.type === 'crownQuarter' || e.type === 'sagaBeat' || e.type === 'starfall' || e.type === 'challenge' || e.type === 'challengeWon' || e.type === 'razed' ||
+    (e.type === 'clashBegan' && (e.owner === 0 || e.defender === 0)) || e.type === 'crownKeeper' || e.type === 'crownQuarter' || e.type === 'sagaBeat' || e.type === 'starfall' || e.type === 'challenge' || e.type === 'challengeWon' || e.type === 'razed' ||
     (e.type === 'raidLaunched' && (e.owner === 0 || e.defender === 0)) || (e.type === 'holdingChanged' && (e.owner === 0 || e.from === 0)) || (e.type === 'scoutSpotted' && (e.owner === 0 || e.seer === 0)) ||
     ((e.type === 'claimed' || e.type === 'rankUp' || e.type === 'valleyEvent' || e.type === 'scoutHome' || e.type === 'deed' || e.type === 'bridgeBuilt') && e.owner === 0);
   for (let i = 0; i < total; i++) {
@@ -128,6 +148,13 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     bot.update(world);
     world.step();
     if (world.players[0].hungry) hungryTicks++;
+    for (; logged < world.commandLog.length; logged++) {
+      const c = world.commandLog[logged].cmd;
+      if ('owner' in c && c.owner === 0 && isDecision(c as { type: string; building?: string })) {
+        const m = Math.floor(world.commandLog[logged].tick / (60 * TICK_HZ));
+        decisionsByMinute[m] = (decisionsByMinute[m] ?? 0) + 1;
+      }
+    }
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
       if (isAction(e)) {
@@ -203,6 +230,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     if (world.tick % (60 * TICK_HZ) === 0) {
       populationByMinute.push(world.population(0));
       renownByMinute.push([world.players[0].renown, world.players[1]?.renown ?? 0]);
+      scoreByMinute.push(world.crown ? Math.round(world.crown.progress[0] - (world.crown.progress[1] ?? 0)) : 0);
       if ([10, 20, 30].includes(world.tick / (60 * TICK_HZ))) stockAt.push(GOODS.reduce((n, g) => n + world.stored(0, g), 0));
       let land = 0;
       for (let k = 0; k < world.territory.length; k++) if (world.territory[k] === 0) land++;
@@ -220,6 +248,28 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     leader = lead;
     if (winner >= 0) winnerDeficit = Math.max(winnerDeficit, (winner === 0 ? b - a : a - b));
   });
+  let crownLeader = -1;
+  let crownLeadChanges = 0;
+  let crownComeback = 0;
+  scoreByMinute.forEach((d, m) => {
+    if (m < 5 || d === 0) return;
+    const lead = d > 0 ? 0 : 1;
+    if (crownLeader >= 0 && lead !== crownLeader) crownLeadChanges++;
+    crownLeader = lead;
+    if (winner >= 0 && m >= 20) crownComeback = Math.max(crownComeback, winner === 0 ? -d : d);
+  });
+  // Settled: the last minute the eventual winner was not in front (they may never have led until the end).
+  let settledAt = 0;
+  if (winner >= 0) scoreByMinute.forEach((d, m) => { if (m >= 5 && (winner === 0 ? d <= 0 : d >= 0)) settledAt = m + 1; });
+  const minutesPlayed = Math.floor(world.tick / (60 * TICK_HZ)) + 1;
+  const decisions = Array.from({ length: minutesPlayed }, (_, m) => decisionsByMinute[m] ?? 0);
+  const actions = Array.from({ length: minutesPlayed }, (_, m) => actionByMinute[m] ?? 0);
+  let longestBored = 0;
+  let run = 0;
+  for (let m = 0; m < minutesPlayed - 1; m++) {
+    run = decisions[m] + actions[m] === 0 ? run + 1 : 0;
+    longestBored = Math.max(longestBored, run);
+  }
   return {
     seed,
     minutes,
@@ -240,7 +290,13 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     leadChanges,
     winnerDeficit,
     holdingFlips,
-    actionByMinute: Array.from({ length: Math.floor(world.tick / (60 * TICK_HZ)) + 1 }, (_, m) => actionByMinute[m] ?? 0),
+    actionByMinute: actions,
+    decisionsByMinute: decisions,
+    scoreByMinute,
+    crownLeadChanges,
+    crownComeback,
+    settledness: winner >= 0 ? Math.round((100 * settledAt) / Math.max(1, minutesPlayed - 1)) / 100 : 1,
+    longestBoredMinutes: longestBored,
     renownBy: world.players.map((p) => ({ ...p.renownBy })),
     origins: world.players.map((p) => p.origin),
     challenges,

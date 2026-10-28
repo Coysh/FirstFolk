@@ -24,6 +24,9 @@ type Idea = [boolean, BuildingType, { x: number; y: number }?, NodeKind?];
  * reactive expansion. It acts only through Commands, exactly like a human.
  */
 export class OpeningBot {
+  /** Decision kinds this bot never takes (scout, deed, raid, bridge, rally, trade): the headless harness uses it to test whether a decision matters. */
+  ablate = new Set<string>();
+
   private opening: { at: number; type: BuildingType }[] = [
     { at: 0, type: 'woodcutter' },
     { at: 10, type: 'forager' },
@@ -66,7 +69,7 @@ export class OpeningBot {
     }
     this.scout(world);
     // A clash at one of our posts, or by our own warband: rally or surge once it turns against us.
-    for (const band of world.warbands) {
+    for (const band of this.ablate.has('rally') ? [] : world.warbands) {
       const c = band.clash;
       if (band.phase !== 'clash' || !c) continue;
       const mine = band.owner === this.owner;
@@ -98,10 +101,10 @@ export class OpeningBot {
         break;
       }
     const target = this.frontierTarget(world);
-    if (this.useDeed(world, target)) return;
-    if (this.raid(world)) return;
-    if (this.trade(world)) return;
-    if (world.tick % (this.thinkEvery * 4) === 0 && this.bridge(world)) return;
+    if (!this.ablate.has('deed') && this.useDeed(world, target)) return;
+    if (!this.ablate.has('raid') && this.raid(world)) return;
+    if (!this.ablate.has('trade') && this.trade(world)) return;
+    if (!this.ablate.has('bridge') && world.tick % (this.thinkEvery * 4) === 0 && this.bridge(world)) return;
     const hungry = world.larder(this.owner) < 12;
     const home: BuildingType = world.isUnlocked(this.owner, 'longhouse') && this.affordable(world, 'longhouse') ? 'longhouse' : 'hut';
     const tower: BuildingType = world.isUnlocked(this.owner, 'watchtower') && this.affordable(world, 'watchtower') ? 'watchtower' : 'lookout';
@@ -307,7 +310,7 @@ export class OpeningBot {
 
   /** Send the scout out whenever it is rested: towards the Kingstone and the rival first, then round the compass. */
   private scout(world: World): void {
-    if (world.tick < 1800 || world.tick % 50 !== 0) return;
+    if (this.ablate.has('scout') || world.tick < 1800 || world.tick % 50 !== 0) return;
     const hall = [...world.buildings.values()].find((b) => b.owner === this.owner && b.type === 'wagon');
     if (!hall) return;
     const bit = 1 << this.owner;

@@ -712,6 +712,37 @@ Three one-off story events come first in the queue: **The Envoy** (6:00+: swear 
 - **Balance** (7 styles, 252 duels a block, two blocks): 36–58%; Raiders' 65% in the first block fell to 49–57% once the Kingstone shielded its keeper and Rally got stronger; Hearthfolk are weakest at 36–44% (they never invest in spears) and got the Rally perk above; a 100-game mirror match is 49:51 by side.
 - **`tests/crown.test.ts`, `scouts.test.ts` and new `pacing.test.ts` contracts** (no victory before 19:00; a star by 15:40 and a fight for it in every game; something to do at 15–20 minutes; the finish at least 1.5× as busy as the start).
 
+## 0i. The Living Valley (v0.23.1 onwards, branch `dev/living-valley`)
+
+**The diagnosis (a playtest after v0.23, plus the first measurements of *decisions*).** The middle and the end still turn passive, and v0.23's Crown made the end a single king-of-the-hill. The inspiration is Battle Drones v4: decisions with stakes, the losing side always with a way back, all of it measured over many AI-vs-AI games. The plan: neutral **steadings** you win with caravans (an economy road to the Crown), a Crown that fills for whoever holds more *voices* of the valley (the steadings and the Kingstone), a deeper economy that makes a town visibly grow up, and a harness that asks whether each decision matters.
+
+### S0: the harness (v0.23.1)
+New metrics (`playtest.ts`, printed by `npm run sim`): `decisionsByMinute` (the player's choices, read from the command log: raids, scouts, bridges, deeds, events, houses, rallies, towers and stockades), `actionByMinute` now counts only battles the player is in, `scoreByMinute` (the Crown gap), `crownLeadChanges`, `crownComeback`, `settledness` (when the winner took the lead for good, as a share of the game) and `longestBoredMinutes`. `tools/ablate.ts` plays a mirror match where the player bot never takes one kind of decision (`--ablate scout,deed,raid,bridge,rally,trade`); what it costs in win rate is what the decision is worth.
+
+**Baseline, v0.23.0** (24 duels, seed 100+, think 160):
+
+| Metric | Value |
+|---|---|
+| Length median (min–max) | 29.2 (21.3–45.0) min |
+| Decisions a minute (0–5 / 5–15 / 15–30 / last 10) | 2.2 / 2.1 / 2.6 / 2.7 |
+| Crown lead changes | 0.4 a game; **15 of 24 games had none** |
+| Settledness | 0.6 |
+| Hungry | 23.6% (worst 53%) |
+| Landmark flips | 2.4 a game |
+
+**Ablation, v0.23.0** (mirror Balanced, 40 games, noise about ±8 points; baseline 43%):
+
+| Without | Player wins | Reading |
+|---|---|---|
+| scouting | 40% | barely matters |
+| house powers | 30% | matters (13 points) |
+| raids | 15% | the most important decision in the game (28 points) |
+| rally | 33% | matters (10 points), though it is always right to press |
+| bridging | 55% | not worth it for this bot |
+| **Market Day** | **70%** | **harmful: time spent selling for renown loses games (28 points)** |
+
+So the Market is a chore that looks like a decision, which is why S1 removes it, and the Crown is usually decided by whoever gets there first.
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -1626,3 +1657,6 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **Harness:** `actionByMinute` and an "actions per minute" line (by game minute, and first / middle / last ten minutes). Hearthfolk's Rally perk.
 - **Saves:** `SAVE_VERSION` 20 (`crown`, `scouts`, `saga`, a warband's `clash`, `rallyReady`, `scoutReady`, `onceEvents`).
 - **Tests:** `crown.test.ts`, `scouts.test.ts` (scouts and the saga), clash tests in `warfare.test.ts`, long-game contracts in `pacing.test.ts`, and the art test covers the Kingstone. 164 pass.
+
+### v0.23.1 The measurement pass (2026-10-28, branch dev/living-valley)
+- **Harness only, no rule change:** decisions a minute, the Crown score and lead changes, settledness, a boredom stretch, `--ablate` on the bot and `tools/ablate.ts`. Baseline and ablation recorded in §0i.
