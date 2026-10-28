@@ -12,7 +12,8 @@ FirstFolk is a fast, single-player browser settlement builder. It combines Settl
 - **Logistics:** Settlers-style road segments with one carrier per segment, plus mitigations for jams. M0 uses free-walking porters first, which keeps the code modular so roads can slot in.
 - **Family extinction:** skills fade into the town **lore** at 50%.
 - **Family features in the MVP:** skills, inheritance, apprenticeship, **marriage between families** and **trade surnames**. Inherited traits and the family chronicle are deferred.
-- **Default scenario:** the *Prosperity Race*: first to 40 settlers, 3 master trades and 3 survived winters. Victory runs on a modular scenario system (§5).
+- **Default scenario:** *The First Valley*, a race against the rival through four chapters that are also the settlement's age-ups (Camp → Hamlet → Village → Town → Renown). *Peaceful* is the same valley with no rival. Victory runs on a modular scenario system (§5).
+- **Fun Pass additions (v0.2–v0.7):** the frontier (fog, a growing border, discoveries and rumours), births, Family Boons, marriage that merges lineages, Fishers, seasons, settlement ranks, Valley Events and the rival. See §0 and the build log.
 
 ---
 
@@ -70,28 +71,31 @@ A playtest of the M1 build said it plainly: *after 10–15 minutes it gets borin
 
 This gives three generations: the founders, their children (adults from about 2.5–5 min), and grandchildren (born from about 6 min, adults from about 13 min). A fourth generation starts arriving near the end of a long game.
 
-### Beat map: something new every 1–3 minutes
+### Beat map (v0.7, measured with the bot; a human runs about 1.5× slower)
 
 | Time | Beat | What the player feels |
 |---|---|---|
-| 0:00–0:30 | The wagon unpacks, the first building goes down, axes swing | Instant agency |
-| ~1:00 | The first logs reach the wagon, and the first hut starts rising | The loop clicks |
-| ~2:30 | The first child comes of age and joins the workforce | The family twist appears early |
-| 3:45–5:00 | **First winter.** Foraging stops and the wagon's food must last | First real tension |
-| ~4–6 | The first **Journeyman**: the building visibly transforms and a new chain opens | Progression you can see |
-| ~6–10 | Newcomer families, the first **marriage**, the second chain | Growth and Sims-like charm |
-| ~8–12 | Scouts meet the rival's border, and contested prize sites are revealed | Competition starts |
-| 12–20 | The border race over prize sites, and migrants choosing the better town | Strategy |
-| ~15 | The third winter is survived (one win condition met) | A milestone |
-| ~20–22 | The founders pass on, and their skills are carried by their children or the lore | Emotional stakes |
-| 20–30 | The first **Masters**, families take trade surnames, buildings reach their final form | Payoff |
-| 30–45 | The race to 40 settlers and 3 masters, with the race bar neck and neck | Climax |
+| 0:00 | **Choose the founders' boon.** The first card is on the table before the first building | "What kind of folk are we?" |
+| 0:00–0:45 | The first buildings go down, a beacon glows just past the border, and a rumour names a second | Instant agency and a goal on the map |
+| 0:40+ | Births in the wagon, migrants every 12 s once huts are free | Growth you didn't wait for |
+| 1:00–2:00 | The first Journeyman: a boon pick and the Sawpit unlocks | Progression you can see |
+| 2:00–4:00 | The first Lookout pushes the border and claims the cart. **Rank up: Hamlet.** The first Valley Event | The loop opens outward |
+| 3:20–3:45 | "Winter is coming", then **the first winter**: frost, snowfall, hungry spells | Rhythm and tension |
+| 4–8 | Ruins (XP for everyone), wanderers, Watchtowers, marriages founding new households, **Village** | Spore-like lineages, SimCity milestones |
+| 5–10 | **The rival's border is sighted**. The race bar tightens, and the central prizes are contested | Competition |
+| 10–20 | **Town**: Masters, Longhouses, the far discoveries, a claim race for land | Strategy and payoff |
+| 17–25 (bot), 25–40 (human) | **Renown**: 4 Masters, 7 discoveries, 90 folk and 3,000 tiles, against the clock of the rival | Climax |
 
-**Pacing rules enforced by the sim runner:**
-- Idle adults stay under 15%.
-- No stretch longer than 30 s without an event (completion, arrival, unlock, discovery, season).
-- The first Journeyman arrives before 6 min.
-- A competent scripted player wins in 30–45 min against Normal.
+**Pacing rules enforced by `tests/pacing.test.ts` and reported by `npm run sim`:**
+- First logs inside 30 s, and something to head for on the map inside 60 s.
+- A major beat at least every **90 s** (measured average 58 s, worst 75 s).
+- No event drought over 20 s.
+- First Journeyman inside 4 min. Hamlet inside 6 min and Village inside 16 min.
+- The border is still growing in the final third of the game.
+- Idle adults under 15% (measured about 7%).
+- A competent scripted player beats Normal in about 56% of games, Relaxed about 81% and Hardy about 31%.
+
+**Not yet built from the original plan:** elders, deaths and lore (the "passing of the founders" beat), trade surnames, and road networks.
 
 ---
 
@@ -130,25 +134,41 @@ All trade data lives in `src/sim/trades.ts`: thresholds, model variant ids, gear
 
 ---
 
-## 4. Economy (MVP content)
+## 4. Economy and the frontier (as built, v0.7)
 
-- **Goods:** logs, stone, berries, then planks, fish, grain and bread.
-- **Buildings:**
-  - Wagon (HQ, storage, housing for the founders)
-  - Hut (one family)
-  - Woodcutter
-  - Forester
-  - Quarry
-  - Forager
-  - Fisher
-  - Sawpit
-  - Field
-  - Mill-Bakehouse
-  - Storehouse
-  - Lookout
-  - Longhouse and Stone Lookout (Master unlocks)
-- **Resources:** trees regrow only through foresters, stone deposits run out, and berry bushes regrow and go dormant in winter. Finite stone is one of the reasons to expand.
-- **Food:** each settler eats 1 food per minute, taken from storage, and winter raises it to 1.25.
+- **Goods:** logs, stone and berries; then planks (Sawpit) and fish (Fisher). Food is any of `FOODS`.
+- **Buildings**, in shelf order with hotkeys 1–9, 0 and −:
+
+  | Building | Role | Unlocked by |
+  |---|---|---|
+  | Woodcutter, Forager, Quarry, Forester | Gathering | Start |
+  | Family Hut | A home for one family | Start |
+  | Lookout | Claims radius 8 and reveals 14; logs only, so expansion never deadlocks | Start |
+  | Fisher | Food from renewable river and lake shoals | Journeyman Gatherer |
+  | Sawpit | Logs to planks | Journeyman Carpenter |
+  | Storehouse | A second store | Journeyman Mason |
+  | Watchtower | Claims 12, reveals 20 | Hamlet |
+  | Longhouse | A family grows to 8 | Village |
+
+  The wagon claims 11 and becomes a hall that grows with each settlement rank.
+- **Resources:**
+  - trees give 2 logs and regrow only through foresters,
+  - rocks give 8 stone and run out,
+  - bushes regrow but sleep in winter,
+  - fish shoals regrow all year.
+
+  Prize sites boost these: an oakwood gives 3 logs per tree and an outcrop 30 stone per rock.
+- **Food:** each settler eats 1 per minute (Normal), and 25% more in winter. A food shortfall slows work and halts births and migrants.
+- **The frontier** (`territory.ts`):
+  - You may build only inside your border, and claimed land is final.
+  - Fog lifts around buildings and wherever settlers walk.
+  - Each side has 8 mirrored discoveries, plus 2 contested ones in the centre.
+  - Rumours reveal the next discovery after 45 s without anything new.
+- **Population:**
+  - births (40 s per family with 2 adults, room and food),
+  - migrants into free homes,
+  - wanderers and events,
+  - marriage, which founds new households in free homes.
 
 ---
 
@@ -174,10 +194,20 @@ interface Scenario {
 - Completed objectives latch, so they stay done once achieved.
 - The race bar shows each player's progress through the same objectives.
 
-**Scenarios:**
-- **Landfall** (M0): a tutorial-style goal list with no rival.
-- **Prosperity Race** (default MVP): 40 settlers, 3 masters and 3 winters, against a rival.
-- Future: **Sandbox** (`victory: 'none'`, milestones only), **Landmarks** (claim 3 sites), **Long Winter** (survival).
+**Scenarios** (`src/sim/scenario.ts`):
+- **The First Valley** (the default, with a rival): four chapters that are the **settlement's age-ups**. Finishing a chapter raises the rank (`rankUp`), which transforms the hall, claims land, unlocks buildings and grants a boon.
+
+  | Chapter | Leads to | Goals |
+  |---|---|---|
+  | Landfall | Hamlet | the basics, a Lookout, 1 discovery, 12 folk |
+  | Hamlet | Village | a Journeyman Carpenter, a Sawpit, 1 winter, a Watchtower, 3 discoveries, 25 folk |
+  | Village | Town | a Master, a Longhouse, 2 winters, 5 discoveries, 50 folk |
+  | Renown | victory, first to finish | 4 Masters, 7 discoveries, 90 folk, 3,000 tiles of land |
+
+- **The First Valley (peaceful):** the same, with no rival. It's also used by unit tests.
+- **Sandbox:** `victory: 'none'`.
+- Objective types: `building`, `produced`, `population`, `trade`, `masters`, `winters`, `discoveries`, `land`.
+- **Design rule learned in v0.7:** no pure clock gates in the finale. A "survive N winters" goal made both towns idle until spring, and the tie went to whoever was evaluated first.
 
 ---
 
@@ -198,6 +228,16 @@ The rival plays by the same rules, through the same `Command` API, with the same
    Each start also has *enough* nearby, so winning without them is possible but slower.
 3. **Migrants.** Newcomer families come from a shared migrant pool and choose the settlement with the better *appeal* (food surplus, free homes, renown). Population is a win condition, so this is direct competition.
 4. **Wanderers and ruins.** Whoever reaches them first gets them.
+
+**As built (v0.6–v0.7):**
+- The rival is the playtest bot (`src/sim/ai/openingBot.ts`) running inside `World.step` as player 1, with its own fog and Commands. It is recreated from saves.
+- It competes over:
+  - land,
+  - discoveries, 8 per side mirrored plus the central outcrop and stones,
+  - the chapter race.
+- You see its red border, its buildings once explored, "rival sighted" and rank-up news, rival claims, and the race bar.
+- Difficulty is its think interval only.
+- Not built yet: a shared migrant pool with appeal, and personalities.
 
 **Design rules for the rival:**
 - **Readable intent.** Alerts like "Rival scouts seen near the Old Oakwood" and visible rival scouts and border flags give the player time to react.
@@ -260,10 +300,27 @@ tests/        Vitest: determinism, mapgen, pathing, placement, gameplay loop, pa
    - The Landfall scenario's goal list, speed controls, event toasts, and tests including a headless pacing test.
    - *Fun check: are the first 5 minutes satisfying?*
 2. **M1 Trades and Presentation** *(done; see the build log)*: skills, XP and trade tiers with visible building, gear and chain transformation (Carpenter: Sawpit and planks; Mason: Storehouse), inheritance on coming of age, skilled newcomers, scenario chapters, title, loading and save system, and a visual and audio overhaul.
-3. **M1b Roads** *(next)*: Roads are prototyped first as **optional fast lanes** (+60% walking speed for anyone on them, drawn by tapping flags), not as mandatory segment carriers. They are evaluated in headless playtests against the free-porting baseline. Segment carriers are adopted only if they stay fun at 40+ settlers without stalls. The footpaths already worn by settlers show where roads want to go.
-4. **M2 Seasons and Kin:** seasons and winter, the food chain (fisher, field, mill-bakehouse), marriage, inheritance, apprenticeship, trade surnames, lore, a family panel, and the asset pipeline (icons, crests, title art).
-5. **M3 Frontier and Rival:** fog of war, scouts, lookouts and borders, prize sites, migrant appeal, the AI rival, the Prosperity Race scenario and race bar, and headless AI-vs-AI balancing.
-6. **M4 Juice and Ship:** effects, procedural audio, day and night, save and load, PWA, a mobile performance pass, and balance sweeps.
+3. **Fun Pass** *(done, v0.2–v0.7; see §0 and the build log)*. This delivered most of the original M2 and M3 in a fun-first order:
+   - the frontier (fog, borders, Lookouts, Watchtowers, discoveries, rumours),
+   - births, marriage, Family Boons,
+   - the Fisher,
+   - seasons and winter, settlement ranks,
+   - Valley Events,
+   - the rival race, with a race bar and difficulty measured headless.
+4. **Next: Lineage and Loss.**
+   - Elders, deaths and lore, so the founders pass on and their skills carry into the lore at 50%.
+   - Trade surnames.
+   - A family chronicle panel.
+   - A shared migrant pool where the more appealing town wins.
+
+   *Fun check: does losing a founder land emotionally, and does it change a decision?*
+5. **Then: Roads** (the old M1b). These start as optional fast lanes, adopted only if they stay fun at 100+ settlers without stalls. The worn footpaths already show where roads want to go.
+6. **M4 Juice and Ship:**
+   - day and night,
+   - PWA,
+   - a mobile performance pass at 150 settlers,
+   - balance sweeps against human playtests,
+   - generated crests and boon card art.
 
 After the MVP: multiple towns, trade, inherited traits, the family chronicle with portraits, militia, more rivals, and the Sandbox and Landmarks scenarios.
 

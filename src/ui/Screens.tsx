@@ -59,7 +59,7 @@ function Title({ shell }: { shell: Shell }) {
         </nav>
         {shell.error.value && <p class="title-error">{shell.error.value}</p>}
       </div>
-      <footer class="title-foot">Early build · M1 “Trades” · Low-poly world rendered live with Three.js</footer>
+      <footer class="title-foot">v{__APP_VERSION__} · Early build · Low-poly world rendered live with Three.js</footer>
       {panel === 'new' && <NewGame shell={shell} onClose={() => setPanel(null)} />}
       {panel === 'settings' && <SettingsPanel onClose={() => setPanel(null)} />}
       {panel === 'howto' && <HowTo onClose={() => setPanel(null)} />}
