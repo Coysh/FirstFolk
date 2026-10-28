@@ -17,7 +17,8 @@ export type Command =
   | { type: 'chooseEvent'; owner: number; eventId: number; option: number }
   | { type: 'deed'; owner: number; familyId: number; x: number; y: number }
   | { type: 'sell'; owner: number; good: Good }
-  | { type: 'setTrade'; owner: number; good: Good; keep: number | null };
+  | { type: 'setTrade'; owner: number; good: Good; keep: number | null }
+  | { type: 'setAutoHomes'; owner: number; on: boolean };
 
 /** What a locked building is waiting for, e.g. "Hamlet" or "Journeyman Carpenter". */
 export function lockLabel(world: World, owner: number, type: BuildingType): string {
@@ -186,6 +187,9 @@ export function applyCommand(world: World, cmd: Command): void {
     }
     case 'sell':
       sell(world, cmd.owner, cmd.good);
+      return;
+    case 'setAutoHomes':
+      if (world.players[cmd.owner]) world.players[cmd.owner].autoHomes = cmd.on;
       return;
     case 'setTrade':
       setTrade(world, cmd.owner, cmd.good, cmd.keep);

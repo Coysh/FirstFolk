@@ -18,7 +18,7 @@ export function hashWorld(world: World): string {
   for (const site of world.sites) parts.push(site.id, site.revealed, site.claimedBy, site.heldBy);
   let t = 0;
   for (let i = 0; i < world.territory.length; i++) t = (t * 31 + world.territory[i] + 2 * world.explored[i]) | 0;
-  parts.push(t);
+  parts.push(t, world.challenge?.def ?? '-', world.challenge?.endsAt ?? 0, world.nextChallengeAt);
 
   const str = parts.join('|');
   let h = 0x811c9dc5;

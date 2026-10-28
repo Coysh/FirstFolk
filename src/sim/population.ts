@@ -3,6 +3,7 @@ import { BUILDINGS, FOODS, SKILLS, type BuildingType, type Good, type Skill } fr
 import { addBoon, drawBoons, offerBoon } from './boons';
 import { walkTo } from './settlers';
 import { hasOmen } from './omens';
+import { bestSite } from './ai/placement';
 import { emptySkills, type Building, type Family, type PlayerState, type Settler, type World } from './world';
 
 export const SURNAMES = [
@@ -116,8 +117,22 @@ function clearEmptyHouseholds(world: World, owner: number): void {
   }
 }
 
+/**
+ * Auto-homes (a player's choice): when every home is full and none is being built, the families
+ * put up a hut themselves, if the stores can spare it. Through a Command, like any placement.
+ */
+function autoHomes(world: World, player: PlayerState): void {
+  if (!player.autoHomes || freeHome(world, player.id)) return;
+  for (const b of world.buildings.values()) if (b.owner === player.id && !b.done && isHome(b.type)) return;
+  const cost = BUILDINGS.hut.cost;
+  if (world.stored(player.id, 'logs') < (cost.logs ?? 0) + 6 || world.stored(player.id, 'stone') < (cost.stone ?? 0)) return;
+  const site = bestSite(world, player.id, 'hut');
+  if (site) world.enqueue({ type: 'place', owner: player.id, building: 'hut', ...site });
+}
+
 function checkNewcomers(world: World, player: PlayerState): void {
   clearEmptyHouseholds(world, player.id);
+  autoHomes(world, player);
   if (player.newcomerCooldown > 0) {
     player.newcomerCooldown -= BALANCE.newcomerCheckInterval;
     return;

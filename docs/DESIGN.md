@@ -209,6 +209,40 @@ Measured (60 fair duels with origins and omens: `npm run sim -- --seed 100 --min
 - **Dynasties (meta-progression).** Winning a valley remembers your greatest house: its name, its two finest boons and its craft. In New Game you can found a valley with that dynasty: its founders bear its name and gifts, and start more skilled with each generation it wins (up to +320 XP). It's the family system carried across games, and a reason to play the next one.
 - **Council news** now announces only a new deed reaching the council, not families swapping seats.
 
+### v0.12: a rival with a voice, contests to race for, and no dull endings
+- **Challenges** (`challenges.ts`): from 7:00, about every 4 minutes, the valley calls a short head-to-head contest with a countdown and a prize (+25 to 40 renown). Seven contests:
+  - The Harvest Contest (50 food);
+  - The Woodmen's Wager (60 logs and planks);
+  - The Builders' Race (4 buildings);
+  - Banners on the Hills (a new tower);
+  - Steal a March (take a landmark);
+  - Race to the Star-Stone (called the moment the star falls);
+  - The Great Fair (3 Market lots).
+
+  Ties go to whoever is further over the line, then to the lower renown. No contest is called in the last 4 minutes. They show as a strip under the race bar with both settlements' progress, and they reward what both are doing anyway, so the race always has a short-term goal. In 60 duels the two sides won 112 to 120.
+- **The rival speaks.** The head of the rival house sends word when the race turns:
+  - a greeting;
+  - landmarks taken either way;
+  - contests won or lost;
+  - Great Works;
+  - the star-fall and the Moot;
+  - one comment on a big lead either way.
+
+  The lines are short, in character, and shown as italic "rival" toasts. A faceless score becomes a neighbour you want to beat.
+- **Acclaim (mercy rule).** Once the Moot is under way, a lead of 500 ends the game by acclaim, so nobody plays out a foregone conclusion. It ends about 12% of duels.
+- **Auto-homes.** An optional toggle (from Hamlet): when every home is full, families put up a hut themselves if the stores can spare it, so growth isn't a chore of placing hut after hut.
+- **The goal is now 1,600**, since contest prizes add about 100 renown a game.
+
+Measured (60 duels with origins and omens):
+
+| Metric | Value |
+|---|---|
+| Length | Median about 29 min, range 25–36 |
+| Lead changes per game | 1.9 |
+| Comeback wins | 20% |
+| Acclaim endings | 12% |
+| Landmark flips per game | about 12 |
+
 ---
 
 ## 1. Design guardrails
@@ -921,4 +955,17 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - The wind's broadband noise masked the music (seen on a spectrogram of a headless recording), and the mix sat at about -29 LUFS. Wind is now halved, the music is louder, and a bus compressor is added (about -24 LUFS).
   - Four council toasts at once.
 - **Tests:** every bar fits its metre, preview equals reality, dynasty founders (102 tests).
+
+### v0.12.0 Challenges, the rival's voice, acclaim, auto-homes (2026-10-28)
+- **Built:**
+  - seven challenges, with harness reporting of wins per side and acclaim endings;
+  - the rival's lines (`ui/rivalVoice.ts`);
+  - the Acclaim rule;
+  - the auto-homes command and toggle;
+  - the contest strip;
+  - the Champion of the Valley honour;
+  - "Challenges" as a renown source on the report.
+- **Duels caught:**
+  - Challenge prizes made games about 2 minutes shorter (median ~27.8) and Acclaim at a 400 lead ended 23% of games. The goal is now 1,600 and Acclaim needs a 500 lead.
+  - The star race only ran if a challenge happened to be due. It now starts the moment the star falls.
 

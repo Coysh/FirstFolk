@@ -20,6 +20,7 @@ import { lockLabel } from '../sim/commands';
 import { DEEDS, council, deedCost, deedOf, deedPower, deedWait, prestige } from '../sim/deeds';
 import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../sim/market';
 import { mootUnderway, renownRate } from '../sim/renown';
+import { challengeDef, challengeProgress } from '../sim/challenges';
 import { OMENS } from '../sim/omens';
 import { ORIGINS } from '../sim/origins';
 import { workOwner } from '../sim/works';
@@ -90,6 +91,16 @@ function TopBar({ game }: { game: Game }) {
           <b>{pop}</b>
           <small>/{housing}</small>
         </span>
+        {w.players[PLAYER].rank >= 1 && (
+          <button
+            class={`auto-homes ${w.players[PLAYER].autoHomes ? 'on' : ''}`}
+            onClick={() => game.setAutoHomes(!w.players[PLAYER].autoHomes)}
+            aria-pressed={w.players[PLAYER].autoHomes}
+            title={w.players[PLAYER].autoHomes ? 'Families build their own huts when every home is full. Click to stop.' : 'Let families build their own huts when every home is full'}
+          >
+            🏠 <span>Auto-homes</span>
+          </button>
+        )}
         {marketOpen(w, PLAYER) && (
           <button class={`market-btn ${game.marketOpen.value ? 'on' : ''}`} onClick={() => (game.marketOpen.value = !game.marketOpen.value)} title="Market Day: sell what piles up for renown">
             ⚖️ <span>Market</span>
@@ -292,7 +303,35 @@ function RaceBar({ game }: { game: Game }) {
       )}
       {row(PLAYER, 'You')}
       {w.players[1] && row(1, 'Rival')}
+      <Contest game={game} />
     </section>
+  );
+}
+
+/** The running challenge: what it is, the clock, and both settlements' progress. */
+function Contest({ game }: { game: Game }) {
+  const w = game.world;
+  const c = w.challenge;
+  const def = c && challengeDef(c.def);
+  if (!c || !def) return null;
+  const left = Math.max(0, c.endsAt - w.tick);
+  const bar = (owner: number) => {
+    const [n, target] = challengeProgress(w, owner);
+    return (
+      <div class={`contest-bar ${owner === PLAYER ? 'me' : 'them'}`} title={`${owner === PLAYER ? 'You' : 'Rival'}: ${Math.min(n, target)}/${target}`}>
+        <div style={{ width: `${Math.min(100, (n / target) * 100)}%` }} />
+      </div>
+    );
+  };
+  return (
+    <div class="contest" title={`${def.title}: ${def.text} +${def.prize} renown to the winner.`}>
+      <span class="contest-name">
+        {def.icon} {def.title} <b>+{def.prize}★</b>
+      </span>
+      <span class={`contest-clock ${left < 300 ? 'pulse' : ''}`}>{formatTime(left)}</span>
+      {bar(PLAYER)}
+      {bar(1)}
+    </div>
   );
 }
 
@@ -910,6 +949,7 @@ const SOURCE_NAMES: Record<string, string> = {
   legends: 'Legends',
   works: 'Great Works',
   trade: 'Market Day',
+  contests: 'Challenges',
 };
 
 /** Honours for how the game was played: a reason to try another way next time. */
@@ -926,6 +966,7 @@ function Awards({ w, won }: { w: World; won: boolean }) {
   if ((me.renownBy.trade ?? 0) >= 150) list.push(['⚖️', 'Merchant Prince', `${me.renownBy.trade} renown from Market Day`]);
   if (outposts >= 4) list.push(['🧭', 'Pathfinder', `${outposts} outposts`]);
   if (me.deedsUsed >= 25) list.push(['✦', 'Great Houses', `${me.deedsUsed} family deeds`]);
+  if (me.challengesWon >= 3) list.push(['🏆', 'Champion of the Valley', `${me.challengesWon} challenges won`]);
   if (!list.length) return null;
   return (
     <div class="awards">
@@ -957,7 +998,7 @@ function Victory({ game }: { game: Game }) {
         <img class="modal-icon" src={ICON.hut} alt="" />
         <h2>{won ? `${v.scenario}: your folk are renowned!` : 'Your rival is the valley’s renowned town'}</h2>
         <p>
-          {v.byTime ? 'The valley gathered at the end of the season to judge. ' : ''}
+          {v.byTime ? 'The valley gathered at the end of the season to judge. ' : v.acclaim ? 'At the Moot the whole valley acclaimed the winner: the lead was beyond doubt. ' : ''}
           After {formatTime(w.tick)}: <b>{me.renown}★</b> to your rival’s <b>{them?.renown ?? 0}★</b>.
         </p>
         <Awards w={w} won={won} />
@@ -992,7 +1033,7 @@ function Victory({ game }: { game: Game }) {
                 {w.population(PLAYER)} folk in {fams.length} households · {me.deedsUsed} deeds done
               </li>
               <li>
-                {me.taken} landmark{me.taken === 1 ? '' : 's'} taken from your rival
+                {me.taken} landmark{me.taken === 1 ? '' : 's'} taken from your rival · {me.challengesWon} challenge{me.challengesWon === 1 ? '' : 's'} won
               </li>
               {works.length > 0 && <li>Raised {works.map((t) => BUILDINGS[t].name).join(' and ')}</li>}
               {me.legends.slice(0, 4).map((l) => (

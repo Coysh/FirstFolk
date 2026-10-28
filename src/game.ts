@@ -19,6 +19,8 @@ import type { GameRenderer } from './render/scene';
 import { recordDaily, recordDynasty, writeSave, type StoredDynasty } from './settings';
 import { ORIGINS, type OriginId } from './sim/origins';
 import { OMENS } from './sim/omens';
+import { challengeDef } from './sim/challenges';
+import { rivalLine, type RivalMoment } from './ui/rivalVoice';
 
 export const PLAYER = 0;
 
@@ -29,7 +31,7 @@ export interface Toast {
   id: number;
   icon: string;
   text: string;
-  tone: 'info' | 'good' | 'warn' | 'big';
+  tone: 'info' | 'good' | 'warn' | 'big' | 'rival';
 }
 
 /** Routine news (births, sales, finished huts) is throttled so the important news stands out. */
@@ -81,7 +83,7 @@ export class Game {
   readonly version = signal(0);
   readonly objectives = signal<ObjectiveStatus[]>([]);
   readonly toasts = signal<Toast[]>([]);
-  readonly victory = signal<{ scenario: string; winner: number; byTime: boolean } | null>(null);
+  readonly victory = signal<{ scenario: string; winner: number; byTime: boolean; acclaim?: boolean } | null>(null);
   /** The ledger letter being read (see Hud's Ledger), and whether the first one has opened itself. */
   readonly ledgerOpen = signal<string | null>(null);
   readonly deedPreview = signal<DeedPreview | null>(null);
@@ -120,6 +122,7 @@ export class Game {
       this.toast('/assets/icons/hut.png', 'Your family has arrived in the valley. Build a Woodcutter near the trees!', 'info');
       const rival = this.world.players[1];
       if (rival?.origin) setTimeout(() => this.toast('/assets/icons/scroll.png', `Across the valley a rival house has settled: ${ORIGINS[rival.origin as OriginId].icon} ${ORIGINS[rival.origin as OriginId].name}.`, 'warn'), 2500);
+      if (rival) setTimeout(() => this.rivalVoice('greet'), 9000);
       if (this.world.omens.length) setTimeout(() => this.toast('/assets/icons/scroll.png', `Omens for this valley: ${this.world.omens.map((o) => `${OMENS[o].icon} ${OMENS[o].name}`).join(', ')}.`, 'info'), 5000);
     }
     else this.toast('/assets/icons/scroll.png', 'Welcome back. Your folk carried on where you left them.', 'info');
@@ -176,6 +179,7 @@ export class Game {
    * late on), and the main theme as the Moot finale. The soundscape follows the camera.
    */
   private tenseUntil = 0;
+  private saidLead = false;
   private sceneTimer = 0;
   private conduct(): void {
     const w = this.world;
@@ -186,6 +190,14 @@ export class Game {
     const late = w.tick > 15 * 600;
     const pressed = this.tenseUntil > w.tick || (!!rival && late && rival.renown - me.renown >= 120);
     const intensity = w.tick < 120 * 10 ? 0 : me.rank >= 2 ? 2 : 1;
+    // The rival comments on a big lead, once each way, after the middle of the game.
+    if (rival && w.tick > 18 * 600 && !this.saidLead) {
+      const gap = rival.renown - me.renown;
+      if (Math.abs(gap) >= 150) {
+        this.saidLead = true;
+        this.rivalVoice(gap > 0 ? 'theyLead' : 'youLead');
+      }
+    }
     if (w.scenario.timeLimit && w.tick >= BALANCE.mootAt) audio.setMood('moot', 3);
     else if (pressed) audio.setMood('tension', 2);
     else if (seasonOf(w.tick) === 3) audio.setMood('winter', 1);
@@ -213,6 +225,15 @@ export class Game {
       renown: w.players[PLAYER].renown,
       date: new Date().toISOString().slice(0, 10),
     });
+  }
+
+  /** The rival's house and its head, for their messages. */
+  private rivalVoice(moment: RivalMoment, vars: Record<string, string> = {}): void {
+    const fam = [...this.world.families.values()].find((f) => f.owner === 1);
+    const head = [...this.world.settlers.values()].find((s) => s.owner === 1 && !s.child);
+    if (!fam) return;
+    const house = `the ${plural(fam.surname)}`;
+    this.toast('/assets/icons/scroll.png', `${head?.name ?? 'The rival'} of ${house}: ${rivalLine(moment, { house, ...vars })}`, 'rival');
   }
 
   /** A new deed reaching the council is news (families swapping seats is not). */
@@ -245,11 +266,20 @@ export class Game {
   private handleEvents(events: SimEvent[]): void {
     for (const e of events) {
       // Only news about the rival that we choose to share gets through.
-      if ('owner' in e && e.owner !== PLAYER && !RIVAL_NEWS.has(e.type) && !(e.type === 'holdingChanged' && e.from === PLAYER)) continue;
+      if ('owner' in e && e.owner !== PLAYER && !RIVAL_NEWS.has(e.type) && !(e.type === 'holdingChanged' && e.from === PLAYER) && !(e.type === 'buildingComplete' && BUILDINGS[e.buildingType].great)) continue;
       switch (e.type) {
         case 'buildingComplete': {
           const p = this.posOf(e.id);
-          if (BUILDINGS[e.buildingType].great) audio.stinger('work');
+          if (e.owner !== PLAYER) {
+            // Only a rival's Great Work gets this far: they boast.
+            this.toast(icon(e.buildingType), `Your rival has finished ${BUILDINGS[e.buildingType].name}.`, 'warn');
+            this.rivalVoice('theirWork', { work: BUILDINGS[e.buildingType].name });
+            break;
+          }
+          if (BUILDINGS[e.buildingType].great) {
+            audio.stinger('work');
+            setTimeout(() => this.rivalVoice('yourWork', { work: BUILDINGS[e.buildingType].name }), 3000);
+          }
           else if (p) audio.play('complete', this.distanceTo(p.x, p.z), this.hearing() * 1.5);
           if (e.buildingType !== 'wagon') (BUILDINGS[e.buildingType].great || e.buildingType === 'watchtower' ? this.toast.bind(this) : this.news.bind(this))(icon(e.buildingType), `${BUILDINGS[e.buildingType].name} finished`, 'good');
           break;
@@ -393,10 +423,12 @@ export class Game {
             audio.stinger('landmark');
             this.banner.value = { title: `${d.icon} ${d.name} is yours!`, sub: e.from >= 0 ? `Taken from your rival: +${d.renown} renown a minute while you hold it` : `+${d.renown} renown a minute while you hold it` };
             setTimeout(() => (this.banner.value = null), 3800);
+            if (e.from >= 0) setTimeout(() => this.rivalVoice('youTook', { site: d.name }), 2500);
           } else if (e.from === PLAYER) {
             audio.stinger('loss');
             this.tenseUntil = this.world.tick + 600;
             this.toast('/assets/icons/lookout.png', `Your rival’s border has swallowed the ${d.name}! Push back with Watchtowers or a Festival.`, 'warn');
+            setTimeout(() => this.rivalVoice('theyTook', { site: d.name }), 2000);
           }
           break;
         }
@@ -449,18 +481,43 @@ export class Game {
             setTimeout(() => (this.banner.value = null), 5200);
           } else this.news('/assets/icons/people.png', `${e.name} ${e.surname} has died, aged ${e.age}. The family mourns.`);
           break;
+        case 'challenge': {
+          const def = challengeDef(e.def)!;
+          audio.stinger('moot');
+          this.toast('/assets/icons/renown.png', `${def.icon} ${def.title}! ${def.text} +${def.prize}★ to the winner.`, 'big');
+          break;
+        }
+        case 'challengeWon': {
+          const def = challengeDef(e.def)!;
+          if (e.winner === PLAYER) {
+            audio.stinger('landmark');
+            this.banner.value = { title: `${def.icon} You won ${def.title}!`, sub: `+${e.prize} renown. The valley talks of nothing else.` };
+            setTimeout(() => (this.banner.value = null), 3600);
+            setTimeout(() => this.rivalVoice('youWon'), 2400);
+          } else {
+            audio.stinger('loss');
+            this.toast('/assets/icons/renown.png', `Your rival won ${def.title} (+${e.prize}★).`, 'warn');
+            setTimeout(() => this.rivalVoice('theyWon'), 1800);
+          }
+          break;
+        }
+        case 'challengeExpired':
+          this.news('/assets/icons/renown.png', `Nobody won ${challengeDef(e.def)?.title ?? 'the challenge'}. The prize goes unclaimed.`);
+          break;
         case 'starfall':
+          setTimeout(() => this.rivalVoice('starfall'), 6500);
           audio.stinger('starfall');
           this.banner.value = { title: '☄️ A star has fallen!', sub: 'It came down between you and your rival: a Star-Stone, the richest landmark in the valley. Push your border over it first!' };
           setTimeout(() => (this.banner.value = null), 5600);
           break;
         case 'moot':
+          setTimeout(() => this.rivalVoice('moot'), 6000);
           audio.stinger('moot');
           this.banner.value = { title: '📯 The Valley Moot!', sub: 'Folk from all around gather for the final stretch: every landmark now pays double renown' };
           setTimeout(() => (this.banner.value = null), 5200);
           break;
         case 'victory':
-          this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime };
+          this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime, acclaim: !!e.acclaim };
           audio.stinger(e.winner === PLAYER ? 'victory' : 'defeat');
           if (e.winner === PLAYER) this.rememberHouse();
           if (this.world.label.startsWith('daily-')) recordDaily({ date: this.world.label.slice(6), won: e.winner === PLAYER, renown: this.world.players[PLAYER].renown, time: Math.floor(this.world.tick / 10) });
@@ -591,6 +648,11 @@ export class Game {
     // Raise picks a site: go straight to the one closest to finished, unless the player taps another.
     this.selection.value = null;
     this.mode.value = { kind: 'deed', familyId, deed: id };
+  }
+
+  setAutoHomes(on: boolean): void {
+    audio.play('click');
+    this.world.enqueue({ type: 'setAutoHomes', owner: PLAYER, on });
   }
 
   sell(good: Good): void {

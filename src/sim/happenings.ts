@@ -28,6 +28,8 @@ export function updateHappenings(world: World): void {
   world.sites.push(site);
   world.emit({ type: 'starfall', siteId: site.id, x: site.x, y: site.y });
   updateHoldings(world);
+  // The race to the stone starts at once (unless a challenge is already running).
+  if (!world.challenge) world.nextChallengeAt = world.tick;
 }
 
 /**

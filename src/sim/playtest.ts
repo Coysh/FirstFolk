@@ -35,6 +35,9 @@ export interface PlaytestReport {
   /** Landmarks that changed hands between settlements. */
   holdingFlips: number;
   renownBy: Partial<Record<string, number>>[];
+  /** Challenges won by [player, rival]. */
+  challenges: number[];
+  acclaim: boolean;
   origins: string[];
   omens: string[];
   /** Goods sitting in the player's stores at minutes 10, 20 and 30: is stuff piling up? */
@@ -66,7 +69,9 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const renownByMinute: [number, number][] = [];
   const stockAt: number[] = [];
   let holdingFlips = 0;
+  const challenges: number[] = [0, 0];
   let byTime = false;
+  let acclaimed = false;
   const timeline: string[] = [];
   const populationByMinute: number[] = [];
   const territoryByMinute: number[] = [];
@@ -100,6 +105,11 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       else if (e.type === 'rivalSighted') timeline.push(`${t} ⚔ rival border sighted`);
       else if (e.type === 'starfall') timeline.push(`${t} ☄ a star falls at ${e.x},${e.y}`);
       else if (e.type === 'moot') timeline.push(`${t} 📯 the Moot: landmarks pay double`);
+      else if (e.type === 'challenge') timeline.push(`${t} 🏁 challenge: ${e.def}`);
+      else if (e.type === 'challengeWon') {
+        (challenges[e.winner] ??= 0), challenges[e.winner]++;
+        timeline.push(`${t} 🏆 ${e.winner === 0 ? 'you win' : 'RIVAL wins'} ${e.def} (+${e.prize})`);
+      } else if (e.type === 'challengeExpired') timeline.push(`${t}    ${e.def} expired`);
       else if (e.type === 'holdingChanged') {
         if (e.from >= 0) holdingFlips++;
         timeline.push(`${t} ${e.owner === 0 ? '⚑ took' : '⚐ LOST'} the ${e.kind}${e.from < 0 ? ' (unheld)' : ''}`);
@@ -127,6 +137,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
         victoryTick = world.tick;
         winner = e.winner;
         byTime = e.byTime;
+        acclaimed = !!e.acclaim;
       }
     }
     if (world.tick % (60 * TICK_HZ) === 0) {
@@ -171,6 +182,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     holdingFlips,
     renownBy: world.players.map((p) => ({ ...p.renownBy })),
     origins: world.players.map((p) => p.origin),
+    challenges,
+    acclaim: acclaimed,
     omens: [...world.omens],
     stockAt,
     territoryByMinute,

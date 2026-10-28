@@ -16,6 +16,7 @@ import { addRenown, updateRenown, type RenownSource } from './renown';
 import type { DeedId } from './deeds';
 import { updateMarket } from './market';
 import { updateHappenings } from './happenings';
+import { updateChallenges } from './challenges';
 import { addBoon, offerBoon, updateOffers, type BoonId, type Mod } from './boons';
 import { ORIGINS, rivalOrigin, type Dynasty, type OriginId } from './origins';
 import { hasOmen, type OmenId } from './omens';
@@ -189,11 +190,14 @@ export type SimEvent =
   | { type: 'renown'; owner: number; amount: number; source: RenownSource; x: number; y: number }
   | { type: 'deed'; owner: number; familyId: number; surname: string; deed: DeedId; x: number; y: number; text: string }
   | { type: 'moot' }
+  | { type: 'challenge'; def: string }
+  | { type: 'challengeWon'; def: string; winner: number; prize: number }
+  | { type: 'challengeExpired'; def: string }
   | { type: 'starfall'; siteId: number; x: number; y: number }
   | { type: 'sold'; owner: number; good: Good; n: number; renown: number }
   | { type: 'workBegun'; owner: number; buildingType: BuildingType }
   | { type: 'workLost'; owner: number; buildingType: BuildingType; winner: number }
-  | { type: 'victory'; scenario: string; winner: number; byTime: boolean };
+  | { type: 'victory'; scenario: string; winner: number; byTime: boolean; acclaim?: boolean };
 
 export interface PlayerState {
   id: number;
@@ -227,6 +231,10 @@ export interface PlayerState {
   renownFrac: [number, number];
   /** Landmarks taken from another settlement. */
   taken: number;
+  /** Challenges won (see challenges.ts). */
+  challengesWon: number;
+  /** Families build their own huts when there's room and timber (see population.ts). */
+  autoHomes: boolean;
   /** The furthest this player has trailed the leader in renown (for comeback honours). */
   maxDeficit: number;
   /** Temporary influence (festivals and the like). */
@@ -337,6 +345,10 @@ export class World {
   territoryVersion = 0;
   fogVersion = 0;
   sites: Discovery[] = [];
+  /** The valley's running challenge (see challenges.ts), when the next is called, and the last one. */
+  challenge: { def: string; endsAt: number; start: number[] } | null = null;
+  nextChallengeAt = BALANCE.firstChallenge;
+  lastChallenge = '';
   /** AI players (the rival), driven through Commands exactly like a human. */
   ais: OpeningBot[] = [];
   /** Bumps when buildings are added or removed (runtime only, for path caches). */
@@ -522,7 +534,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '' };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '' };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -680,6 +692,7 @@ export class World {
     if (this.tick % 10 === 5) {
       updateExploration(this);
       updateHappenings(this);
+      updateChallenges(this);
       updateOffers(this);
       updateValleyEvents(this);
     }
@@ -788,7 +801,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['starfall', 'moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['challenge', 'challengeWon', 'starfall', 'moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);

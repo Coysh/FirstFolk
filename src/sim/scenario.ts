@@ -1,7 +1,7 @@
 import { BUILDINGS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Skill } from './defs';
 import { offerBoon } from './boons';
 import { recomputeTerritory } from './territory';
-import { addRenown } from './renown';
+import { addRenown, mootUnderway } from './renown';
 import { BALANCE, secs } from './balance';
 import { TIER_XP, tradeTitle } from './trades';
 import type { World } from './world';
@@ -152,7 +152,7 @@ export const LANDFALL: Scenario = {
   rival: true,
   timeLimit: secs(45 * 60),
   // Landfall teaches the basics; after that each rank is earned with renown, and the first
-  // settlement to 1,500 renown (or the one with most when the clock runs out) wins.
+  // settlement to 1,600 renown (or the one with most when the clock runs out) wins.
   objectives: [
     with_(objectives.building('woodcutter'), 'Landfall', 'Pick Woodcutter below, then place it beside the trees.'),
     with_(objectives.building('forager'), 'Landfall', 'Foragers feed everyone. Place one near the blue berry bushes.'),
@@ -167,7 +167,7 @@ export const LANDFALL: Scenario = {
     with_(objectives.renown(300), 'Hamlet', 'Renown: landmarks, land, discoveries, Masters, deeds and Market Day all add to it.'),
     with_(objectives.building('watchtower'), 'Village', 'Watchtowers push hard: build them at the border to take land from your rival.'),
     with_(objectives.renown(750), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
-    with_(objectives.renown(1500), 'Town', 'First to 1,500 renown wins. From 25:00 the Moot makes landmarks pay double: take them back!'),
+    with_(objectives.renown(1600), 'Town', 'First to 1,600 renown wins. From 25:00 the Moot makes landmarks pay double: take them back!'),
   ],
 };
 
@@ -223,6 +223,15 @@ export function evaluateScenario(world: World): void {
     if (world.scenario.victory === 'all' ? results.every(Boolean) : results.some(Boolean)) winners.push(player.id);
   }
   if (state.winner >= 0 || world.scenario.victory === 'none') return;
+  // Acclaim: once the Moot is under way, a crushing lead ends the race (no dull walkovers).
+  if (!winners.length && mootUnderway(world) && world.players.length > 1) {
+    const sorted = [...world.players].sort((a, b) => b.renown - a.renown);
+    if (sorted[0].renown - sorted[1].renown >= BALANCE.acclaimLead) {
+      state.winner = sorted[0].id;
+      world.emit({ type: 'victory', scenario: world.scenario.name, winner: state.winner, byTime: false, acclaim: true });
+      return;
+    }
+  }
   // The clock runs out: whoever has the most renown wins.
   const timeUp = !!world.scenario.timeLimit && world.tick >= world.scenario.timeLimit;
   if (timeUp && !winners.length) winners.push(...world.players.map((p) => p.id));

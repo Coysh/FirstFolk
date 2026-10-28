@@ -76,6 +76,11 @@ export const BALANCE = {
   renownTick: secs(10),
   /** From this tick (the final stretch) the Moot doubles what landmarks pay. */
   mootAt: secs(25 * 60),
+  /** Challenges: the first is called at 7:00, then one every 3½–4½ minutes after the last ends. */
+  firstChallenge: secs(7 * 60),
+  challengeGap: [secs(210), secs(270)] as [number, number],
+  /** Acclaim: after the Moot begins, a lead this large ends the race early. */
+  acclaimLead: 500,
   /** Star-fall: a new landmark lands between the settlements from this tick (≡ 5 mod 10). */
   starfallAt: secs(15 * 60) + 5,
 

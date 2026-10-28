@@ -1,0 +1,24 @@
+/**
+ * The rival has a voice: their house's head sends word when the race turns, boasting,
+ * grumbling or goading. Pure flavour (UI only), so it may pick lines at random.
+ */
+export type RivalMoment = 'greet' | 'theyTook' | 'youTook' | 'theyWon' | 'youWon' | 'theirWork' | 'yourWork' | 'starfall' | 'moot' | 'theyLead' | 'youLead';
+
+const LINES: Record<RivalMoment, string[]> = {
+  greet: ['“The valley is wide, neighbour. Not wide enough for two great towns.”', '“Welcome to our valley. Do try to keep up.”'],
+  theyTook: ['“The {site} sing for us now. Come and take them back, if you dare.”', '“Thank you for keeping the {site} warm for us.”', '“Our banners fly over the {site}. A fine view from up here.”'],
+  youTook: ['“Enjoy the {site} while you can. We are coming for them.”', '“A lucky push. It will not happen twice.”', '“You have taken the {site}? Our elders are not amused.”'],
+  theyWon: ['“Another prize for {house}! Perhaps practise more?”', '“Was that a contest? We barely noticed.”'],
+  youWon: ['“Beginner’s luck. Next time the prize is ours.”', '“Hmph. Our folk were busy with more important work.”'],
+  theirWork: ['“Behold {work}! Built by {house} hands. Your masons may visit to learn.”'],
+  yourWork: ['“So you finished {work}. We meant to build a better one anyway.”'],
+  starfall: ['“A star fell between us. The heavens choose {house}, surely?”', '“Did you see the star? It is ours, of course.”'],
+  moot: ['“The whole valley is watching now. Let them see who is greater.”', '“The Moot! Our bards have been practising your lament.”'],
+  theyLead: ['“The bards sing of {house} this season. Your name? They forgot it.”'],
+  youLead: ['“Renown is fickle, neighbour. The race is not over.”'],
+};
+
+export function rivalLine(moment: RivalMoment, vars: Record<string, string>): string {
+  const pool = LINES[moment];
+  return pool[Math.floor(Math.random() * pool.length)].replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+}

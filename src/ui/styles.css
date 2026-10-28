@@ -2284,3 +2284,68 @@ button.danger.armed {
   background: rgba(242, 193, 78, 0.25);
   font-weight: 700;
 }
+
+/* ---------- challenges and the rival's voice ---------- */
+.contest {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 230, 180, 0.25);
+}
+.contest-name {
+  font: 800 11px var(--body);
+  color: #fff4d2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contest-name b {
+  color: var(--gold);
+}
+.contest-clock {
+  font: 800 11px var(--body);
+  color: #ffd9a0;
+  font-variant-numeric: tabular-nums;
+}
+.contest-bar {
+  grid-column: 1 / -1;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.contest-bar div {
+  height: 100%;
+  border-radius: 3px;
+}
+.contest-bar.me div {
+  background: var(--gold);
+}
+.contest-bar.them div {
+  background: #d9534f;
+}
+.toast.rival {
+  border-color: #b5402f;
+  background: linear-gradient(#fff1ea, #f6d9cc);
+  font-style: italic;
+}
+.auto-homes {
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font: 800 12px var(--body);
+  background: linear-gradient(#fff6dc, #f0d9a5);
+}
+.auto-homes.on {
+  border-color: var(--good);
+  background: linear-gradient(#eaf7e4, #cfe8c4);
+}
+@media (max-width: 720px) {
+  .auto-homes span {
+    display: none;
+  }
+  .contest-name {
+    font-size: 10px;
+  }
+}

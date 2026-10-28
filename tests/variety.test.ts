@@ -169,3 +169,43 @@ describe('dynasties (meta-progression)', () => {
     expect(ORIGIN_IDS).toContain(w.players[1].origin);
   });
 });
+
+describe('challenges, acclaim and auto-homes', () => {
+  it('the valley calls a challenge, and the first to the target wins the prize', async () => {
+    const { CHALLENGES, challengeProgress } = await import('../src/sim/challenges');
+    const w = new World({ seed: 5 });
+    w.tick = BALANCE.firstChallenge - 5;
+    w.run(20);
+    expect(w.challenge).not.toBeNull();
+    const def = CHALLENGES.find((d) => d.id === w.challenge!.def)!;
+    expect(challengeProgress(w, 0)).toEqual([0, def.target]);
+    // Fake the player's progress past the line.
+    w.challenge!.start[0] -= def.target;
+    const before = w.players[0].renown;
+    w.run(20);
+    expect(w.challenge).toBeNull();
+    expect(w.players[0].challengesWon).toBe(1);
+    expect(w.players[0].renown).toBe(before + def.prize);
+  });
+
+  it('a crushing lead at the Moot ends the race by acclaim', async () => {
+    const { evaluateScenario } = await import('../src/sim/scenario');
+    const w = new World({ seed: 3 });
+    w.tick = BALANCE.mootAt + 10;
+    w.players[0].renown = 900;
+    w.players[1].renown = 900 - BALANCE.acclaimLead;
+    evaluateScenario(w);
+    expect(w.scenarioState.winner).toBe(0);
+    expect(w.drainEvents().some((e) => e.type === 'victory' && e.acclaim)).toBe(true);
+  });
+
+  it('with auto-homes on, families put up a hut when every home is full', () => {
+    const w = new World({ seed: 4, scenario: 'peaceful' });
+    const wagon = [...w.buildings.values()].find((b) => b.type === 'wagon')!;
+    wagon.stock.logs = 60;
+    wagon.stock.stone = 20;
+    w.enqueue({ type: 'setAutoHomes', owner: 0, on: true });
+    w.run(secs(12));
+    expect(w.countBuildings(0, 'hut', true)).toBeGreaterThan(0);
+  });
+});

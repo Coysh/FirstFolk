@@ -51,6 +51,7 @@ if (games > 1) {
     `\n${reports.length} games · P wins ${reports.filter((r) => r.winner === 0).length} · rival wins ${reports.filter((r) => r.winner === 1).length} · by time ${reports.filter((r) => r.byTime).length} · undecided ${reports.length - won.length}` +
       `\nlength min/median/max ${lengths[0]?.toFixed(1)}/${lengths[Math.floor(lengths.length / 2)]?.toFixed(1)}/${lengths.at(-1)?.toFixed(1)} min` +
       `\navg lead changes ${avg((r) => r.leadChanges)} · comebacks (winner was ≥100 behind) ${reports.filter((r) => r.winnerDeficit >= 100).length} · avg landmark flips ${avg((r) => r.holdingFlips)}` +
+      `\nchallenges won P/R ${reports.reduce((n, r) => n + r.challenges[0], 0)}/${reports.reduce((n, r) => n + r.challenges[1], 0)} · by acclaim ${reports.filter((r) => r.acclaim).length}` +
       `\navg idle ${avg((r) => r.idleAdultPct)}% · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg stock@20m ${avg((r) => r.stockAt[1] ?? 0)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)}`,
   );
   const sources: Record<string, number> = {};

@@ -196,7 +196,7 @@ function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void;
           <div class="choices">
             <button class={`choice ${rival ? 'on' : ''}`} onClick={() => setRival(true)} aria-pressed={rival}>
               <strong>Race a rival</strong>
-              <span>Another settlement across the valley races you for renown. First to 1,500 wins.</span>
+              <span>Another settlement across the valley races you for renown. First to 1,600 wins.</span>
             </button>
             <button class={`choice ${!rival ? 'on' : ''}`} onClick={() => setRival(false)} aria-pressed={!rival}>
               <strong>Peaceful</strong>
@@ -263,7 +263,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 export function HowTo({ onClose }: { onClose: () => void }) {
   const steps = [
-    { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,500 renown wins, or the most renown when the clock reaches 45:00. From 25:00 the Moot makes landmarks pay double. Landmarks, land, discoveries, Masters, deeds, Great Works and Market Day all count.' },
+    { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,600 renown wins, or the most renown when the clock reaches 45:00. From 25:00 the Moot makes landmarks pay double. Landmarks, land, discoveries, Masters, deeds, Great Works and Market Day all count.' },
     { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Families with room and food have children; empty huts draw newcomers; young adults marry into new households.' },
     { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Influence decides the border: Lookouts and Watchtowers push it, and your rival can push back. Landmarks (groves, oakwoods, outcrops, standing stones) pay renown every minute you hold them.' },
     { icon: '/assets/icons/people.png', title: 'Raise great houses', text: 'Work makes Journeymen and Masters. Choices arrive as letters at the left: open them when you like. Your four greatest houses each lend a Deed (Z X C V). Win, and your greatest house can found your next valley.' },
