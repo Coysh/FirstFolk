@@ -68,6 +68,7 @@ function TopBar({ game }: { game: Game }) {
   const housing = w.housing(PLAYER);
   const hungry = w.players[PLAYER].hungry;
   const children = [...w.settlers.values()].filter((s) => s.owner === PLAYER && s.child).length;
+  const idle = [...w.settlers.values()].filter((s) => s.owner === PLAYER && !s.child && s.job.kind === 'idle').length;
   const showPlanks = w.players[PLAYER].produced.planks > 0 || w.isUnlocked(PLAYER, 'sawpit');
   const showFish = w.players[PLAYER].produced.fish > 0 || w.isUnlocked(PLAYER, 'fisher');
   return (
@@ -82,6 +83,11 @@ function TopBar({ game }: { game: Game }) {
           <small>/{housing}</small>
         </span>
         {hungry && <span class="hungry pulse">Hungry!</span>}
+        {idle >= 3 && (
+          <span class="idle-chip" title={`${idle} adults have nothing to do. Build workplaces (or more homes for families to grow).`}>
+            💤 {idle} idle
+          </span>
+        )}
       </div>
       <div class="speed">
         <SeasonChip game={game} />

@@ -59,30 +59,35 @@ export class OpeningBot {
     const LOW: Partial<Record<BuildingType, [Good, number]>> = { quarry: ['stone', 12], woodcutter: ['logs', 20] };
     const starving = (t: BuildingType) =>
       world.stored(this.owner, LOW[t]![0]) < LOW[t]![1] && [...world.buildings.values()].some((b) => b.owner === this.owner && b.type === t && b.alert === 'noResource');
-    // Like a tidy human: clear away gatherers whose resources are gone.
+    // Like a tidy human: clear away a gatherer whose resources are gone (then keep thinking).
     for (const b of world.buildings.values())
       if (b.owner === this.owner && b.done && b.alert === 'noResource' && BUILDINGS[b.type].job?.kind === 'gather' && world.countBuildings(this.owner, b.type) > 1) {
         world.enqueue({ type: 'demolish', owner: this.owner, id: b.id });
-        return;
+        break;
       }
     const target = this.frontierTarget(world);
-
+    const hungry = world.food(this.owner) < 12;
     const home: BuildingType = world.isUnlocked(this.owner, 'longhouse') && this.affordable(world, 'longhouse') ? 'longhouse' : 'hut';
     const tower: BuildingType = world.isUnlocked(this.owner, 'watchtower') && this.affordable(world, 'watchtower') ? 'watchtower' : 'lookout';
-    const lookoutSites = [...world.buildings.values()].filter((b) => b.owner === this.owner && BUILDINGS[b.type].claim && !b.done).length;
-    if (emptyHuts === 0 && pop >= world.housing(this.owner) - 2 && this.affordable(world, home)) this.place(world, home);
-    else if (world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0) this.place(world, 'sawpit');
-    else if (world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0 && this.affordable(world, 'watchtower')) this.place(world, 'watchtower', target ?? undefined);
-    else if (world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0 && this.affordable(world, 'storehouse')) this.place(world, 'storehouse');
-    else if (world.food(this.owner) < 12 && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 10) && bestSite(world, this.owner, 'fisher')) this.place(world, 'fisher');
-    else if (world.food(this.owner) < 12 && count('forager') < Math.ceil(pop / 6)) this.place(world, 'forager');
-    // Push the border: towards a seen discovery, or for room once the land fills up.
-    else if (lookoutSites === 0 && this.affordable(world, 'lookout') && (target || count('lookout') < pop / 8 || starving('quarry') || starving('woodcutter')))
-      this.place(world, tower, target ?? undefined, starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined);
-    else if (starving('woodcutter') && count('forester') < count('woodcutter') / 2) this.place(world, 'forester');
-    else if (count('woodcutter') < Math.ceil(pop / 7)) this.place(world, 'woodcutter');
-    else if (emptyHuts === 0 && this.affordable(world, 'hut')) this.place(world, 'hut');
-    else if (count('quarry') < Math.ceil(pop / 12)) this.place(world, 'quarry');
+    const towerSites = [...world.buildings.values()].filter((b) => b.owner === this.owner && BUILDINGS[b.type].claim && !b.done).length;
+    const want: NodeKind | undefined = hungry ? 'bush' : starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined;
+
+    // Ordered ideas; the first one that is wanted, affordable and has a valid site is done.
+    const ideas: [boolean, BuildingType, { x: number; y: number }?, NodeKind?][] = [
+      [emptyHuts === 0 && pop >= world.housing(this.owner) - 2, home],
+      [world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0, 'sawpit'],
+      [world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0, 'watchtower', target ?? undefined],
+      [world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0, 'storehouse'],
+      [hungry && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 10), 'fisher'],
+      [hungry && count('forager') < Math.ceil(pop / 6), 'forager'],
+      // Push the border: towards a seen discovery, for room, or towards what we lack.
+      [towerSites === 0 && (!!target || count('lookout') < pop / 8 || !!want), tower, target ?? undefined, want],
+      [starving('woodcutter') && count('forester') < count('woodcutter') / 2, 'forester'],
+      [count('woodcutter') < Math.ceil(pop / 7), 'woodcutter'],
+      [emptyHuts === 0, 'hut'],
+      [count('quarry') < Math.ceil(pop / 12), 'quarry'],
+    ];
+    for (const [wanted, type, tgt, w] of ideas) if (wanted && world.isUnlocked(this.owner, type) && this.affordable(world, type) && this.place(world, type, tgt, w)) return;
   }
 
   private affordable(world: World, type: BuildingType): boolean {
@@ -107,8 +112,9 @@ export class OpeningBot {
     return best;
   }
 
-  private place(world: World, type: BuildingType, target?: { x: number; y: number }, want?: NodeKind): void {
+  private place(world: World, type: BuildingType, target?: { x: number; y: number }, want?: NodeKind): boolean {
     const site = bestSite(world, this.owner, type, target, { want });
     if (site) world.enqueue({ type: 'place', owner: this.owner, building: type, ...site });
+    return !!site;
   }
 }

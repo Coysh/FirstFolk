@@ -62,6 +62,18 @@ export const objectives = {
       evaluate: (w, o) => ({ current: w.population(o), target: n }),
     };
   },
+  /** Tiles of territory held: the border as a scoreboard. */
+  land(n: number): Objective {
+    return {
+      id: `land-${n}`,
+      label: `Hold ${n.toLocaleString('en-GB')} tiles of land`,
+      evaluate: (w, o) => {
+        let c = 0;
+        for (let i = 0; i < w.territory.length; i++) if (w.territory[i] === o) c++;
+        return { current: c, target: n };
+      },
+    };
+  },
   winters(n: number): Objective {
     return {
       id: `winters-${n}`,
@@ -131,7 +143,7 @@ export const LANDFALL: Scenario = {
     with_(objectives.discoveries(5), 'Village', 'The richest prizes lie far out: oakwoods, outcrops, standing stones.'),
     with_(objectives.population(50), 'Village', 'Grow your village to fifty souls.'),
     with_(objectives.masters(4), 'Renown', 'Four Masters make a town famous.'),
-    with_(objectives.winters(4), 'Renown', 'Endure four winters.'),
+    with_(objectives.land(3000), 'Renown', 'Out-build your rival’s border: Watchtowers claim the most land.'),
     with_(objectives.discoveries(7), 'Renown', 'Race your rival for the prizes in the middle of the valley.'),
     with_(objectives.population(90), 'Renown', 'Ninety folk: a true town.'),
   ],

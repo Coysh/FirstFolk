@@ -556,3 +556,18 @@ Previously queued offers could also expire unseen; that's fixed too. Plural surn
 **The playtest found a bug** that would have been confusing in play. Objective, chapter, unlock, hunger, arrival and tier-up events had no owner, so the **rival's progress would have appeared as your toasts**, and the chapter timings in the report were the rival's. Every per-player event now carries `owner`, and the UI and reports filter on it.
 
 **Balance:** Renown needed 10 discoveries, which was impossible when the 16 split evenly (6 of 8 games had no winner). It now needs 7, plus the 2 contested central prizes.
+
+### v0.7.0 Review pass: no waiting gates, and a smarter bot (2026-10-28)
+**What still felt wrong after the rival landed:**
+1. **A waiting gate in the finale.** Renown required *4 winters*, a pure clock. Many games ended at exactly 20:00 with both towns idling until spring. Worse, when both completed on the same tick, player 0 won because players are evaluated in order: a hidden bias that inflated the measured win rate. Renown now asks you to **hold 3,000 tiles of land**, a contested and active goal. Winters remain only as early gates (Hamlet 1, Village 2), where they teach the rhythm.
+2. **A stalled rival.** On seed 5 the rival never left its starting land. It was short of berries, placed Foragers with nothing to pick, demolished them, and `return`ed before considering a Lookout, for 35 minutes. The bot now thinks in an **ordered list of ideas**, each requiring a real site, and falls through to the next. A food shortage now drives expansion towards berry bushes.
+
+**Results** (8 seeds, 35 min):
+
+| Metric | Before | After |
+|---|---|---|
+| Idle adults | 17% | **7%** |
+| Average longest major gap | 69 s | **58 s** |
+| Average population | about 130 | about 148 |
+
+Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player about 31%, Normal (160) about 56% and Relaxed (240) about 81%.
