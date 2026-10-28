@@ -30,9 +30,9 @@ export interface StyleDef {
 
 export const STYLES: Record<BotStyle, StyleDef> = {
   balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: true, muster: true, raids: 1, houses: ['plough', 'spear', 'shield', 'hammer', 'horn', 'hearth', 'axe'] },
-  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120, stockades: false, muster: false, raids: 0, houses: ['horn', 'hearth', 'axe', 'plough', 'hammer', 'shield', 'spear'] },
-  builder: { name: 'Builder', towerPer: 16, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60, stockades: false, muster: false, raids: 0, houses: ['hammer', 'axe', 'plough', 'hearth', 'shield', 'horn', 'spear'] },
-  raider: { name: 'Raider', towerPer: 9, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: false, muster: true, raids: 2, houses: ['spear', 'hammer', 'plough', 'axe', 'horn', 'hearth', 'shield'] },
+  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120, stockades: true, muster: false, raids: 0, houses: ['horn', 'shield', 'hearth', 'axe', 'plough', 'hammer', 'spear'] },
+  builder: { name: 'Builder', towerPer: 16, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60, stockades: true, muster: false, raids: 0, houses: ['hammer', 'shield', 'axe', 'plough', 'hearth', 'horn', 'spear'] },
+  raider: { name: 'Raider', towerPer: 9, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: false, muster: true, raids: 2, houses: ['spear', 'shield', 'hammer', 'plough', 'axe', 'horn', 'hearth'] },
   warden: { name: 'Warden', towerPer: 12, towersFirst: false, towersOnlyWithAim: true, sellKeep: 80, stockades: true, muster: true, raids: 0, houses: ['shield', 'hearth', 'plough', 'hammer', 'axe', 'horn', 'spear'] },
 };
 

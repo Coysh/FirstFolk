@@ -59,7 +59,7 @@ for (let g = 0; g < games; g++) {
   }
   if (!quiet || games === 1)
     console.log(
-      `seed ${r.seed}${real ? ` [${r.origins.join(' v ')} | ${r.omens.join(', ')}]` : ''}: winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'}${r.byTime ? ' (time)' : ''} at ${r.victorySec < 0 ? '-' : `${(r.victorySec / 60).toFixed(1)}m`} · renown ${r.renownByMinute.at(-1)?.join(':')} · leads ${r.leadChanges} · comeback ${r.winnerDeficit} · flips ${r.holdingFlips} · idle ${r.idleAdultPct}% · major gap ${r.longestMajorGapSec}s · stock ${r.stockAt.join('/')} · chapters ${JSON.stringify(r.chapters)} · pop ${r.populationByMinute.at(-1)} · towers ${r.towers.join(':')} · news ${r.newsPerMinute}/min (${r.bannersPerGame} banners) · ${Math.round(performance.now() - t0)}ms`,
+      `seed ${r.seed}${real ? ` [${r.origins.join(' v ')} | ${r.omens.join(', ')}]` : ''}: winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'}${r.byTime ? ' (time)' : ''} at ${r.victorySec < 0 ? '-' : `${(r.victorySec / 60).toFixed(1)}m`} · renown ${r.renownByMinute.at(-1)?.join(':')} · leads ${r.leadChanges} · comeback ${r.winnerDeficit} · flips ${r.holdingFlips} · idle ${r.idleAdultPct}% · major gap ${r.longestMajorGapSec}s · stock ${r.stockAt.join('/')} · chapters ${JSON.stringify(r.chapters)} · pop ${r.populationByMinute.at(-1)} · towers ${r.towers.join(':')} · battles ${r.battles} · news ${r.newsPerMinute}/min (${r.bannersPerGame} banners) · ${Math.round(performance.now() - t0)}ms`,
     );
 }
 if (games > 1) {
@@ -71,6 +71,7 @@ if (games > 1) {
       `\nlength min/median/max ${lengths[0]?.toFixed(1)}/${lengths[Math.floor(lengths.length / 2)]?.toFixed(1)}/${lengths.at(-1)?.toFixed(1)} min` +
       `\navg lead changes ${avg((r) => r.leadChanges)} · comebacks (winner was ≥100 behind) ${reports.filter((r) => r.winnerDeficit >= 100).length} · avg landmark flips ${avg((r) => r.holdingFlips)}` +
       `\nchallenges won P/R ${reports.reduce((n, r) => n + r.challenges[0], 0)}/${reports.reduce((n, r) => n + r.challenges[1], 0)} · by acclaim ${reports.filter((r) => r.acclaim).length}` +
+      `\nbattles the player saw: avg ${avg((r) => r.battles)} · games with none ${reports.filter((r) => !r.battles).length}` +
       `\navg idle ${avg((r) => r.idleAdultPct)}% · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg stock@20m ${avg((r) => r.stockAt[1] ?? 0)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)}`,
   );
   const sources: Record<string, number> = {};

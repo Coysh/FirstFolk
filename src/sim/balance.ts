@@ -65,6 +65,8 @@ export const BALANCE = {
   guardStrength: 10,
   /** Close to home (radius) the hall wards its buildings: strength, plus more per rank. */
   hallWard: [12, 20, 10] as [number, number, number],
+  /** The rival's mood: this far behind it raids anything it can beat; this far ahead it digs in. */
+  moodGap: 100,
   /** Raids: how far from the Mustering Hall a warband can strike, spoils (base, cap), the defender's reward, the rest after, and how close a home warband turns out. */
   raidReach: 48,
   /** No raids before this tick: the opening is for building. */
@@ -81,7 +83,7 @@ export const BALANCE = {
    */
   reaversFrom: secs(12 * 60),
   reaverGap: [secs(240), secs(300)] as [number, number],
-  reaverMinPosts: 6,
+  reaverMinPosts: 4,
   /** Strength at 12:00, and how much more every 5 minutes after. */
   reaverStrength: [20, 10] as [number, number],
   reaverRepel: 15,

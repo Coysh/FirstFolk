@@ -187,6 +187,23 @@ export class Game {
       this.version.value++;
       this.objectives.value = objectiveStatus(this.world, PLAYER);
       this.conduct();
+      this.watchRivalMood();
+    }
+  }
+
+  /** The rival says when its mood turns (see the bot's mood): war when it falls behind, walls when it leads. */
+  private rivalMood: 'calm' | 'war' | 'walls' = 'calm';
+  private watchRivalMood(): void {
+    const me = this.world.players[PLAYER];
+    const rival = this.world.players[1];
+    if (!rival) return;
+    const gap = me.renown - rival.renown;
+    const mood = gap >= BALANCE.moodGap ? 'war' : gap <= -BALANCE.moodGap ? 'walls' : 'calm';
+    if (mood === this.rivalMood) return;
+    this.rivalMood = mood;
+    if (mood !== 'calm') {
+      this.rivalSpokeAt = -Infinity;
+      this.rivalVoice(mood === 'war' ? 'warMood' : 'wallsMood');
     }
   }
 

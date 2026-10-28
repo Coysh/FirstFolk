@@ -221,3 +221,28 @@ describe('landmarks need watching', () => {
     expect(renownRate(w, 0).landmarks).toBe(DISCOVERIES[site.kind].renown! + BALANCE.tendedBonus);
   });
 });
+
+describe('a rival with a mood', () => {
+  it('a peaceable rival that falls far behind sends its huscarls against a post it can beat', async () => {
+    const { OpeningBot } = await import('../src/sim/ai/openingBot');
+    const w = new World({ seed: 2, rivalStyle: 'builder' });
+    w.ais = [];
+    const bot = new OpeningBot(1, 10, 1, 'builder');
+    w.tick = BALANCE.raidsFrom;
+    const theirs = [...w.buildings.values()].find((b) => b.owner === 1 && b.type === 'wagon')!;
+    const hall = w.addBuilding('musterhall', 1, theirs.x + 3, theirs.y - 4, true);
+    for (const s of [...w.settlers.values()].filter((x) => x.owner === 1).slice(0, 3)) {
+      s.child = false;
+      s.job = { kind: 'guard', buildingId: hall.id, phase: 'watch' };
+    }
+    const post = w.addBuilding('lookout', 0, theirs.x - 14, theirs.y, true);
+    for (let i = 0; i < w.explored.length; i++) w.explored[i] |= 2;
+    w.players[0].renown = 400;
+    w.players[1].renown = 100;
+    for (let i = 0; i < 200 && !w.warbands.length; i++) {
+      bot.update(w);
+      w.step();
+    }
+    expect(w.warbands.some((b) => b.owner === 1 && b.targetId === post.id)).toBe(true);
+  });
+});

@@ -451,6 +451,20 @@ The evidence and the fixes:
   - The Healing Spring is a plain landmark.
 - **Measured** (60 real duels): median 31–32 min, 2.4 lead changes, **30% comebacks**, 3.7 landmark flips a game (up from 2.6), no games ending on the clock, idle 5–8%, longest beat gap about 72 s. Craft tiers land at 1:44, 1:50 and 3:28 (skilled), and from 9:30 (masterly).
 
+**v0.19 a rival with teeth.** The playtest saw no military action. Only a Woodfolk rival (the Raider style) ever raided, and reavers ignored anyone with fewer than 6 posts.
+- **The rival has a mood** (`OpeningBot.mood`), and so does the player bot:
+  - **100+ renown behind:** it raids any post it can beat.
+  - **100+ ahead:** it digs in, with Stockades by its landmarks and raids only for landmarks.
+  - **Every rival keeps a Mustering Hall,** so war is always possible.
+  - **It says when its mood turns** ("Sharpen the spears. Our neighbours have grown proud."), so a sudden raid has a reason you saw coming.
+- **Reavers visit anyone with 4+ posts.** They go for the settlement spread widest and talked of most (posts, plus the renown lead).
+- **Every style guards its contested landmarks** and seats a war house. Once everyone could raid, styles without the Shield's answer fell to 34–35% and Balanced rose to 71%. After the change all styles sit at 43–55%.
+- **Measured** (60 real duels):
+  - player 33 : rival 27;
+  - median about 31 min;
+  - 2.3 lead changes a game, 27% comebacks;
+  - **about 6.8 battles a game for the player** (raids either way, and reavers), with 4 of 60 games having none (5%).
+
 **How `ui/news.ts` sorts the news:**
 - **Banners:** rank-ups, a raid on you, the star-fall, the Moot, your Great Work, and the opening goal. They show one at a time.
 - **Short toasts:** landmarks won or lost, raids, contests, house seats, hunger, new buildings.
@@ -1309,4 +1323,13 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - craft renown +15 and +50;
   - ruins, hermit, wanderers and events re-rewarded.
 - **Saves:** version 18.
+
+### v0.19.0 A rival with teeth: moods, war for everyone, fairer reavers (2026-10-28)
+- **The bot's mood:** 100+ behind it raids anything beatable; 100+ ahead it digs in. Every rival builds a Mustering Hall.
+- **The rival announces its mood** in a voice line.
+- **Reavers** come at 4+ posts and go for the widest and most famous.
+- **Every style** guards contested landmarks and seats a war house.
+- **Harness:** a `battles` metric (the war the player saw).
+- **Test:** a peaceable rival that falls behind raids a post it can beat.
+- **Measured:** see §0d.
 

@@ -58,6 +58,8 @@ export interface PlaytestReport {
   repelled: number[];
   /** What the player would have seen on screen (see ui/news.ts): banners and toasts per minute. */
   newsPerMinute: number;
+  /** Raids and reaver bands the player was in (attacking or defending): the war they saw. */
+  battles: number;
   bannersPerGame: number;
   /** Reaver bands that came for [player, rival], and how many of them burned a post. */
   reavers: number[];
@@ -89,6 +91,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   world.players[0].style = bot.style;
   const towers = [0, 0];
   const raids = [0, 0];
+  let battles = 0;
   const newsItems: { tick: number; news: News }[] = [];
   const reavers = [0, 0];
   const reaverBurns = [0, 0];
@@ -116,6 +119,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       if (n) newsItems.push({ tick: world.tick, news: n });
       if (e.type === 'buildingComplete' && BUILDINGS[e.buildingType].capped) towers[e.owner]++;
       if (e.type === 'raidLaunched' && e.owner >= 0) raids[e.owner]++;
+      if (e.type === 'raidLaunched' && (e.owner === 0 || e.defender === 0)) battles++;
       if (e.type === 'raidLaunched' && e.owner < 0) reavers[e.defender]++;
       if (e.type === 'raidResolved' && e.owner < 0 && e.won) reaverBurns[e.defender]++;
       if (e.type === 'raidLaunched') timeline.push(`${t} ⚔ ${e.owner === 0 ? 'you raid' : e.owner === 1 ? 'RIVAL raids' : 'REAVERS march on'} ${e.defender === 0 ? 'your' : 'their'} ${e.buildingType} (${e.strength})`);
@@ -227,6 +231,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     repelled: world.players.map((p) => p.repelled),
     reavers,
     reaverBurns,
+    battles,
     ...(() => {
       const desk = simulateDesk(newsItems);
       return { newsPerMinute: Math.round(((desk.banners + desk.toasts) * 600 * 10) / Math.max(1, world.tick)) / 10, bannersPerGame: desk.banners };

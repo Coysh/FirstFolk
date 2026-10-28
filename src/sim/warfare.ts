@@ -211,8 +211,10 @@ export function updateReavers(world: World): void {
   if (limit && world.tick > limit - BALANCE.reaverGap[0] / 2) return;
   const gap = BALANCE.reaverGap[0] + world.rng.int(BALANCE.reaverGap[1] - BALANCE.reaverGap[0]);
   world.nextReaversAt = world.tick + (hasOmen(world, 'reaverCoast') ? Math.floor(gap / 2) : gap);
-  // The settlement spread widest (ties: the one with more renown).
-  const ranked = [...world.players].sort((a, b) => world.frontierCount(b.id) - world.frontierCount(a.id) || b.renown - a.renown || a.id - b.id);
+  // The settlement spread widest and talked of most: posts, plus one for every 50 renown of lead.
+  const top = Math.max(...world.players.map((p) => p.renown));
+  const lure = (p: (typeof world.players)[number]) => world.frontierCount(p.id) * 50 + Math.max(0, p.renown - (world.players.length > 1 ? Math.min(...world.players.map((q) => q.renown)) : p.renown)) + (p.renown === top ? 1 : 0);
+  const ranked = [...world.players].sort((a, b) => lure(b) - lure(a) || a.id - b.id);
   const victim = ranked[0];
   if (!victim || world.frontierCount(victim.id) < BALANCE.reaverMinPosts) return;
   const hall = [...world.buildings.values()].find((b) => b.owner === victim.id && b.type === 'wagon');

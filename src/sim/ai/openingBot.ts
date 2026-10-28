@@ -9,7 +9,7 @@ import { BALANCE } from '../balance';
 import { canAfford, eventDef } from '../events';
 import { isHome } from '../population';
 import { bestSite } from './placement';
-import { STYLES, type BotStyle } from './styles';
+import { STYLES, type BotStyle, type StyleDef } from './styles';
 import { defenceOf, hallOf, huscarls, raidProblem, raidStrength, raidable } from '../warfare';
 import { previewRemoval } from '../territory';
 
@@ -92,7 +92,7 @@ export class OpeningBot {
     const idle = [...world.settlers.values()].filter((s) => s.owner === this.owner && !s.child && s.job.kind === 'idle').length;
     const idleJob: BuildingType = (['woodcutter', 'quarry', 'fisher', 'forager'] as BuildingType[])[(world.tick / this.thinkEvery) % 4 | 0];
     const want: NodeKind | undefined = hungry ? 'bush' : starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined;
-    const st = STYLES[this.style];
+    const st = this.mood(world);
     // Push the border: towards a seen discovery, for room, or towards what we lack.
     const towers = count('lookout') + (this.style === 'balanced' ? 0 : count('watchtower') + count('outpost'));
     const hold = this.landmarkToHold(world);
@@ -251,7 +251,7 @@ export class OpeningBot {
 
   /** Send the huscarls against the rival post that is worth most and that they can beat. */
   private raid(world: World): boolean {
-    const st = STYLES[this.style];
+    const st = this.mood(world);
     if (!st.raids) return false;
     const hall = hallOf(world, this.owner);
     const n = huscarls(world, hall);
@@ -269,6 +269,22 @@ export class OpeningBot {
     if (!best) return false;
     world.enqueue({ type: 'raid', owner: this.owner, targetId: best.id });
     return true;
+  }
+
+  /**
+   * The bot's mood follows the race, so the rival feels alive: far behind, it strikes at any
+   * post it can beat; well ahead, it digs in around its landmarks. Every rival keeps a
+   * Mustering Hall, so a war is always possible.
+   */
+  private mood(world: World): StyleDef {
+    const st = STYLES[this.style];
+    const me = world.players[this.owner];
+    const others = world.players.filter((p) => p.id !== this.owner);
+    if (!others.length) return st;
+    const behind = Math.max(...others.map((p) => p.renown)) - me.renown;
+    if (behind >= BALANCE.moodGap) return { ...st, muster: true, raids: 2 };
+    if (behind <= -BALANCE.moodGap) return { ...st, muster: true, stockades: true, raids: st.raids || 1 };
+    return { ...st, muster: true };
   }
 
   /** A landmark we hold with the rival's land close by and no stockade guarding it yet. */
