@@ -30,11 +30,17 @@ describe('seasons and settlement ranks', () => {
     const w = new World({ scenario: 'peaceful', seed: 1 });
     const land = w.territory.filter((t) => t === 0).length;
     expect(w.isUnlocked(0, 'watchtower')).toBe(false);
+    // The founders' letter (a classic start): settle it, so Hamlet's seat can be offered.
+    expect(w.players[0].houseOffer?.choices.length).toBe(3);
+    w.enqueue({ type: 'chooseHouse', owner: 0, offerId: w.players[0].houseOffer!.id, choice: 1 });
+    w.step();
+    expect(w.players[0].seats.length).toBe(1);
     rankUp(w, 0, 1);
     expect(w.players[0].rank).toBe(1);
     expect(wagon(w).tier).toBe(1);
     expect(w.isUnlocked(0, 'watchtower')).toBe(true);
     expect(w.territory.filter((t) => t === 0).length).toBeGreaterThan(land);
-    expect(w.players[0].offers.length).toBeGreaterThanOrEqual(1);
+    // A second seat is offered, and one of the war houses is always among the choices.
+    expect(w.players[0].houseOffer?.choices.some((h) => h === 'spear' || h === 'shield')).toBe(true);
   });
 });

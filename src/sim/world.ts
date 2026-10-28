@@ -17,7 +17,7 @@ import type { DeedId } from './deeds';
 import { updateMarket } from './market';
 import { updateHappenings } from './happenings';
 import { updateChallenges } from './challenges';
-import { addBoon, offerBoon, updateOffers, type BoonId, type Mod } from './boons';
+import { FOUNDING_HOUSES, offerHouse, playerMod, seatHouse, updateHouses, type HouseId, type HouseOffer, type Mod, type Seat } from './houses';
 import { ORIGINS, rivalOrigin, type Dynasty, type OriginId } from './origins';
 import { hasOmen, type OmenId } from './omens';
 import { unlocksFor } from './trades';
@@ -107,15 +107,8 @@ export interface Family {
   skills: Skills;
   /** Ticks until the family can next have a child. */
   birthCooldown: number;
-  /** Family boons (see boons.ts) and their summed effects. */
-  boons: BoonId[];
-  mods: Partial<Record<Mod, number>>;
   /** Families this household was founded from by marriage. */
   parents: number[];
-  /** Deeds done and legends left: part of the house's prestige (see deeds.ts). */
-  glory: number;
-  /** Tick when the family's deed is next ready. */
-  deedReady: number;
 }
 
 export type Job =
@@ -181,8 +174,8 @@ export type SimEvent =
   | { type: 'discovered'; siteId: number; kind: DiscoveryKind; owner: number }
   | { type: 'claimed'; siteId: number; kind: DiscoveryKind; owner: number; text: string }
   | { type: 'rumour'; siteId: number; kind: DiscoveryKind; owner: number; dir: string }
-  | { type: 'boonOffered'; owner: number; offerId: number; familyId: number; surname: string; reason: string }
-  | { type: 'boonChosen'; owner: number; familyId: number; surname: string; boon: BoonId }
+  | { type: 'houseOffered'; owner: number; offerId: number; reason: string }
+  | { type: 'houseSeated'; owner: number; house: HouseId; surname: string }
   | { type: 'married'; owner: number; a: number; b: number; familyId: number; surname: string; buildingId: number }
   | { type: 'season'; season: Season }
   | { type: 'winterComing' }
@@ -194,7 +187,7 @@ export type SimEvent =
   | { type: 'holdingChanged'; siteId: number; kind: DiscoveryKind; owner: number; from: number }
   | { type: 'landLost'; owner: number; tiles: number }
   | { type: 'renown'; owner: number; amount: number; source: RenownSource; x: number; y: number }
-  | { type: 'deed'; owner: number; familyId: number; surname: string; deed: DeedId; x: number; y: number; text: string }
+  | { type: 'deed'; owner: number; seat: number; house: HouseId; surname: string; deed: DeedId; x: number; y: number; text: string }
   | { type: 'moot' }
   | { type: 'challenge'; def: string }
   | { type: 'challengeWon'; def: string; winner: number; prize: number }
@@ -221,9 +214,10 @@ export interface PlayerState {
   claimed: number;
   /** Tick after which a rumour reveals the next discovery (if none is in sight). */
   rumourAt: number;
-  /** Boon choices waiting for the player; only the first is live (expires > 0). */
-  offers: BoonOffer[];
-  nextOfferAt: number;
+  /** The Great Houses on the council (see houses.ts), their summed passives, and a seat on offer. */
+  seats: Seat[];
+  mods: Partial<Record<Mod, number>>;
+  houseOffer: HouseOffer | null;
   /** Winters survived. */
   winters: number;
   /** Settlement rank: 0 Camp, 1 Hamlet, 2 Village, 3 Town. */
@@ -264,6 +258,10 @@ export interface PlayerState {
   style: BotStyle;
   /** Raids (see warfare.ts): when the huscarls can march again, raids won, raids driven off. */
   raidReady: number;
+  /** The War-Horn has sounded: the next raid strikes half as hard again. */
+  warhorn: boolean;
+  /** A Shield Wall raised by the House of the Shield. */
+  shieldWall: { x: number; y: number; until: number } | null;
   raidsWon: number;
   repelled: number;
 }
@@ -273,14 +271,6 @@ export interface Legend {
   surname: string;
   skill: Skill;
   tick: number;
-}
-
-export interface BoonOffer {
-  id: number;
-  familyId: number;
-  choices: BoonId[];
-  reason: string;
-  expires: number;
 }
 
 export interface WorldStats {
@@ -557,7 +547,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, raidsWon: 0, repelled: 0 };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -571,18 +561,14 @@ export class World {
     folk[0].spouseId = folk[1].id;
     folk[1].spouseId = folk[0].id;
     if (!origin) {
-      // The very first choice: what kind of folk are the founders?
-      offerBoon(this, fam, 'The founders set out');
+      // The very first choice: which house founds the settlement?
+      offerHouse(this, owner, 'The founders set out: which house leads them?', FOUNDING_HOUSES);
       return;
     }
-    // An origin is that choice made before the clock starts: a craft, a boon (and its deed), supplies.
+    // An origin is that choice made before the clock starts: a founding house, a craft, supplies.
     for (const g of GOODS) wagon.stock[g] += origin.stock[g] ?? 0;
-    for (const b of origin.boons) addBoon(fam, b);
     const skill = dynasty ? dynasty.skill : origin.skill;
-    if (dynasty) {
-      for (const b of dynasty.boons.slice(0, 2)) addBoon(fam, b);
-      fam.glory = dynasty.generation * 2;
-    }
+    seatHouse(this, owner, dynasty ? dynasty.house : origin.house);
     if (skill) {
       // A dynasty's founders know a little more with each generation.
       const xp = TIER_XP[1] + (dynasty ? Math.min(4, dynasty.generation - 1) * 80 : 0);
@@ -648,6 +634,13 @@ export class World {
    */
   buildCost(owner: number, type: BuildingType): Partial<Record<Good, number>> {
     const def = BUILDINGS[type];
+    if (type === 'stockade') {
+      // The House of the Shield builds stockades cheaply.
+      const pct = 100 - playerMod(this, owner, 'stockade');
+      const out: Partial<Record<Good, number>> = {};
+      for (const g of GOODS) if (def.cost[g]) out[g] = Math.ceil((def.cost[g]! * pct) / 100);
+      return out;
+    }
     if (!def.frontier) return { ...def.cost };
     const pct = 100 + BALANCE.towerCostPct * this.frontierCount(owner);
     const out: Partial<Record<Good, number>> = {};
@@ -735,7 +728,7 @@ export class World {
       updateHappenings(this);
       updateChallenges(this);
       updateReavers(this);
-      updateOffers(this);
+      updateHouses(this);
       updateValleyEvents(this);
     }
     if (this.tick % 5 === 0) {
@@ -769,7 +762,7 @@ export class World {
       if (s.child && s.age >= adult) {
         s.child = false;
         // Inheritance: a new adult starts with part of the family's knowledge.
-        const pct = BALANCE.inheritPct + (fam?.mods.teach ?? 0);
+        const pct = BALANCE.inheritPct;
         if (fam) for (const k of SKILLS) s.skills[k] = Math.max(s.skills[k], Math.floor((fam.skills[k] * pct) / 100));
         this.emit({ type: 'cameOfAge', owner: s.owner, settlerId: s.id, name: s.name, surname: fam?.surname ?? '' });
       } else if (!s.elder && s.age >= elder) {
@@ -782,7 +775,7 @@ export class World {
         // Elders pass their best craft on to the family's working adults.
         const best = SKILLS.reduce((a, k) => (s.skills[k] > s.skills[a] ? k : a), SKILLS[0]);
         if (s.skills[best] > 0)
-          for (const o of this.settlers.values()) if (o.familyId === s.familyId && !o.child && !o.elder) grantXp(this, o, best, BALANCE.elderTeachXp + Math.floor((fam?.mods.teach ?? 0) / 10));
+          for (const o of this.settlers.values()) if (o.familyId === s.familyId && !o.child && !o.elder) grantXp(this, o, best, BALANCE.elderTeachXp);
       }
     }
   }
@@ -800,7 +793,6 @@ export class World {
     this.emit({ type: 'died', owner: s.owner, name: s.name, surname: fam?.surname ?? '', age: Math.floor(s.age / BALANCE.yearTicks), legend, x: s.x, y: s.y });
     if (legend && p) {
       p.legends.push({ name: s.name, surname: fam?.surname ?? '', skill: legend, tick: this.tick });
-      if (fam) fam.glory += 3;
       addRenown(this, s.owner, BALANCE.renown.legend, 'legends', s.x, s.y);
     }
   }
@@ -843,7 +835,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'challenge', 'challengeWon', 'starfall', 'moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'challenge', 'challengeWon', 'starfall', 'moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);

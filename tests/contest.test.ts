@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE, secs } from '../src/sim/balance';
-import { DEEDS, council, deedCost, deedOf } from '../src/sim/deeds';
+import { DEEDS, deedCost, deedProblem } from '../src/sim/deeds';
+import { HOUSES, playerMod, seatHouse, type HouseId } from '../src/sim/houses';
+import { defenceOf, raidStrength } from '../src/sim/warfare';
 import { BUILDINGS, DISCOVERIES } from '../src/sim/defs';
 import { FAIR_LOT, FAIR_VALUE, fairPrice } from '../src/sim/market';
 import { recomputeTerritory } from '../src/sim/territory';
@@ -64,50 +66,48 @@ describe('living borders', () => {
   });
 });
 
-describe('family deeds', () => {
-  const seat = (w: World, skill: 'stonework' | 'woodcraft' | 'husbandry') => {
-    const fam = [...w.families.values()].find((f) => f.owner === 0)!;
-    fam.boons = [];
-    fam.mods = {};
-    fam.skills[skill] = TIER_XP[1];
-    fam.deedReady = 0;
-    return fam;
+describe('house powers', () => {
+  /** Seat one house for player 0 (in a peaceful valley), its power ready. */
+  const seated = (w: World, house: HouseId) => {
+    w.players[0].seats = [];
+    seatHouse(w, 0, house);
+    w.players[0].seats[0].ready = 0;
+    return 0;
   };
 
-  it('a family with a Journeyman lends the council its craft’s deed; each deed sits once', () => {
+  it('each house lends exactly one power, and seats hold distinct houses', () => {
     const w = newWorld();
-    const fam = seat(w, 'stonework');
-    expect(deedOf(fam)).toBe('raise');
-    expect(council(w, 0)).toContain(fam);
-    const ids = council(w, 0).map((f) => deedOf(f));
-    expect(new Set(ids).size).toBe(ids.length);
+    seatHouse(w, 0, 'hammer');
+    seatHouse(w, 0, 'hammer');
+    expect(w.players[0].seats.length).toBe(1);
+    expect(HOUSES[w.players[0].seats[0].house].power).toBe('raise');
+    expect(playerMod(w, 0, 'build')).toBe(40);
   });
 
   it('Raise finishes a construction site at once', () => {
     const w = newWorld();
-    const fam = seat(w, 'stonework');
+    const k = seated(w, 'hammer');
     const site = w.addBuilding('hut', 0, wagon(w).x + 5, wagon(w).y + 5);
-    w.enqueue({ type: 'deed', owner: 0, familyId: fam.id, x: site.x, y: site.y });
+    w.enqueue({ type: 'deed', owner: 0, seat: k, x: site.x, y: site.y });
     w.step();
     expect(site.done).toBe(true);
-    expect(fam.deedReady).toBeGreaterThan(w.tick);
+    expect(w.players[0].seats[k].ready).toBeGreaterThan(w.tick);
     // On cooldown: a second use does nothing.
     const site2 = w.addBuilding('hut', 0, wagon(w).x - 6, wagon(w).y + 5);
-    w.enqueue({ type: 'deed', owner: 0, familyId: fam.id, x: site2.x, y: site2.y });
+    w.enqueue({ type: 'deed', owner: 0, seat: k, x: site2.x, y: site2.y });
     w.step();
     expect(site2.done).toBe(false);
+    expect(deedProblem(w, 0, k)).toMatch(/Ready in/);
   });
 
   it('a Festival surges influence for a minute, then fades', () => {
     const w = newWorld();
-    const fam = seat(w, 'husbandry');
-    fam.boons = ['bigHearts'];
-    expect(deedOf(fam)).toBe('festival');
+    const k = seated(w, 'hearth');
     w.players[0].rank = 1;
     const store = wagon(w);
     store.stock.berries = 50;
     const before = tiles(w, 0);
-    w.enqueue({ type: 'deed', owner: 0, familyId: fam.id, x: store.x + 10, y: store.y });
+    w.enqueue({ type: 'deed', owner: 0, seat: k, x: store.x + 10, y: store.y });
     w.step();
     expect(tiles(w, 0)).toBeGreaterThan(before);
     expect(w.players[0].boosts.length).toBe(1);
@@ -117,17 +117,43 @@ describe('family deeds', () => {
 
   it('an Expedition raises an outpost beyond the border, and the next costs more', () => {
     const w = newWorld();
-    const fam = seat(w, 'husbandry');
-    fam.boons = ['wanderlust'];
+    const k = seated(w, 'horn');
     const store = wagon(w);
     store.stock.logs = 80;
     store.stock.berries = 40;
     const cost = deedCost(w, 0, 'expedition').logs!;
-    w.enqueue({ type: 'deed', owner: 0, familyId: fam.id, x: store.x + 20, y: store.y });
+    w.enqueue({ type: 'deed', owner: 0, seat: k, x: store.x + 20, y: store.y });
     w.step();
     expect(w.countBuildings(0, 'outpost')).toBe(1);
     expect(deedCost(w, 0, 'expedition').logs!).toBeGreaterThan(cost);
     expect(DEEDS.expedition.target).toBe(true);
+  });
+
+  it('the Shield Wall adds its defence near where it is raised, for a minute', () => {
+    const w = newWorld();
+    const k = seated(w, 'shield');
+    const home = wagon(w);
+    const post = w.addBuilding('lookout', 0, home.x + 30, home.y + 30, true);
+    w.territory[w.idx(post.x, post.y)] = 0;
+    w.enqueue({ type: 'deed', owner: 0, seat: k, x: post.x, y: post.y });
+    w.step();
+    post.guarded = 0;
+    expect(defenceOf(w, post)).toBe(BALANCE.shieldWall[1]);
+    w.run(secs(61));
+    post.guarded = 0;
+    expect(defenceOf(w, post)).toBe(0);
+  });
+
+  it('the War-Horn readies the huscarls and strengthens the next raid', () => {
+    const w = newWorld();
+    const k = seated(w, 'spear');
+    expect(deedProblem(w, 0, k)).toMatch(/Mustering Hall/);
+    w.addBuilding('musterhall', 0, wagon(w).x + 4, wagon(w).y - 5, true);
+    const plain = raidStrength(w, 0, 4);
+    expect(plain).toBe(4 * (BALANCE.guardStrength + 5));
+    w.enqueue({ type: 'deed', owner: 0, seat: k, x: 0, y: 0 });
+    w.step();
+    expect(raidStrength(w, 0, 4)).toBe(Math.floor((plain * 3) / 2));
   });
 });
 

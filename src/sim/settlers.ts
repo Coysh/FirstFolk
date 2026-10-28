@@ -1,8 +1,8 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, GOOD_INFO, type GatherJob, type Good, type NodeKind, type Skill } from './defs';
 import { addRenown } from './renown';
-import { TRADES, tierOf, tradeTitle, unlocksFor } from './trades';
-import { offerBoon } from './boons';
+import { TRADES, tierOf, unlocksFor } from './trades';
+import { playerMod } from './houses';
 import { Terrain } from './mapgen';
 import { onBuildingComplete } from './territory';
 import { berryRegrow, type Building, type ResourceNode, type Settler, type World } from './world';
@@ -255,13 +255,11 @@ export function gainXp(world: World, s: Settler, skill: Skill, b: Building): voi
 export function grantXp(world: World, s: Settler, skill: Skill, amount: number, buildingId = 0): number {
   const before = tierOf(s.skills[skill]);
   const fam = world.families.get(s.familyId);
-  s.skills[skill] += Math.floor((amount * (100 + (fam?.mods.xp ?? 0))) / 100);
+  s.skills[skill] += amount;
   const famBefore = fam ? tierOf(fam.skills[skill]) : 0;
   if (fam) fam.skills[skill] = Math.max(fam.skills[skill], s.skills[skill]);
   const after = tierOf(s.skills[skill]);
-  // A family's first Journeyman or Master in a craft is a moment to choose how it grows.
   if (fam && tierOf(fam.skills[skill]) > famBefore) {
-    offerBoon(world, fam, `${s.name} became a ${tradeTitle(skill, after)}`);
     // A family's first Master of a craft makes the whole settlement famous.
     if (after === 2) {
       addRenown(world, s.owner, BALANCE.renown.master, 'masters', s.x, s.y);
@@ -282,10 +280,9 @@ export function grantXp(world: World, s: Settler, skill: Skill, amount: number, 
 }
 
 function workTicks(world: World, s: Settler, base: number, skill: Skill): number {
-  const fam = world.families.get(s.familyId);
-  let t = (base * TRADES[skill].speed[tierOf(s.skills[skill])] * 100) / (100 + (fam?.mods[`speed.${skill}`] ?? 0) + legendBonus(world, s.owner, skill));
+  let t = (base * TRADES[skill].speed[tierOf(s.skills[skill])] * 100) / (100 + playerMod(world, s.owner, `speed.${skill}`) + legendBonus(world, s.owner, skill));
   const player = world.players[s.owner];
-  if (player.hungry && !fam?.mods.hardy) t *= 1.4;
+  if (player.hungry) t *= 1.4;
   // Deeds: a timber drive or a harvest home.
   if (skill === 'woodcraft' && player.buffs.timber > world.tick) t /= 3;
   if (skill === 'husbandry' && player.buffs.harvest > world.tick) t /= 2;
@@ -300,8 +297,7 @@ export function legendBonus(world: World, owner: number, skill: Skill): number {
 }
 
 function rollBonus(world: World, s: Settler, skill: Skill): number {
-  const extra = world.families.get(s.familyId)?.mods[`bonus.${skill}`] ?? 0;
-  return world.rng.int(100) < TRADES[skill].bonus[tierOf(s.skills[skill])] + extra ? 1 : 0;
+  return world.rng.int(100) < TRADES[skill].bonus[tierOf(s.skills[skill])] ? 1 : 0;
 }
 
 function anyBuilder(world: World, owner: number): boolean {
@@ -337,10 +333,8 @@ function stepMove(world: World, s: Settler): void {
     if (!s.path.length) return;
     beginStep(world, s, s.path.shift()!);
   }
-  const fam = world.families.get(s.familyId);
   let speed = s.child ? BALANCE.childSpeed : BALANCE.adultSpeed;
-  if (fam?.mods.walk) speed = Math.floor((speed * (100 + fam.mods.walk)) / 100);
-  if (world.players[s.owner].hungry && !fam?.mods.hardy) speed = Math.floor((speed * BALANCE.hungrySpeedPct) / 100);
+  if (world.players[s.owner].hungry) speed = Math.floor((speed * BALANCE.hungrySpeedPct) / 100);
   s.progress += speed;
   while (s.progress >= s.stepLen) {
     s.progress -= s.stepLen;
@@ -447,9 +441,8 @@ function thinkBuild(world: World, s: Settler, job: Extract<Settler['job'], { kin
   s.anim = 'work';
   site.status = 'Under construction';
   site.alert = '';
-  const fam = world.families.get(s.familyId);
-  let rate = world.players[s.owner].hungry && !fam?.mods.hardy ? Math.floor(BALANCE.buildRate * 0.6) : BALANCE.buildRate;
-  rate = Math.floor((rate * (100 + (fam?.mods.build ?? 0))) / 100);
+  let rate = world.players[s.owner].hungry ? Math.floor(BALANCE.buildRate * 0.6) : BALANCE.buildRate;
+  rate = Math.floor((rate * (100 + playerMod(world, s.owner, 'build'))) / 100);
   if (world.winterBites(s.owner)) rate = Math.max(1, Math.floor((rate * (hasOmen(world, 'longWinters') ? 50 : BALANCE.winterBuildPct)) / 100));
   site.work = Math.min(site.workNeeded, site.work + rate);
   if (site.work >= site.workNeeded) {

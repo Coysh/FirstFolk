@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { BUILDINGS, DISCOVERIES, type Good } from '../sim/defs';
 import { NO_OWNER } from '../sim/territory';
+import { watched } from '../sim/renown';
+import { BALANCE } from '../sim/balance';
 import type { Building, World } from '../sim/world';
 import type { BuildingsView } from './buildings';
 import type { SitesView } from './sites';
@@ -138,12 +140,24 @@ export class Overlay {
           this.root.appendChild(pin);
           this.pins.set(site.id, pin);
         }
-        const state = site.heldBy === 0 ? 'mine' : site.heldBy > 0 ? 'theirs' : 'open';
+        // Your landmarks pay only while a manned post watches them: say so when none does.
+        const watch = site.heldBy === 0 && d.renown ? watched(world, 0, site.x, site.y) : '';
+        const state = site.heldBy === 0 ? (d.renown && !watch ? 'mine unwatched' : watch === 'stockade' ? 'mine tended' : 'mine') : site.heldBy > 0 ? 'theirs' : 'open';
         if (pin.dataset.state !== state) {
           pin.dataset.state = state;
           pin.className = `pin ${state} ${d.renown ? 'landmark' : ''}`;
           const rate = pin.querySelector('.pin-rate') as HTMLElement;
-          rate.textContent = d.renown ? (state === 'mine' ? `yours · +${d.renown}★/min` : state === 'theirs' ? `rival’s · +${d.renown}★/min` : `+${d.renown}★/min`) : '';
+          rate.textContent = d.renown
+            ? state === 'mine unwatched'
+              ? 'yours · unwatched: man a post nearby'
+              : state === 'mine tended'
+                ? `yours · +${d.renown + BALANCE.tendedBonus}★/min (stockade)`
+                : state === 'mine'
+                  ? `yours · +${d.renown}★/min`
+                  : state === 'theirs'
+                    ? `rival’s · +${d.renown}★/min`
+                    : `+${d.renown}★/min`
+            : '';
         }
         const p = sites.position(world, site.id);
         if (!p) continue;

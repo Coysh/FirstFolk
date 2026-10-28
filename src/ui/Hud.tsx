@@ -4,7 +4,7 @@ import { audio } from '../audio/audio';
 import { ICON } from '../render/overlay';
 import { BUILDINGS, BUILD_MENU, DISCOVERIES, FOODS, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
-import { BOONS, BOON_TIMEOUT, familyTitle } from '../sim/boons';
+import { HOUSES, HOUSE_TIMEOUT, MAX_SEATS } from '../sim/houses';
 import { BALANCE, TICK_HZ, secs } from '../sim/balance';
 import { canAfford, eventDef } from '../sim/events';
 import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
@@ -17,7 +17,7 @@ import { ageYears, describeSettler, formatTime } from './describe';
 import { HowTo, SettingsPanel } from './Screens';
 import { DEED_KEYS, HOTKEYS } from '../input/input';
 import { lockLabel } from '../sim/commands';
-import { DEEDS, council, deedCost, deedOf, deedPower, deedWait, prestige } from '../sim/deeds';
+import { DEEDS, activePowers, deedCooldown, deedProblem, deedWait } from '../sim/deeds';
 import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../sim/market';
 import { mootUnderway, renownRate } from '../sim/renown';
 import { challengeDef, challengeProgress } from '../sim/challenges';
@@ -214,46 +214,24 @@ function Goals({ game }: { game: Game }) {
   );
 }
 
-/** A family's title and boon badges, plus where the household came from. */
+/** A family's craft, the house banner it flies (if any), and where the household came from. */
 function FamilyLine({ w, fam }: { w: World; fam: Family }) {
   const best = SKILLS.reduce((a, k) => (fam.skills[k] > fam.skills[a] ? k : a), SKILLS[0]);
   const craft = fam.skills[best] > 0 ? TRADES[best].titles[tierOf(fam.skills[best])] + 's' : 'folk';
   const parents = fam.parents.map((id) => w.families.get(id)?.surname).filter(Boolean);
+  const seat = w.players[fam.owner]?.seats.find((s) => s.familyId === fam.id);
   return (
     <div class="family-line">
       <p class="fam-title">
-        The {plural(fam.surname)}, <em>{familyTitle(fam, craft)}</em>
+        The {plural(fam.surname)}, <em>{craft}</em>
       </p>
-      {fam.boons.length > 0 && (
-        <p class="boon-badges">
-          {fam.boons.map((id) => (
-            <span key={id} class="boon-badge" title={`${BOONS[id].name}: ${BOONS[id].blurb}`}>
-              {BOONS[id].icon} {BOONS[id].name}
-            </span>
-          ))}
+      {seat && (
+        <p class="muted small fam-deed">
+          {HOUSES[seat.house].icon} They fly the banner of the <b>{HOUSES[seat.house].name}</b>.
         </p>
       )}
       {parents.length === 2 && <p class="muted small">A household joining the {parents[0]} and {parents[1]} lines.</p>}
-      <FamilyDeed w={w} fam={fam} />
     </div>
-  );
-}
-
-/** The deed a family would lend the council, and whether it sits there. */
-function FamilyDeed({ w, fam }: { w: World; fam: Family }) {
-  const id = deedOf(fam);
-  const seated = council(w, fam.owner).includes(fam);
-  return (
-    <p class="muted small fam-deed">
-      Prestige {prestige(w, fam)}
-      {id ? (
-        <>
-          {' · '}Deed: {DEEDS[id].icon} <b>{DEEDS[id].name}</b> {seated ? '(on the council)' : '(another house lends it)'}
-        </>
-      ) : (
-        ' · No deed yet: a Journeyman in the family, or a boon, brings one'
-      )}
-    </p>
   );
 }
 
@@ -428,42 +406,56 @@ function RaidBar({ game }: { game: Game }) {
   );
 }
 
-/** The council of great houses: each lends its deed, a call-down power with a cooldown. */
+/**
+ * The Great Houses: each seat shows its house, the power it lends and what that power does in
+ * a few words, with a cooldown ring that tells the truth and a chip for any effect still running.
+ */
 function Council({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
-  const seats = council(w, PLAYER);
-  if (!seats.length && !hallOf(w, PLAYER)) return null;
+  const p = w.players[PLAYER];
+  if (!p.seats.length && !hallOf(w, PLAYER)) return null;
+  const running = activePowers(w, PLAYER);
   return (
     <section class="council" aria-label="Great Houses">
-      <span class="council-label">Great Houses</span>
-      {seats.map((fam, i) => {
-        const id = deedOf(fam)!;
-        const d = DEEDS[id];
-        const wait = deedWait(w, fam);
-        const cost = deedCost(w, PLAYER, id);
-        const ok = canAfford(w, PLAYER, cost);
-        const ready = wait === 0 && ok;
-        const pct = wait ? 1 - wait / Math.max(1, d.cooldown) : 1;
-        const costText = Object.entries(cost).map(([g, n]) => `${n} ${g}`).join(', ');
+      <span class="council-label">Great Houses {p.seats.length < MAX_SEATS && <small>· {p.seats.length}/{MAX_SEATS} seats</small>}</span>
+      {p.seats.map((seat, i) => {
+        const h = HOUSES[seat.house];
+        const d = DEEDS[h.power];
+        const wait = deedWait(w, seat);
+        const problem = deedProblem(w, PLAYER, i);
+        const ready = !problem;
+        const full = deedCooldown(w, PLAYER, h.power);
+        const pct = wait ? 1 - wait / Math.max(1, full) : 1;
+        const run = running.find((r) => r.id === h.power);
+        const fam = w.families.get(seat.familyId);
         return (
           <button
-            key={fam.id}
-            class={`deed ${ready ? 'ready' : ''}`}
-            disabled={!ready}
-            onClick={() => game.useDeed(fam.id)}
-            title={`${d.name} (${DEED_KEYS[i].toUpperCase()}), lent by the ${plural(fam.surname)}: ${d.blurb}${costText ? ` Costs ${costText}.` : ''}${wait ? ` Ready in ${Math.ceil(wait / TICK_HZ)}s.` : ''}`}
+            key={seat.house}
+            class={`deed house ${ready ? 'ready' : ''}`}
+            onClick={() => game.useDeed(i)}
+            title={`${h.name}${fam ? ` (banner: the ${plural(fam.surname)})` : ''}. Always: ${h.passive} Power (${DEED_KEYS[i].toUpperCase()}): ${d.blurb}${problem ? ` Now: ${problem}.` : ''}`}
           >
             <span class="deed-ring" style={{ background: `conic-gradient(var(--gold) ${pct * 360}deg, rgba(0,0,0,0.35) 0)` }}>
               <span class="deed-icon">{d.icon}</span>
             </span>
             <span class="deed-name">{d.name}</span>
             <span class="deed-fam">
-              <span class="crest" style={{ background: hex(CREST_COLORS[fam.color]) }} />
-              {fam.surname}
-              {deedPower(fam) > 1 && <b title="A Master's deed: stronger"> ★</b>}
+              <span class="crest" style={{ background: hex(h.color) }} />
+              {h.icon} {h.name.replace('House of the ', '')}
             </span>
-            {wait > 0 ? <span class="deed-wait">{Math.ceil(wait / TICK_HZ)}s</span> : !ok ? <span class="deed-wait">{costText}</span> : <span class="hotkey">{DEED_KEYS[i].toUpperCase()}</span>}
+            <span class="deed-short">{d.short}</span>
+            {run && run.left > 0 ? (
+              <span class="deed-wait running">{Math.ceil(run.left / TICK_HZ)}s left</span>
+            ) : run ? (
+              <span class="deed-wait running">sounded</span>
+            ) : wait > 0 ? (
+              <span class="deed-wait">{Math.ceil(wait / TICK_HZ)}s</span>
+            ) : problem ? (
+              <span class="deed-wait">{problem.replace(/^Needs /, '')}</span>
+            ) : (
+              <span class="hotkey">{DEED_KEYS[i].toUpperCase()}</span>
+            )}
           </button>
         );
       })}
@@ -561,12 +553,8 @@ function Ledger({ game }: { game: Game }) {
     const def = eventDef(p.event.def);
     if (def) items.push({ key: `e${p.event.id}`, icon: def.icon, title: def.title, left: (p.event.expires - w.tick) / BALANCE.eventTimeout, secs: Math.ceil((p.event.expires - w.tick) / TICK_HZ) });
   }
-  for (const o of p.offers) {
-    const fam = w.families.get(o.familyId);
-    if (!fam) continue;
-    const live = o.expires > 0;
-    items.push({ key: `b${o.id}`, icon: '🎁', title: `A gift for the ${plural(fam.surname)}`, left: live ? (o.expires - w.tick) / BOON_TIMEOUT : 1, secs: live ? Math.ceil((o.expires - w.tick) / TICK_HZ) : 0, waiting: !live, crest: fam.color });
-  }
+  const o = p.houseOffer;
+  if (o) items.push({ key: `b${o.id}`, icon: '🏰', title: 'A seat on the council', left: (o.expires - w.tick) / HOUSE_TIMEOUT, secs: Math.ceil((o.expires - w.tick) / TICK_HZ) });
   const open = game.ledgerOpen.value;
   const openItem = items.find((i) => i.key === open);
   useEffect(() => {
@@ -584,7 +572,7 @@ function Ledger({ game }: { game: Game }) {
         openItem.key.startsWith('e') ? (
           <EventLetter game={game} />
         ) : (
-          <BoonLetter game={game} offerId={Number(openItem.key.slice(1))} />
+          <HouseLetter game={game} />
         )
       ) : (
         <>
@@ -678,36 +666,41 @@ function EventLetter({ game }: { game: Game }) {
   );
 }
 
-/** Spore-style evolution picks: choose how a family grows. */
-function BoonLetter({ game, offerId }: { game: Game; offerId: number }) {
+/** Choose a Great House for a council seat: each card says plainly what it always does and the power it lends. */
+function HouseLetter({ game }: { game: Game }) {
   const w = game.world;
-  const o = w.players[PLAYER].offers.find((x) => x.id === offerId);
-  const fam = o && w.families.get(o.familyId);
-  if (!o || !fam) return null;
+  const p = w.players[PLAYER];
+  const o = p.houseOffer;
+  if (!o) return null;
   return (
     <div class="letter-open boon-letter" key={o.id}>
-      <LetterHead game={game} icon="🎁" sub={o.reason} title={`Choose a gift for the ${fam.surname} family`} left={(o.expires - w.tick) / BOON_TIMEOUT} />
+      <LetterHead game={game} icon="🏰" sub={o.reason} title={`Choose your ${['first', 'second', 'third'][p.seats.length] ?? 'next'} Great House`} left={(o.expires - w.tick) / HOUSE_TIMEOUT} />
       <div class="boon-cards">
-        {o.choices.map((id, i) => (
-          <button
-            key={id}
-            class="boon-card"
-            style={{ animationDelay: `${i * 90}ms` }}
-            onClick={() => {
-              game.ledgerOpen.value = null;
-              game.chooseBoon(o.id, i);
-            }}
-          >
-            <span class="bc-icon">{BOONS[id].icon}</span>
-            <strong>{BOONS[id].name}</strong>
-            <span class="bc-blurb">{BOONS[id].blurb}</span>
-            {BOONS[id].deed && (
-              <span class="bc-deed">
-                Deed: {DEEDS[BOONS[id].deed!].icon} {DEEDS[BOONS[id].deed!].name}
+        {o.choices.map((id, i) => {
+          const h = HOUSES[id];
+          const d = DEEDS[h.power];
+          return (
+            <button
+              key={id}
+              class="boon-card house-card"
+              style={{ animationDelay: `${i * 90}ms`, borderTopColor: hex(h.color) }}
+              onClick={() => {
+                game.ledgerOpen.value = null;
+                game.chooseHouse(o.id, i);
+              }}
+            >
+              <span class="bc-icon">{h.icon}</span>
+              <strong>{h.name}</strong>
+              <span class="bc-blurb">
+                <b>Always:</b> {h.passive}
               </span>
-            )}
-          </button>
-        ))}
+              <span class="bc-deed">
+                <b>Power:</b> {d.icon} {d.name}. {d.blurb}
+              </span>
+              <span class="bc-suits">{h.suits}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -883,7 +876,7 @@ function InfoPanel({ game }: { game: Game }) {
         {fam && <FamilyLine w={w} fam={fam} />}
         {s.spouseId > 0 && w.settlers.get(s.spouseId) && <p class="muted small">Married to {w.settlers.get(s.spouseId)!.name}</p>}
         {!s.child && <SkillBars skills={s.skills} />}
-        {s.child && fam && <p class="muted small">Will inherit {BALANCE.inheritPct + (fam.mods.teach ?? 0)}% of the {fam.surname} family’s craft on coming of age.</p>}
+        {s.child && fam && <p class="muted small">Will inherit {BALANCE.inheritPct}% of the {fam.surname} family’s craft on coming of age.</p>}
       </aside>
     );
   }
@@ -1071,6 +1064,8 @@ const SOURCE_NAMES: Record<string, string> = {
   works: 'Great Works',
   trade: 'Market Day',
   contests: 'Challenges',
+  raids: 'Raids',
+  defence: 'Holding the line',
 };
 
 /** Honours for how the game was played: a reason to try another way next time. */
@@ -1086,7 +1081,7 @@ function Awards({ w, won }: { w: World; won: boolean }) {
   if (me.legends.length >= 3) list.push(['🕯️', 'Keeper of Legends', `${me.legends.length} legends`]);
   if ((me.renownBy.trade ?? 0) >= 150) list.push(['⚖️', 'Merchant Prince', `${me.renownBy.trade} renown from Market Day`]);
   if (outposts >= 4) list.push(['🧭', 'Pathfinder', `${outposts} outposts`]);
-  if (me.deedsUsed >= 25) list.push(['✦', 'Great Houses', `${me.deedsUsed} family deeds`]);
+  if (me.deedsUsed >= 20) list.push(['✦', 'Great Houses', `${me.deedsUsed} house powers called`]);
   if (me.raidsWon >= 3) list.push(['🔥', 'Warlord', `${me.raidsWon} rival posts burned`]);
   if (me.repelled >= 3) list.push(['🛡️', 'Unbroken', `${me.repelled} raids driven off`]);
   if (me.challengesWon >= 3) list.push(['🏆', 'Champion of the Valley', `${me.challengesWon} challenges won`]);
@@ -1111,8 +1106,6 @@ function Victory({ game }: { game: Game }) {
   const me = w.players[PLAYER];
   const them = w.players[1];
   const won = v.winner === PLAYER;
-  const fams = [...w.families.values()].filter((f) => f.owner === PLAYER);
-  const greatest = fams.sort((a, b) => prestige(w, b) - prestige(w, a))[0];
   const sources = Object.entries(me.renownBy).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
   const works = BUILD_MENU.filter((t) => BUILDINGS[t].great && workOwner(w, t) === PLAYER);
   return (
@@ -1141,11 +1134,8 @@ function Victory({ game }: { game: Game }) {
           <div>
             <h4>The chronicle</h4>
             <ul class="chronicle">
-              {greatest && (
-                <li>
-                  Greatest house: the {plural(greatest.surname)} ({familyTitle(greatest, 'folk')})
-                </li>
-              )}
+              {me.seats.length > 0 && <li>Your council: {me.seats.map((s) => `${HOUSES[s.house].icon} ${HOUSES[s.house].name}`).join(', ')}</li>}
+              {them?.seats.length ? <li>Your rival’s: {them.seats.map((s) => `${HOUSES[s.house].icon} ${HOUSES[s.house].name}`).join(', ')}</li> : null}
               {me.origin && (
                 <li>
                   Founded by {me.origin === 'dynasty' ? 'your dynasty' : ORIGINS[me.origin].name}
@@ -1153,7 +1143,7 @@ function Victory({ game }: { game: Game }) {
                 </li>
               )}
               <li>
-                {w.population(PLAYER)} folk in {fams.length} households · {me.deedsUsed} deeds done
+                {w.population(PLAYER)} folk · {me.deedsUsed} house powers called · {me.raidsWon} posts burned, {me.repelled} raids held
               </li>
               <li>
                 {me.taken} landmark{me.taken === 1 ? '' : 's'} taken from your rival · {me.challengesWon} challenge{me.challengesWon === 1 ? '' : 's'} won

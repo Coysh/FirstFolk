@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { audio } from '../audio/audio';
 import { DIFFICULTY_INFO, type Difficulty } from '../sim/rules';
 import { dailyBest, dailySeed, dynasties, saveSettings, saveSummary, settings, todayKey, type Quality, type StoredDynasty } from '../settings';
-import { BOONS } from '../sim/boons';
+import { HOUSES } from '../sim/houses';
 import { TRADES } from '../sim/trades';
 import { ORIGINS, ORIGIN_IDS, type OriginId } from '../sim/origins';
 import { OMENS, rollOmens } from '../sim/omens';
@@ -163,7 +163,7 @@ function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void;
                   <span class="or-icon">👑</span> The {d.surname} line{d.generation > 1 ? `, generation ${d.generation}` : ''}
                 </strong>
                 <span>
-                  {d.boons.map((b) => BOONS[b].name).join(' & ') || 'No boons'}
+                  {HOUSES[d.house].icon} {HOUSES[d.house].name}
                   {d.skill ? ` · ${TRADES[d.skill].name} from the start` : ''} · won with {d.renown}★
                 </span>
               </button>
@@ -263,10 +263,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 export function HowTo({ onClose }: { onClose: () => void }) {
   const steps = [
-    { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,600 renown wins, or the most renown when the clock reaches 45:00. From 25:00 the Moot makes landmarks pay double. Landmarks, land, discoveries, Masters, deeds, Great Works and Market Day all count.' },
+    { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,400 renown wins, or the most renown when the clock reaches 45:00. From 25:00 the Moot makes landmarks pay double. Landmarks, land, raids, discoveries, Masters, Great Works and Market Day all count.' },
     { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Families with room and food have children; empty huts draw newcomers; young adults marry into new households.' },
-    { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Influence decides the border: Lookouts and Watchtowers push it, and your rival can push back. Landmarks (groves, oakwoods, outcrops, standing stones) pay renown every minute you hold them.' },
-    { icon: '/assets/icons/people.png', title: 'Raise great houses', text: 'Work makes Journeymen and Masters. Choices arrive as letters at the left: open them when you like. Your four greatest houses each lend a Deed (Z X C V). Win, and your greatest house can found your next valley.' },
+    { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Lookouts and Watchtowers push your border, but every banner needs a spear: posts need guards (free adults) to push at full strength, and a landmark pays renown only while a manned post watches it. Your rank limits how many posts you can hold.' },
+    { icon: '/assets/icons/stockade.png', title: 'Spears and shields', text: 'Wide or tall? A Stockade holds a little land hard and makes a landmark pay more. From 10:00 a Mustering Hall’s huscarls can raid (R) a rival post: the stronger side wins, and a burned post frees its land. Reavers strike the furthest post of whoever spreads widest.' },
+    { icon: '/assets/icons/people.png', title: 'Choose your Great Houses', text: 'Your origin seats your first house; you choose a second at Hamlet and a third at Village (letters at the left). Each house gives a plain bonus and one power to call on (Z X C): Raise, Timber Drive, Harvest Home, Expedition, Festival, War-Horn or Shield Wall. Win, and your founding house can found your next valley.' },
     { icon: '/assets/icons/henge.png', title: 'Race for Great Works', text: 'From Village rank: the Stone Circle, Mead Hall and Great Granary. Only one of each in the valley, so finish first! Sell surplus on Market Day for renown.' },
     { icon: '/assets/icons/berries.png', title: 'Generations', text: 'Winters bite, so stockpile food. Folk grow old, teach their families and die; a Master who dies becomes a legend that makes their craft faster for all.' },
   ];
@@ -311,8 +312,8 @@ export function HowTo({ onClose }: { onClose: () => void }) {
             <td>Tap a card, tap the ground, Build here</td>
           </tr>
           <tr>
-            <td>Family deeds</td>
-            <td>Z X C V, or click a Great House</td>
+            <td>House powers · raid</td>
+            <td>Z X C, or click a Great House · R</td>
             <td>Tap a Great House</td>
           </tr>
           <tr>

@@ -1,4 +1,5 @@
 import type { OriginId } from '../origins';
+import type { HouseId } from '../houses';
 
 /**
  * Bot personalities: the same bot, the same rules, different priorities. They give the rival a
@@ -23,25 +24,29 @@ export interface StyleDef {
   /** Builds a Mustering Hall (from Village), and how keenly it raids: 0 never, 1 for a landmark or much land, 2 any post it can beat. */
   muster: boolean;
   raids: 0 | 1 | 2;
+  /** The Great Houses it seats when offered a choice, favourite first. */
+  houses: HouseId[];
 }
 
 export const STYLES: Record<BotStyle, StyleDef> = {
-  balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: true, muster: true, raids: 1 },
-  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120, stockades: false, muster: false, raids: 0 },
-  builder: { name: 'Builder', towerPer: 16, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60, stockades: false, muster: false, raids: 0 },
-  raider: { name: 'Raider', towerPer: 9, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: false, muster: true, raids: 2 },
-  warden: { name: 'Warden', towerPer: 12, towersFirst: false, towersOnlyWithAim: true, sellKeep: 80, stockades: true, muster: true, raids: 0 },
+  balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: true, muster: true, raids: 1, houses: ['plough', 'spear', 'shield', 'hammer', 'horn', 'hearth', 'axe'] },
+  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120, stockades: false, muster: false, raids: 0, houses: ['horn', 'hearth', 'axe', 'plough', 'hammer', 'shield', 'spear'] },
+  builder: { name: 'Builder', towerPer: 16, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60, stockades: false, muster: false, raids: 0, houses: ['hammer', 'axe', 'plough', 'hearth', 'shield', 'horn', 'spear'] },
+  raider: { name: 'Raider', towerPer: 9, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: false, muster: true, raids: 2, houses: ['spear', 'hammer', 'plough', 'axe', 'horn', 'hearth', 'shield'] },
+  warden: { name: 'Warden', towerPer: 12, towersFirst: false, towersOnlyWithAim: true, sellKeep: 80, stockades: true, muster: true, raids: 0, houses: ['shield', 'hearth', 'plough', 'hammer', 'axe', 'horn', 'spear'] },
 };
 
 /** The rival's character follows where it comes from (a classic start plays balanced). */
 export function styleOf(origin: OriginId | ''): BotStyle {
   switch (origin) {
     case 'wayfarers':
-    case 'kinfolk':
       return 'expander';
     case 'hillclan':
-    case 'woodfolk':
       return 'builder';
+    case 'woodfolk':
+      return 'raider';
+    case 'riverfolk':
+      return 'warden';
     default:
       return 'balanced';
   }

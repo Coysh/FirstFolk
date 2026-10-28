@@ -1,5 +1,5 @@
 import { BUILDINGS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Skill } from './defs';
-import { offerBoon } from './boons';
+import { rankSeat } from './houses';
 import { recomputeTerritory } from './territory';
 import { addRenown, mootUnderway } from './renown';
 import { BALANCE, secs } from './balance';
@@ -109,7 +109,7 @@ export const objectives = {
   deeds(n: number): Objective {
     return {
       id: `deeds-${n}`,
-      label: n === 1 ? 'Call on a family deed' : `Call on ${n} family deeds`,
+      label: n === 1 ? 'Call on a Great House' : `Call on your Great Houses ${n} times`,
       evaluate: (w, o) => ({ current: w.players[o].deedsUsed, target: n }),
     };
   },
@@ -152,7 +152,7 @@ export const LANDFALL: Scenario = {
   rival: true,
   timeLimit: secs(45 * 60),
   // Landfall teaches the basics; after that each rank is earned with renown, and the first
-  // settlement to 1,600 renown (or the one with most when the clock runs out) wins.
+  // settlement to 1,400 renown (or the one with most when the clock runs out) wins.
   objectives: [
     with_(objectives.building('woodcutter'), 'Landfall', 'Pick Woodcutter below, then place it beside the trees.'),
     with_(objectives.building('forager'), 'Landfall', 'Foragers feed everyone. Place one near the blue berry bushes.'),
@@ -161,13 +161,13 @@ export const LANDFALL: Scenario = {
     with_(objectives.building('lookout'), 'Landfall', 'Build a Lookout near your border to push it outwards.'),
     with_(objectives.discoveries(1), 'Landfall', 'See the golden light? Grow your border over it to claim what lies there.'),
     with_(objectives.population(12), 'Landfall', 'Keep food stocked and huts free, and families will come.'),
-    with_(objectives.deeds(1), 'Hamlet', 'Your Great Houses (above the build bar) each lend a deed: click one, or press Z X C V.'),
-    with_(objectives.landmarks(1), 'Hamlet', 'Landmarks (grove, oakwood, outcrop, stones) pay renown every minute you hold them.'),
+    with_(objectives.deeds(1), 'Hamlet', 'Your Great House (above the build bar) lends a power: click it, or press Z. Its card says what it does.'),
+    with_(objectives.landmarks(1), 'Hamlet', 'Landmarks pay renown every minute you hold them, while a manned post (or your hall) stands within 9 tiles.'),
     with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: planks build Watchtowers.'),
     with_(objectives.renown(300), 'Hamlet', 'Renown: landmarks, land, discoveries, Masters, deeds and Market Day all add to it.'),
     with_(objectives.building('watchtower'), 'Village', 'Watchtowers push hard: build them at the border to take land from your rival.'),
     with_(objectives.renown(750), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
-    with_(objectives.renown(1600), 'Town', 'First to 1,600 renown wins. From 25:00 the Moot makes landmarks pay double: take them back!'),
+    with_(objectives.renown(1400), 'Town', 'First to 1,400 renown wins. Landmarks pay only while a manned post watches them, and from 25:00 the Moot doubles them: take them back!'),
   ],
 };
 
@@ -245,7 +245,7 @@ export function evaluateScenario(world: World): void {
 
 /**
  * The settlement levels up: the founders' wagon becomes a hall (model tier), the home
- * claim widens, new buildings unlock and a family is granted a boon.
+ * claim widens, new buildings unlock and (at Hamlet and Village) a house takes a council seat.
  */
 export function rankUp(world: World, owner: number, rank: number): void {
   const player = world.players[owner];
@@ -257,13 +257,8 @@ export function rankUp(world: World, owner: number, rank: number): void {
   wagon.tier = rank;
   // The hall's influence grows with the rank (see influenceSources).
   recomputeTerritory(world);
-  // The household with the most folk is honoured with a boon.
-  const counts = new Map<number, number>();
-  for (const s of world.settlers.values()) if (s.owner === owner) counts.set(s.familyId, (counts.get(s.familyId) ?? 0) + 1);
-  let best = 0;
-  for (const [id, n] of counts) if (n > (counts.get(best) ?? 0)) best = id;
-  const fam = world.families.get(best);
-  if (fam) offerBoon(world, fam, `Your camp is now a ${RANK_NAMES[rank]}`);
+  // A new seat on the council (Hamlet and Village).
+  rankSeat(world, owner, rank);
 }
 
 /** The same valley without a rival: build and explore at your own pace. */

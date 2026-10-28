@@ -5,6 +5,7 @@ import { canPlace } from '../src/sim/commands';
 import { previewInfluence, recomputeTerritory, updateHoldings } from '../src/sim/territory';
 import { defenceOf, raidProblem, raidStrength, reaversCome, updateReavers } from '../src/sim/warfare';
 import { World } from '../src/sim/world';
+import { renownRate } from '../src/sim/renown';
 import { hashWorld } from '../src/sim/hash';
 import { deserializeWorld, serializeWorld } from '../src/sim/save';
 import { newWorld, wagon } from './helpers';
@@ -202,5 +203,21 @@ describe('reavers', () => {
     for (let i = 0; i < secs(90) && w.warbands.some((b) => b.phase === 'march'); i++) w.step();
     expect(w.buildings.has(t.id)).toBe(true);
     expect(w.players[0].renownBy.defence).toBe(BALANCE.reaverRepel);
+  });
+});
+
+describe('landmarks need watching', () => {
+  it('a landmark pays only while a manned post watches it, and more when a stockade does', () => {
+    const w = new World({ seed: 2, scenario: 'peaceful' });
+    const site = w.sites.find((s) => DISCOVERIES[s.kind].renown && Math.max(Math.abs(s.x - wagon(w).x), Math.abs(s.y - wagon(w).y)) > 14)!;
+    const tower = w.addBuilding('watchtower', 0, site.x - 4, site.y - 1, true);
+    recomputeTerritory(w);
+    expect(site.heldBy).toBe(0);
+    tower.guarded = 0;
+    expect(renownRate(w, 0).landmarks).toBe(0);
+    tower.guarded = 1;
+    expect(renownRate(w, 0).landmarks).toBe(DISCOVERIES[site.kind].renown);
+    w.addBuilding('stockade', 0, site.x + 2, site.y + 2, true).guarded = 1;
+    expect(renownRate(w, 0).landmarks).toBe(DISCOVERIES[site.kind].renown! + BALANCE.tendedBonus);
   });
 });

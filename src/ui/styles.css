@@ -2048,11 +2048,11 @@ button.danger.armed {
   .event-card,
   .boon-tray,
   .frontier {
-    bottom: calc(228px + var(--safe-b));
+    bottom: calc(262px + var(--safe-b));
   }
   .toasts {
     top: auto;
-    bottom: calc(228px + var(--safe-b));
+    bottom: calc(262px + var(--safe-b));
   }
   .report-grid {
     grid-template-columns: 1fr;
@@ -2412,7 +2412,7 @@ button.danger.armed {
 }
 @media (max-width: 720px) {
   .threats {
-    bottom: 262px;
+    bottom: calc(262px + var(--safe-b));
     width: calc(100vw - 32px);
   }
   .threat {
@@ -2428,4 +2428,55 @@ button.danger.armed {
 .pin.war.theirs {
   background: #f4c9b8;
   animation: threat-pulse 1.2s ease-in-out infinite;
+}
+
+/* ---------- Great Houses: seats with their power spelled out ---------- */
+.deed.house {
+  width: 104px;
+  cursor: pointer;
+}
+.deed-short {
+  font-size: 9.5px;
+  line-height: 1.15;
+  color: var(--ink);
+  text-align: center;
+  min-height: 2.3em;
+}
+.deed-wait.running {
+  color: #3f7d20;
+}
+.council-label small {
+  color: var(--paper);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.house-card {
+  border-top: 5px solid var(--gold);
+}
+.house-card .bc-blurb,
+.house-card .bc-deed {
+  text-align: left;
+  font-size: 12px;
+}
+.bc-suits {
+  margin-top: 4px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+@media (max-width: 720px) {
+  .deed.house {
+    width: 23%;
+  }
+  .deed-short {
+    font-size: 8.5px;
+  }
+}
+.pin.mine.unwatched {
+  border-style: dashed;
+  opacity: 0.85;
+}
+.pin.mine.unwatched .pin-rate {
+  color: var(--warn);
 }

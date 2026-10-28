@@ -1,12 +1,12 @@
 import { Rng } from './rng';
-import type { BoonId } from './boons';
+import type { HouseId } from './houses';
 import type { Good, Skill } from './defs';
 
 /**
  * Openers (Battle Drones' Blitz / Industry / Air Wing): before the clock starts you choose
  * where your founding house comes from. Each origin is a different first ten minutes: a
- * craft the founders already know (unlocking its building at once), a boon that brings a
- * deed, and a little extra in the wagon. The rival rolls one of its own.
+ * craft the founders already know (unlocking its building at once), the Great House that takes
+ * the first council seat, and a little extra in the wagon. The rival rolls one of its own.
  */
 export type OriginId = 'woodfolk' | 'hillclan' | 'riverfolk' | 'wayfarers' | 'kinfolk' | 'dynasty';
 
@@ -17,7 +17,8 @@ export interface OriginDef {
   blurb: string;
   /** The founders start as Journeymen of this craft. */
   skill?: Skill;
-  boons: BoonId[];
+  /** The Great House that founds the settlement (the first council seat). */
+  house: HouseId;
   stock: Partial<Record<Good, number>>;
   /** Extra children in the founding family. */
   children?: number;
@@ -28,53 +29,53 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     id: 'woodfolk',
     name: 'Woodfolk',
     icon: '🪓',
-    blurb: 'Journeyman Carpenters from the deep forest: the Sawpit from the start, Axe-Sworn, and a Timber Drive ready to call.',
+    blurb: 'Journeyman Carpenters from the deep forest: the Sawpit from the start, and the House of the Axe (40% faster woodcraft, Timber Drive).',
     skill: 'woodcraft',
-    boons: ['axeSworn'],
+    house: 'axe',
     stock: { logs: 10 },
   },
   hillclan: {
     id: 'hillclan',
     name: 'Hill Clan',
     icon: '⛏️',
-    blurb: 'Journeyman Masons and Master Builders: a Storehouse from the start and the Raise deed to finish sites in an instant.',
+    blurb: 'Journeyman Masons: a Storehouse from the start, and the House of the Hammer (build 40% faster, quarry 20% faster, Raise finishes a site at once).',
     skill: 'stonework',
-    boons: ['masterBuilders'],
+    house: 'hammer',
     stock: { stone: 8 },
   },
   riverfolk: {
     id: 'riverfolk',
     name: 'River Folk',
     icon: '🐟',
-    blurb: 'Journeyman Gatherers: Fishers from the start, a Bountiful harvest, and Harvest Home to fill the larder.',
+    blurb: 'Journeyman Gatherers: Fishers from the start, and the House of the Plough (40% faster gathering, Harvest Home).',
     skill: 'husbandry',
-    boons: ['bountiful'],
-    stock: { berries: 12 },
+    house: 'plough',
+    stock: { berries: 20, logs: 6 },
   },
   wayfarers: {
     id: 'wayfarers',
     name: 'Wayfarers',
     icon: '🧭',
-    blurb: 'Restless explorers with Wanderlust and Keen Eyes: they see further, their towers reach further, and Expeditions plant outposts far beyond the border.',
-    boons: ['wanderlust', 'keenEyes'],
-    stock: { logs: 8, berries: 6 },
+    blurb: 'Restless explorers: the House of the Horn (towers reach 3 further, folk see 4 further, Expeditions plant outposts beyond the border).',
+    house: 'horn',
+    stock: { logs: 16, berries: 10 },
   },
   dynasty: {
     id: 'dynasty',
     name: 'Dynasty',
     icon: '👑',
     blurb: 'Your greatest house from a valley you won, founding a new one.',
-    boons: [],
+    house: 'hearth',
     stock: { logs: 6, berries: 6 },
   },
   kinfolk: {
     id: 'kinfolk',
     name: 'Kinfolk',
     icon: '❤️',
-    blurb: 'A big, warm-hearted clan: two more children, Big Hearts for many more, and Festivals that pull the border their way.',
-    boons: ['bigHearts'],
+    blurb: 'A big, warm-hearted clan: another child, and the House of the Hearth (a third more births, Festivals that pull the border their way).',
+    house: 'hearth',
     stock: { berries: 10 },
-    children: 2,
+    children: 1,
   },
 };
 
@@ -83,12 +84,12 @@ export const ORIGIN_IDS: OriginId[] = ['woodfolk', 'hillclan', 'riverfolk', 'way
 
 /**
  * A dynasty: the greatest house of a valley you won, carried into the next one (meta-progression).
- * The founders bear its name, its two finest boons and its craft; each win with it adds a generation,
+ * The founders bear its name, its Great House and its craft; each win with it adds a generation,
  * and each generation the founders start a little more skilled.
  */
 export interface Dynasty {
   surname: string;
-  boons: BoonId[];
+  house: HouseId;
   skill: Skill | null;
   generation: number;
 }

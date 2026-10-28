@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import type { SaveData } from './sim/save';
 import type { Dynasty } from './sim/origins';
+import { houseFromBoons } from './sim/houses';
 import { summarize, type SaveSummary } from './sim/save';
 
 export type Quality = 'high' | 'balanced' | 'low';
@@ -121,7 +122,8 @@ export interface StoredDynasty extends Dynasty {
   date: string;
 }
 
-export const dynasties = signal<StoredDynasty[]>(read<StoredDynasty[]>(DYNASTY_KEY) ?? []);
+// Dynasties won before the Great Houses remembered boons: they keep the house those boons implied.
+export const dynasties = signal<StoredDynasty[]>((read<(StoredDynasty & { boons?: string[] })[]>(DYNASTY_KEY) ?? []).map((d) => ({ ...d, house: d.house ?? houseFromBoons(d.boons ?? [], d.skill) })));
 
 /** Remember a winning house; winning again with the same name adds a generation. */
 export function recordDynasty(d: Omit<StoredDynasty, 'generation'>): StoredDynasty {

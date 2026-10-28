@@ -5,7 +5,7 @@ import { addRenown, mootUnderway } from './renown';
 import { greatWorkDone } from './works';
 import { grantXp } from './settlers';
 import { TIER_XP } from './trades';
-import { offerBoon } from './boons';
+import { playerMod } from './houses';
 import { guardCounts } from './settlers';
 import type { Building, Discovery, World } from './world';
 
@@ -288,7 +288,7 @@ export function onBuildingComplete(world: World, b: Building): void {
   const def = BUILDINGS[b.type];
   const cx = b.x + Math.floor(def.size / 2);
   const cy = b.y + Math.floor(def.size / 2);
-  if (def.frontier) b.reach = world.families.get(b.builtBy)?.mods.claim ?? 0;
+  if (def.frontier) b.reach = playerMod(world, b.owner, 'claim');
   revealArea(world, b.owner, cx, cy, Math.max(def.reveal ?? 4, (def.claim ?? 0) + b.reach + 2));
   if (def.claim) recomputeTerritory(world);
   greatWorkDone(world, b);
@@ -297,7 +297,7 @@ export function onBuildingComplete(world: World, b: Building): void {
 /** Settlers lift the fog a little wherever they walk. Runs about once a second. */
 export function updateExploration(world: World): void {
   const r = BALANCE.settlerSight;
-  for (const s of world.settlers.values()) revealArea(world, s.owner, s.x, s.y, r + (world.families.get(s.familyId)?.mods.sight ?? 0));
+  for (const s of world.settlers.values()) revealArea(world, s.owner, s.x, s.y, r + playerMod(world, s.owner, 'sight'));
   // Manned posts keep watch: whatever comes into view of a guarded tower is seen.
   if (world.tick % 50 === 5)
     for (const b of world.buildings.values()) {
@@ -426,9 +426,9 @@ function claimReward(world: World, site: Discovery, owner: number): string {
       return `Silver and treasures: +${BALANCE.renown.hoard} renown, +10 planks and +10 stone`;
     }
     case 'shrine': {
-      const fam = largestFamily(world, owner);
-      if (fam) offerBoon(world, fam, 'Blessed at the Forest Shrine');
-      return `A landmark: +${DISCOVERIES.shrine.renown} renown a minute while you hold it, and the ${fam?.surname ?? ''} family is blessed`;
+      // The shrine's blessing: every Great House's power is ready at once.
+      for (const seat of world.players[owner].seats) seat.ready = Math.min(seat.ready, world.tick);
+      return `A landmark: +${DISCOVERIES.shrine.renown} renown a minute while you hold it, and the shrine's blessing makes every house power ready now`;
     }
     case 'stones':
       return `The land around the stones follows you now. +${DISCOVERIES.stones.renown} renown a minute while you hold them`;

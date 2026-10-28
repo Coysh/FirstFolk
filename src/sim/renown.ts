@@ -1,5 +1,5 @@
 import { BALANCE, TICK_HZ } from './balance';
-import { DISCOVERIES } from './defs';
+import { BUILDINGS, DISCOVERIES } from './defs';
 import type { World } from './world';
 import { hasOmen } from './omens';
 
@@ -22,7 +22,12 @@ export function addRenown(world: World, owner: number, n: number, source: Renown
 export function renownRate(world: World, owner: number): { landmarks: number; land: number } {
   let landmarks = 0;
   const bonus = hasOmen(world, 'oldKingdom') ? 1 : 0;
-  for (const s of world.sites) if (s.heldBy === owner) landmarks += (DISCOVERIES[s.kind].renown ?? 0) + bonus;
+  for (const s of world.sites) {
+    if (s.heldBy !== owner) continue;
+    const watch = watched(world, owner, s.x, s.y);
+    // A stockade standing watch tends the landmark: it pays a little more.
+    if (watch) landmarks += (DISCOVERIES[s.kind].renown ?? 0) + bonus + (watch === 'stockade' ? BALANCE.tendedBonus : 0);
+  }
   // The Stone Circle makes held landmarks pay half as much again.
   if (world.hasWork(owner, 'henge')) landmarks = Math.floor((landmarks * 3) / 2);
   // The Moot: the whole valley gathers for the final stretch, and landmarks pay double.
@@ -30,6 +35,22 @@ export function renownRate(world: World, owner: number): { landmarks: number; la
   let tiles = 0;
   for (let i = 0; i < world.territory.length; i++) if (world.territory[i] === owner) tiles++;
   return { landmarks, land: Math.floor(tiles / BALANCE.renown.landTiles) };
+}
+
+/**
+ * A landmark pays only while it is watched: a manned post (a guard standing there), or your
+ * hall, within `watchRange`. Holding many landmarks takes many spears; burn the post that
+ * watches one and it stops paying, even if the land stays.
+ */
+export function watched(world: World, owner: number, x: number, y: number): '' | 'watched' | 'stockade' {
+  const r = BALANCE.watchRange;
+  let out: '' | 'watched' | 'stockade' = '';
+  for (const b of world.buildings.values()) {
+    if (b.owner !== owner || !b.done || Math.max(Math.abs(b.x + 1 - x), Math.abs(b.y + 1 - y)) > r) continue;
+    if (b.type === 'stockade' && b.guarded > 0) return 'stockade';
+    if (b.type === 'wagon' || (BUILDINGS[b.type].garrison && b.guarded > 0)) out = 'watched';
+  }
+  return out;
 }
 
 export const mootUnderway = (world: World) => !!world.scenario.timeLimit && world.tick >= BALANCE.mootAt;

@@ -1,6 +1,6 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, FOODS, SKILLS, type BuildingType, type Good, type Skill } from './defs';
-import { addBoon, drawBoons, offerBoon } from './boons';
+import { playerMod } from './houses';
 import { walkTo } from './settlers';
 import { hasOmen } from './omens';
 import { bestSite } from './ai/placement';
@@ -24,7 +24,7 @@ export function createFamily(world: World, owner: number, homeId: number, inheri
   const used = new Set([...world.families.values()].map((f) => f.surname));
   const free = SURNAMES.filter((n) => !used.has(n));
   const surname = inherit ?? (free.length ? world.rng.pick(free) : world.rng.pick(SURNAMES));
-  const fam: Family = { id: world.newId(), owner, surname, color: world.families.size % CREST_COLORS.length, homeId, skills: emptySkills(), birthCooldown: BALANCE.birthInterval, boons: [], mods: {}, parents: [], glory: 0, deedReady: world.tick + BALANCE.deedFirstWait };
+  const fam: Family = { id: world.newId(), owner, surname, color: world.families.size % CREST_COLORS.length, homeId, skills: emptySkills(), birthCooldown: BALANCE.birthInterval, parents: [] };
   world.families.set(fam.id, fam);
   return fam;
 }
@@ -33,7 +33,7 @@ export function updatePopulation(world: World): void {
   for (const player of world.players) {
     // Hearth-keepers eat less: appetite is summed per settler in percent.
     let appetite = 0;
-    for (const s of world.settlers.values()) if (s.owner === player.id) appetite += 100 - (world.families.get(s.familyId)?.mods.appetite ?? 0);
+    for (const s of world.settlers.values()) if (s.owner === player.id) appetite += 100;
     // Winter cold: everyone eats a quarter more.
     player.mealAccum += Math.floor((appetite * (world.winterBites(player.id) ? 100 + BALANCE.winterAppetitePct * (hasOmen(world, 'longWinters') ? 2 : 1) : 100)) / 10000);
     while (player.mealAccum >= world.rules.mealInterval) {
@@ -72,12 +72,12 @@ function checkBirths(world: World, player: PlayerState): void {
     const room = (BUILDINGS[home.type].housing ?? 0) - members;
     if (adults < 2 || room <= 0) continue;
     const e = world.entrance(home);
-    const n = room >= 2 && world.rng.int(100) < (fam.mods.twins ?? 0) ? 2 : 1;
+    const n = 1;
     for (let k = 0; k < n; k++) {
       const baby = world.addSettler(player.id, fam.id, world.randomName(), 0, e.x, e.y);
       world.emit({ type: 'born', owner: player.id, settlerId: baby.id, name: baby.name, surname: fam.surname });
     }
-    fam.birthCooldown = Math.round((BALANCE.birthInterval * (100 - (fam.mods.birth ?? 0)) * (hasOmen(world, 'fertile') ? 70 : 100)) / 10000);
+    fam.birthCooldown = Math.round((BALANCE.birthInterval * (100 - playerMod(world, fam.owner, 'birth')) * (hasOmen(world, 'fertile') ? 70 : 100)) / 10000);
   }
 }
 
@@ -113,7 +113,6 @@ function clearEmptyHouseholds(world: World, owner: number): void {
     const home = world.buildings.get(fam.homeId);
     if (home && home.type !== 'wagon' && home.familyId === fam.id) home.familyId = 0;
     world.families.delete(fam.id);
-    world.players[owner].offers = world.players[owner].offers.filter((o) => o.familyId !== fam.id);
   }
 }
 
@@ -160,8 +159,7 @@ function checkNewcomers(world: World, player: PlayerState): void {
 
 /**
  * Marriage: two unmarried adults from different families found a new household in a free
- * hut. The household inherits the best skills of both houses and the union of their boons:
- * the player's lever for breeding lineages.
+ * hut. The household inherits the best skills of both houses.
  */
 function marry(world: World, player: PlayerState, hut: Building): boolean {
   const single = singles(world, player.id);
@@ -185,8 +183,8 @@ export function freeHome(world: World, owner: number): Building | null {
 }
 
 /**
- * Two people from different families found a household with both families' best skills and
- * boons. Without a free home they live as a homeless household until the next one is built.
+ * Two people from different families found a household with both families' best skills.
+ * Without a free home they live as a homeless household until the next one is built.
  */
 export function wed(world: World, player: PlayerState, a: Settler, b: Settler, hut: Building | null): boolean {
   const fa = world.families.get(a.familyId);
@@ -198,7 +196,6 @@ export function wed(world: World, player: PlayerState, a: Settler, b: Settler, h
   if (hut) hut.familyId = fam.id;
   fam.parents = [fa.id, fb.id];
   for (const k of SKILLS) fam.skills[k] = Math.max(fa.skills[k], fb.skills[k]);
-  for (const id of [...fa.boons, ...fb.boons]) addBoon(fam, id);
   a.familyId = fam.id;
   b.familyId = fam.id;
   a.spouseId = b.id;
@@ -251,9 +248,6 @@ export function spawnFamily(world: World, player: PlayerState, hut: Building | n
     }
     folk.push(s);
   }
-  // Every family arrives with a character of its own; wanderers' arrival is the player's pick.
-  if (skillXp) offerBoon(world, fam, 'Wanderers join you');
-  else for (const id of drawBoons(world, fam, 1)) addBoon(fam, id);
   player.newcomerCooldown = hasOmen(world, 'wanderersRoad') ? BALANCE.newcomerCooldown / 2 : BALANCE.newcomerCooldown;
   world.stats.arrivals.push(world.tick);
   world.emit({ type: 'familyApproaching', owner: player.id, familyId: fam.id, surname: fam.surname, size, skill: craft });

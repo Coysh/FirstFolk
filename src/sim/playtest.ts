@@ -122,8 +122,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       else if (e.type === 'claimed' && e.owner === 0) timeline.push(`${t} ★ claimed ${e.kind}: ${e.text}`);
       else if (e.type === 'rumour' && e.owner === 0) timeline.push(`${t} 🗣 rumour of ${e.kind} to the ${e.dir}`);
       else if (e.type === 'familySettled') timeline.push(`${t} the ${e.surname} family moves into a hut`);
-      else if (e.type === 'boonOffered' && e.owner === 0) timeline.push(`${t} 🃏 boon choice for the ${plural(e.surname)} (${e.reason})`);
-      else if (e.type === 'boonChosen' && e.owner === 0) timeline.push(`${t}    → the ${plural(e.surname)} take ${e.boon}`);
+      else if (e.type === 'houseOffered' && e.owner === 0) timeline.push(`${t} 🃏 house choice (${e.reason})`);
+      else if (e.type === 'houseSeated' && e.owner === 0) timeline.push(`${t}    → house chosen: ${e.house}${e.surname ? ` (the ${plural(e.surname)})` : ''}`);
       else if (e.type === 'married' && e.owner === 0) timeline.push(`${t} 💍 a new ${e.surname} household is founded by marriage`);
       else if (e.type === 'season') timeline.push(`${t} ${['🌱 spring', '☀️ summer', '🍂 autumn', '❄️ winter'][e.season]}`);
       else if (e.type === 'rankUp' && e.owner === 0) timeline.push(`${t} 🏰 RANK UP: ${['Camp', 'Hamlet', 'Village', 'Town'][e.rank]} (unlocks ${e.unlocks.join(', ') || 'nothing'})`);

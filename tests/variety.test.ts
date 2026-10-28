@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE, secs } from '../src/sim/balance';
 import { DISCOVERIES } from '../src/sim/defs';
-import { deedOf } from '../src/sim/deeds';
+import { HOUSES } from '../src/sim/houses';
 import { OMEN_IDS, rollOmens } from '../src/sim/omens';
 import { ORIGINS, ORIGIN_IDS, rivalOrigin } from '../src/sim/origins';
 import { renownRate } from '../src/sim/renown';
@@ -12,19 +12,20 @@ import { World } from '../src/sim/world';
 const founders = (w: World, owner: number) => [...w.families.values()].find((f) => f.owner === owner)!;
 
 describe('origins (openers)', () => {
-  it('each origin gives its craft, buildings, boons and a deed before the clock starts', () => {
+  it('each origin seats its founding house, and gives its craft and buildings before the clock starts', () => {
     for (const id of ORIGIN_IDS) {
       const w = new World({ seed: 4, scenario: 'peaceful', origin: id });
       const o = ORIGINS[id];
       const fam = founders(w, 0);
-      for (const b of o.boons) expect(fam.boons).toContain(b);
-      expect(deedOf(fam)).not.toBeNull();
+      expect(w.players[0].seats.map((s) => s.house)).toEqual([o.house]);
+      expect(w.players[0].seats[0].familyId).toBe(fam.id);
+      expect(Object.keys(w.players[0].mods)).toEqual(Object.keys(HOUSES[o.house].mods));
       if (o.skill) {
         expect(fam.skills[o.skill]).toBe(TIER_XP[1]);
         expect(w.players[0].unlocked.length).toBeGreaterThan(0);
       }
-      // No founders' boon card to pick: the origin was that choice.
-      expect(w.players[0].offers.length).toBe(0);
+      // No founders' letter to answer: the origin was that choice.
+      expect(w.players[0].houseOffer).toBeNull();
       expect(w.population(0)).toBe(4 + (o.children ?? 0));
     }
   });
@@ -57,8 +58,9 @@ describe('omens', () => {
     const run = (omens: ('oldKingdom')[]) => {
       const w = new World({ seed: 2, scenario: 'peaceful', omens });
       const site = w.sites.find((s) => DISCOVERIES[s.kind].renown)!;
-      w.addBuilding('watchtower', 0, site.x - 6, site.y - 1, true);
+      const tower = w.addBuilding('watchtower', 0, site.x - 6, site.y - 1, true);
       recomputeTerritory(w);
+      tower.guarded = 1;
       return renownRate(w, 0).landmarks;
     };
     expect(run(['oldKingdom'])).toBe(run([]) + 1);
@@ -125,44 +127,21 @@ describe('happenings and matches', () => {
     expect(w.drainEvents().some((e) => e.type === 'starfall')).toBe(true);
   });
 
-  it('a Betrothal lets you choose which families join, and the new house gets both sets of boons', async () => {
-    const { VALLEY_EVENTS, resolveEvent } = await import('../src/sim/events');
-    const { wed } = await import('../src/sim/population');
-    void wed;
+  it('a classic start asks which house founds the settlement, and settles it if left unanswered', () => {
     const w = new World({ seed: 3, scenario: 'peaceful' });
-    w.players[0].rank = 1;
-    // Build a little town: three families with singles, and a free hut.
-    const home = [...w.buildings.values()].find((b) => b.type === 'wagon')!;
-    const fams = [0, 1, 2].map((i) => {
-      const hut = w.addBuilding('hut', 0, home.x - 8 + i * 4, home.y + 6, true);
-      const f = [...w.families.values()][0];
-      const fam = { ...f, id: w.newId(), surname: ['Ash', 'Brook', 'Cole'][i], homeId: hut.id, boons: [(['keenEyes', 'masterBuilders', 'bigHearts'] as const)[i]], mods: {}, parents: [], glory: 0, deedReady: 0, skills: { ...f.skills } };
-      w.families.set(fam.id, fam);
-      hut.familyId = fam.id;
-      for (let k = 0; k < 2; k++) w.addSettler(0, fam.id, `S${i}${k}`, 2, hut.x, hut.y + 2);
-      return fam;
-    });
-    w.addBuilding('hut', 0, home.x + 6, home.y + 6, true);
-    const def = VALLEY_EVENTS.find((d) => d.id === 'betrothal')!;
-    const data = def.setup!(w, 0)!;
-    expect(data.length).toBe(4);
-    w.players[0].event = { id: 77, def: 'betrothal', expires: w.tick + 100, data };
-    resolveEvent(w, 0, 77, 0);
-    const a = w.settlers.get(data[0])!;
-    const merged = w.families.get(a.familyId)!;
-    expect(merged.parents.length).toBe(2);
-    expect(merged.boons.length).toBeGreaterThanOrEqual(2);
-    expect(fams.length).toBe(3);
+    const o = w.players[0].houseOffer!;
+    expect(o.choices.every((h) => !['spear', 'shield'].includes(h))).toBe(true);
+    w.run(secs(121));
+    expect(w.players[0].seats.map((s) => s.house)).toEqual([o.choices[0]]);
   });
 });
 
 describe('dynasties (meta-progression)', () => {
-  it('a winning house founds the next valley with its name, boons and craft, more skilled each generation', () => {
-    const dynasty = { surname: 'Thorne', boons: ['masterBuilders', 'keenEyes'] as const, skill: 'stonework' as const, generation: 3 };
-    const w = new World({ seed: 8, origin: 'dynasty', dynasty: { ...dynasty, boons: [...dynasty.boons] } });
+  it('a winning house founds the next valley with its name, house and craft, more skilled each generation', () => {
+    const w = new World({ seed: 8, origin: 'dynasty', dynasty: { surname: 'Thorne', house: 'hammer', skill: 'stonework', generation: 3 } });
     const fam = founders(w, 0);
     expect(fam.surname).toBe('Thorne');
-    expect(fam.boons).toEqual(['masterBuilders', 'keenEyes']);
+    expect(w.players[0].seats[0].house).toBe('hammer');
     expect(fam.skills.stonework).toBe(TIER_XP[1] + 160);
     expect(w.players[0].unlocked).toContain('storehouse');
     // The rival still rolls an ordinary origin.

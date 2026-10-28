@@ -20,6 +20,7 @@ FirstFolk is a fast, single-player browser settlement builder. It combines Settl
   - **Landmarks are held:** they pay renown every minute and can be taken.
   - **The family system is your arsenal:** Family Deeds are call-down powers.
   - **Lineage:** elders, deaths and legends replace "lore at 50%".
+- **The Shield Pass (v0.13+), superseding some of the above:** posts need guards, raids and reavers burn them, landmarks pay only while watched, and the Great Houses are three seats you choose (with family boons and the prestige council removed). See §0c.
   - **New sinks:** Great Works and Market Day.
 
   See §0b.
@@ -87,7 +88,7 @@ The second playtest verdict: *better, but at about 20 minutes it turns repetitiv
 - **Landmarks and renown** (`renown.ts`, `DISCOVERIES[].renown`). Grove and oakwood pay +2★/min, outcrops +4 and Standing Stones +5 while you hold them. Taking one from the rival pays +10 once.
   - **Other sources:** discoveries 8, objectives 5, a family's first Master in a craft 10, legends 15, Great Works 100, Market Day lots 2–6, festivals 5, and 1★/min per 800 tiles of land.
   - **Ranks:** Landfall (the tutorial) gives Hamlet, 300 renown gives Village, 750 gives Town, and **1,500 wins** (v0.9; in v0.8 it was 700 and 1,200). At 45:00 the most renowned settlement wins.
-- **Family Deeds** (`deeds.ts`). The council is each deed's most prestigious family, the top four by prestige. Prestige counts members, their tiers, deeds done and legends left.
+- **Family Deeds** (`deeds.ts`). *(Superseded in v0.16: deeds are now the powers of the Great Houses you choose; see §0c.)* The council is each deed's most prestigious family, the top four by prestige. Prestige counts members, their tiers, deeds done and legends left.
 
   | Deed | Comes from | Effect |
   |---|---|---|
@@ -328,6 +329,54 @@ The measurements behind each:
     - All five styles fall between 47% and 52%.
     - Expanders are visited most (2.2 a game, against 0.8 for Builders).
     - Settlements sometimes hold the line.
+- **v0.16.0 the Great Houses, redesigned:** three seats you choose, with the numbers written on the cards.
+  - **Removed:** the prestige council (the top 4 families by prestige, each lending a deed from its boons or craft), family boons and boon letters, Betrothal, Lessons and family prestige.
+  - **Three seats:**
+    - **Seat 1** is your origin: the five origins *are* the five founding houses. A classic start gets a letter at 0:00 instead.
+    - **Seats 2 and 3** come at Hamlet and Village, each as a letter with three houses. One is always a war house, so the military path is always offered.
+    - **An unanswered letter** settles itself after 120 s.
+
+    | House | Always | Power (key Z X C) |
+    |---|---|---|
+    | Axe (Woodfolk) | Woodcraft 40% faster | **Timber Drive**: 3× woodcraft for 60 s |
+    | Hammer (Hill Clan) | Build 40% faster, quarry 20% faster | **Raise**: finish the nearest site (a quarter of a Great Work) |
+    | Plough (River Folk) | Gathering and fishing 40% faster | **Harvest Home**: 15 + pop/3 food, 2× gathering for 45 s |
+    | Horn (Wayfarers) | Towers reach +3, sight +4 | **Expedition**: an Outpost up to 18 tiles out |
+    | Hearth (Kinfolk) | Births a third more often | **Festival**: a 60 s influence surge (radius 12), +5 renown |
+    | Spear | Huscarls fight at 15, not 10 | **War-Horn**: the hall is ready now, and the next raid is +50% |
+    | Shield | Guards +50% defence, Stockades 30% cheaper | **Shield Wall**: +40 defence within 9 tiles for 60 s |
+
+  - **Settlement-wide passives.** They're summed into `player.mods` and read through `playerMod()`.
+  - **A real family carries each house.** The largest family without a seat flies the banner, and when that family dies out the banner passes on, but nobody has to look.
+  - **The house bar shows everything:**
+    - the power;
+    - its house;
+    - what it does in a few words;
+    - a cooldown ring that uses the real wait;
+    - a chip for an effect still running.
+
+    Pressing a power that can't be used says why ("Needs a Mustering Hall"), and the result line carries the numbers ("+31 food").
+  - **The Forest Shrine and the Pilgrims' blessing** now make every house power ready at once.
+  - **Families still have skills, tiers, births, marriages, elders and legends**, all running by themselves. The settler panel says which house banner a family flies.
+  - **Dynasties** carry their founding house, and old stored dynasties are mapped from their boons.
+  - **The rival's character follows its origin:**
+
+    | Origin | Style |
+    |---|---|
+    | Wayfarers | Expander |
+    | Hill Clan | Builder |
+    | Woodfolk | Raider |
+    | River Folk | Warden |
+    | Kinfolk, or a classic start | Balanced |
+
+    Its house picks follow its style.
+- **Landmarks pay only while watched** (v0.16.0). A held landmark earns renown only while a manned post (at least one guard) or your hall stands within 9 tiles. A manned **Stockade** watching it adds +2 a minute (*tended*). Pins show "unwatched: man a post nearby". Holding many landmarks takes many spears, and burning the post that watches one stops the income even if the land stays. This was the fix for houses making Expander dominant again (72%): Horn's reach and a reliable Expedition let it out-hold everyone.
+- **Measured** (12 seeds × both sides, origins):
+  - All five styles fall between 42% and 59%, and none beats every other.
+  - About 2.2 lead changes a game, with 24–27% comebacks.
+  - Origins fall between 36% and 64% (Kinfolk strongest, even with one extra child rather than two).
+  - Real games (origins and omens, 15 duels): 8 : 7, median 31.3 min, 2.7 lead changes, 20% comebacks, 4.2 landmark flips a game.
+- **The goal is now 1,400** (from 1,600), because watched landmarks pay less.
 - **Raids were rare at first, and the measurements showed why:**
   - **Huscarls waited behind every tower's guards,** so the first raid came at 20:00 or later. They now staff first.
   - **Posts never took workers.** The watch can now borrow an extra crew hand from a busy workplace.
@@ -1117,4 +1166,34 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **Saves:** version 16.
 - **Tests:** reavers ignore small settlements and peaceful valleys, march on the furthest post, and are held off by a guarded post with a stockade.
 - **Versioning:** v0.14.1 (raids) should have been a minor version under AGENTS.md. It's fixed from here on.
+
+### v0.16.0 The Great Houses: three seats you choose, and landmarks that need watching (2026-10-28)
+- **Why:** the playtest said the Great Houses were confusing ("used their abilities without really understanding their effects"), and that with 170 settlers there was never a reason to look at a family.
+- **Built:**
+  - `houses.ts`: seven houses, seats at origin, Hamlet and Village, house letters, `playerMod`, banner families;
+  - house powers keyed by seat, each with exact numbers and a `deedProblem` reason;
+  - the War-Horn and Shield Wall powers;
+  - the house bar (power, house, short effect, true cooldown, running chip);
+  - the house letter cards ("Always:" and "Power:");
+  - landmarks that pay only while watched, with stockade tending;
+  - origins as founding houses;
+  - dynasty migration;
+  - rival personalities by origin;
+  - per-origin results in the matrix;
+  - How to Play and chapter hints rewritten.
+- **Removed:** `boons.ts`, boon letters, the prestige council, Betrothal and Lessons.
+- **Balance:**
+  - **Houses made Expander dominant again (72%),** and Kinfolk won 79% as an origin, because "births +50%" now applied to the whole town. The fixes:
+    - landmarks need watching;
+    - Hearth births +25%;
+    - Kinfolk +1 child;
+    - Horn +3 reach;
+    - Plough +40%;
+    - Axe +40%;
+    - Hammer adds quarrying;
+    - richer River Folk and Wayfarer wagons;
+    - goal 1,400.
+  - **After the fixes:** all styles 42–59%.
+- **Bug found by the duels:** a raid whose target had already burned reported "held: 90 vs 0". The band now just goes home.
+- **Saves:** version 17 (shape changed: seats, mods, the house offer, families without boons).
 

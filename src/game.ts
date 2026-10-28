@@ -5,12 +5,12 @@ import { BALANCE, TICK_MS } from './sim/balance';
 import { seasonOf } from './sim/seasons';
 import { canPlace } from './sim/commands';
 import { BUILDINGS, DISCOVERIES, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Tool } from './sim/defs';
-import { DEEDS, bestCraft, council, deedOf, deedPower, prestige, deedTargetProblem, outpostSpot, type DeedId } from './sim/deeds';
+import { DEEDS, deedProblem, deedTargetProblem, outpostSpot, type DeedId } from './sim/deeds';
+import { HOUSES, playerMod } from './sim/houses';
 import { NO_OWNER, previewInfluence, previewRemoval } from './sim/territory';
 import { defenceOf, hallOf, huscarls, raidProblem, raidStrength } from './sim/warfare';
 import { ICON } from './render/overlay';
 import { serializeWorld } from './sim/save';
-import { BOONS } from './sim/boons';
 import { eventDef } from './sim/events';
 import { plural } from './sim/population';
 import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
@@ -26,7 +26,7 @@ import { rivalLine, type RivalMoment } from './ui/rivalVoice';
 
 export const PLAYER = 0;
 
-export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; familyId: number; deed: DeedId } | { kind: 'raid' };
+export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; seat: number; deed: DeedId } | { kind: 'raid' };
 export type Selection = { kind: 'building'; id: number } | { kind: 'settler'; id: number } | null;
 
 export interface Toast {
@@ -183,7 +183,6 @@ export class Game {
       this.uiTimer = 0.2;
       this.version.value++;
       this.objectives.value = objectiveStatus(this.world, PLAYER);
-      this.watchCouncil();
       this.conduct();
     }
   }
@@ -229,13 +228,14 @@ export class Game {
   /** Winning remembers your greatest house, to found a future valley. */
   private rememberHouse(): void {
     const w = this.world;
-    const fams = [...w.families.values()].filter((f) => f.owner === PLAYER);
-    if (!fams.length) return;
-    const best = fams.reduce((a, f) => (prestige(w, f) > prestige(w, a) ? f : a));
-    const craft = bestCraft(best);
+    // The founding house: its banner family's name, its house and its best craft.
+    const seat = w.players[PLAYER].seats[0];
+    const best = seat && w.families.get(seat.familyId);
+    if (!seat || !best) return;
+    const craft = SKILLS.reduce((a, k) => (best.skills[k] > best.skills[a] ? k : a), SKILLS[0]);
     this.earned.value = recordDynasty({
       surname: best.surname,
-      boons: best.boons.slice(0, 2),
+      house: seat.house,
       skill: best.skills[craft] >= TIER_XP[1] ? craft : null,
       renown: w.players[PLAYER].renown,
       date: new Date().toISOString().slice(0, 10),
@@ -249,21 +249,6 @@ export class Game {
     if (!fam) return;
     const house = `the ${plural(fam.surname)}`;
     this.toast('/assets/icons/scroll.png', `${head?.name ?? 'The rival'} of ${house}: ${rivalLine(moment, { house, ...vars })}`, 'rival');
-  }
-
-  /** A new deed reaching the council is news (families swapping seats is not). */
-  private seated: DeedId[] | null = null;
-  private watchCouncil(): void {
-    const seats = council(this.world, PLAYER);
-    const now = seats.map((f) => deedOf(f)!);
-    if (this.seated)
-      for (const fam of seats) {
-        const id = deedOf(fam)!;
-        if (this.seated.includes(id)) continue;
-        audio.play('objective');
-        this.toast('/assets/icons/people.png', `The ${plural(fam.surname)} rise to the Great Houses: ${DEEDS[id].icon} ${DEEDS[id].name} is yours to call.`, 'good');
-      }
-    this.seated = now;
   }
 
   save(manual: boolean): boolean {
@@ -368,15 +353,21 @@ export class Game {
           audio.play('objective');
           this.toast('/assets/icons/people.png', `A traveller tells of the ${DISCOVERIES[e.kind].name} to the ${e.dir}. Push your border that way!`, 'info');
           break;
-        case 'boonOffered':
+        case 'houseOffered':
           // A letter arrives in the ledger: a soft chime, no interruption.
           if (e.owner === PLAYER) audio.play('letter');
           break;
-        case 'boonChosen':
-          if (e.owner !== PLAYER) break;
+        case 'houseSeated': {
+          const h = HOUSES[e.house];
+          const d = DEEDS[h.power];
+          if (e.owner !== PLAYER) {
+            this.toast('/assets/icons/scroll.png', `Your rival raises the banner of the ${h.name} ${h.icon}: ${h.suits.split(':')[0].toLowerCase()} ahead.`, 'rival');
+            break;
+          }
           audio.play('tierUp');
-          this.news('/assets/icons/people.png', `The ${plural(e.surname)} are now ${BOONS[e.boon].name}: ${BOONS[e.boon].blurb}`, 'good');
+          this.toast('/assets/icons/people.png', `${h.icon} The ${h.name} takes a seat${e.surname ? `, its banner over the ${plural(e.surname)}` : ''}. ${h.passive} Power: ${d.icon} ${d.name}, ${d.short.toLowerCase()}.`, 'big');
           break;
+        }
         case 'married': {
           if (e.owner !== PLAYER) break;
           const a = this.world.settlers.get(e.a);
@@ -699,24 +690,30 @@ export class Game {
     this.world.enqueue({ type: 'chooseEvent', owner: PLAYER, eventId, option });
   }
 
-  chooseBoon(offerId: number, choice: number): void {
+  chooseHouse(offerId: number, choice: number): void {
     audio.play('click');
-    this.world.enqueue({ type: 'chooseBoon', owner: PLAYER, offerId, choice });
+    this.world.enqueue({ type: 'chooseHouse', owner: PLAYER, offerId, choice });
   }
 
-  /** A council family's deed: instant ones happen now, targeted ones wait for a tap on the map. */
-  useDeed(familyId: number): void {
-    const fam = this.world.families.get(familyId);
-    const id = fam && deedOf(fam);
-    if (!id) return;
-    audio.play('click');
-    if (!DEEDS[id].target) {
-      this.world.enqueue({ type: 'deed', owner: PLAYER, familyId, x: 0, y: 0 });
+  /** A Great House's power: instant ones happen now, targeted ones wait for a tap on the map. */
+  useDeed(seatIndex: number): void {
+    const seat = this.world.players[PLAYER].seats[seatIndex];
+    if (!seat) return;
+    const id = HOUSES[seat.house].power;
+    const problem = deedProblem(this.world, PLAYER, seatIndex);
+    if (problem) {
+      // Say why, rather than doing nothing.
+      audio.play('warn');
+      this.toast('/assets/icons/scroll.png', `${DEEDS[id].icon} ${DEEDS[id].name}: ${problem}`, 'warn');
       return;
     }
-    // Raise picks a site: go straight to the one closest to finished, unless the player taps another.
+    audio.play('click');
+    if (!DEEDS[id].target) {
+      this.world.enqueue({ type: 'deed', owner: PLAYER, seat: seatIndex, x: 0, y: 0 });
+      return;
+    }
     this.selection.value = null;
-    this.mode.value = { kind: 'deed', familyId, deed: id };
+    this.mode.value = { kind: 'deed', seat: seatIndex, deed: id };
   }
 
   /** Pick a rival post for the huscarls: the map waits for a tap on one. */
@@ -827,7 +824,7 @@ export class Game {
       this.toast('/assets/icons/scroll.png', pv.problem, 'warn');
       return;
     }
-    this.world.enqueue({ type: 'deed', owner: PLAYER, familyId: mode.familyId, x: pv.x, y: pv.y });
+    this.world.enqueue({ type: 'deed', owner: PLAYER, seat: mode.seat, x: pv.x, y: pv.y });
     this.mode.value = { kind: 'select' };
     this.deedPreview.value = null;
     this.view.showTargetRing(null);
@@ -843,15 +840,13 @@ export class Game {
     const prev = this.deedPreview.value;
     if (prev && prev.x === x && prev.y === y) return;
     const problem = deedTargetProblem(this.world, PLAYER, mode.deed, x, y);
-    const fam = this.world.families.get(mode.familyId);
-    let r = 0;
+    let r = mode.deed === 'shieldwall' && !problem ? BALANCE.shieldWall[0] : 0;
     let claim: ClaimPreview | undefined;
-    if (!problem && fam && (mode.deed === 'festival' || mode.deed === 'expedition')) {
-      const power = deedPower(fam);
+    if (!problem && (mode.deed === 'festival' || mode.deed === 'expedition')) {
       const src =
         mode.deed === 'festival'
-          ? { owner: PLAYER, x, y, r: 10 + power * 2, p: 110 + power * 30 }
-          : { owner: PLAYER, ...(outpostSpot(this.world, PLAYER, x, y) ?? { x, y }), r: (BUILDINGS.outpost.claim ?? 7) + (power > 1 ? 2 : 0) + (fam.mods.claim ? 2 : 0), p: BUILDINGS.outpost.power ?? 70 };
+          ? { owner: PLAYER, x, y, r: 12, p: 150 }
+          : { owner: PLAYER, ...(outpostSpot(this.world, PLAYER, x, y) ?? { x, y }), r: (BUILDINGS.outpost.claim ?? 7) + playerMod(this.world, PLAYER, 'claim'), p: BUILDINGS.outpost.power ?? 70 };
       if (mode.deed === 'expedition') {
         src.x += 1;
         src.y += 1;

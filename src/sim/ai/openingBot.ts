@@ -1,12 +1,12 @@
 import { BUILDINGS, DISCOVERIES, FOODS, GOODS, GREAT_WORKS, type BuildingType, type Good, type NodeKind } from '../defs';
-import { council, deedCost, deedOf, deedWait, outpostSpot } from '../deeds';
+import { deedCost, deedWait, outpostSpot } from '../deeds';
+import { HOUSES, HOUSE_TIMEOUT } from '../houses';
 import { workOwner } from '../works';
 import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../market';
 import type { World } from '../world';
 import { NO_OWNER } from '../territory';
 import { BALANCE } from '../balance';
 import { canAfford, eventDef } from '../events';
-import { BOON_TIMEOUT } from '../boons';
 import { isHome } from '../population';
 import { bestSite } from './placement';
 import { STYLES, type BotStyle } from './styles';
@@ -52,9 +52,14 @@ export class OpeningBot {
       const pick = def.options.findIndex((o) => canAfford(world, this.owner, o.cost));
       world.enqueue({ type: 'chooseEvent', owner: this.owner, eventId: ev.id, option: pick < 0 ? def.options.length - 1 : pick });
     }
-    // Boons: take the first card a few seconds after it's offered, like a quick human.
-    for (const o of world.players[this.owner].offers)
-      if (o.expires > 0 && o.expires - world.tick < BOON_TIMEOUT - 60) world.enqueue({ type: 'chooseBoon', owner: this.owner, offerId: o.id, choice: 0 });
+    // A house letter: the house its style likes best, a few seconds after it's offered.
+    const offer = world.players[this.owner].houseOffer;
+    if (offer && offer.expires - world.tick < HOUSE_TIMEOUT - 60) {
+      const prefs = STYLES[this.style].houses;
+      const rank = (h: string) => (prefs.indexOf(h as never) + 100) % 100;
+      const best = offer.choices.reduce((a, h, i) => (rank(h) < rank(offer.choices[a]) ? i : a), 0);
+      world.enqueue({ type: 'chooseHouse', owner: this.owner, offerId: offer.id, choice: best });
+    }
     while (this.opening.length && this.opening[0].at <= world.tick) {
       this.place(world, this.opening.shift()!.type);
     }
@@ -182,12 +187,13 @@ export class OpeningBot {
     return best;
   }
 
-  /** Use one ready family deed, when it would help. */
+  /** Call on one ready house power, when it would help. */
   private useDeed(world: World, target: { x: number; y: number } | null): boolean {
     const pop = world.population(this.owner);
-    for (const fam of council(world, this.owner)) {
-      if (deedWait(world, fam) > 0) continue;
-      const id = deedOf(fam)!;
+    const seats = world.players[this.owner].seats;
+    for (let k = 0; k < seats.length; k++) {
+      if (deedWait(world, seats[k]) > 0) continue;
+      const id = HOUSES[seats[k].house].power;
       if (!canAfford(world, this.owner, deedCost(world, this.owner, id))) continue;
       let at: { x: number; y: number } | null = null;
       switch (id) {
@@ -203,9 +209,16 @@ export class OpeningBot {
         case 'harvest':
           at = world.food(this.owner) < pop ? { x: 0, y: 0 } : null;
           break;
-        case 'lessons':
-          at = { x: 0, y: 0 };
+        case 'warhorn':
+          at = hallOf(world, this.owner) && !world.players[this.owner].warhorn && world.tick >= BALANCE.raidsFrom ? { x: 0, y: 0 } : null;
           break;
+        case 'shieldwall': {
+          // Where raiders or reavers are heading.
+          const band = world.warbands.find((b) => b.phase === 'march' && world.buildings.get(b.targetId)?.owner === this.owner);
+          const t = band && world.buildings.get(band.targetId);
+          at = t ? { x: t.x, y: t.y } : null;
+          break;
+        }
         case 'expedition':
           at = target && world.territory[world.idx(target.x, target.y)] !== this.owner && outpostSpot(world, this.owner, target.x, target.y) ? target : null;
           break;
@@ -217,7 +230,7 @@ export class OpeningBot {
         }
       }
       if (!at) continue;
-      world.enqueue({ type: 'deed', owner: this.owner, familyId: fam.id, x: at.x, y: at.y });
+      world.enqueue({ type: 'deed', owner: this.owner, seat: k, x: at.x, y: at.y });
       return true;
     }
     return false;

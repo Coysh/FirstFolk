@@ -1,12 +1,11 @@
 import { hallOf } from '../sim/warfare';
 import { BUILD_MENU } from '../sim/defs';
-import { council } from '../sim/deeds';
 import type { Game } from '../game';
 import { toggleMute } from '../settings';
 
 /** Build hotkeys in shelf order. */
 export const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'];
-/** Family deed hotkeys, in council order. */
+/** House power hotkeys, in seat order. */
 export const DEED_KEYS = ['z', 'x', 'c', 'v'];
 
 interface PointerInfo {
@@ -171,8 +170,7 @@ export class Input {
     else if (k === 'm') toggleMute();
     else if (k === 'r' && hallOf(this.game.world, 0)) this.game.startRaid();
     else if (DEED_KEYS.includes(k)) {
-      const fam = council(this.game.world, 0)[DEED_KEYS.indexOf(k)];
-      if (fam) this.game.useDeed(fam.id);
+      if (this.game.world.players[0].seats[DEED_KEYS.indexOf(k)]) this.game.useDeed(DEED_KEYS.indexOf(k));
     }
     else if (k === 'delete' || k === 'backspace') {
       const sel = this.game.selection.value;

@@ -1,9 +1,6 @@
 import { BALANCE } from './balance';
-import { offerBoon } from './boons';
 import { BUILDINGS, FOODS, SKILLS, type Good } from './defs';
-import { freeHome, plural, singles, spawnFamily, wed } from './population';
-import { DEEDS, deedOf } from './deeds';
-import { tierOf, tradeTitle } from './trades';
+import { spawnFamily } from './population';
 import { isWinter, seasonOf } from './seasons';
 import { grantXp } from './settlers';
 import { NO_OWNER, revealArea } from './territory';
@@ -75,78 +72,7 @@ function loseFood(world: World, owner: number, n: number): number {
   return lost;
 }
 
-/** Who a single settler is, for a match card: "Edith Thorne, Master Mason (Builder)". */
-function matchName(world: World, id: number): string {
-  const s = world.settlers.get(id);
-  const fam = s && world.families.get(s.familyId);
-  if (!s || !fam) return 'someone';
-  const best = SKILLS.reduce((a, k) => (s.skills[k] > s.skills[a] ? k : a), SKILLS[0]);
-  const deed = deedOf(fam);
-  return `${s.name} ${fam.surname}${s.skills[best] > 0 ? `, ${tradeTitle(best, tierOf(s.skills[best]))}` : ''}${deed ? ` (${DEEDS[deed].name})` : ''}`;
-}
-
-/**
- * Two matches for the player to choose between: the most gifted single and their best
- * partner from another family, and a second pair from other families again.
- */
-function chooseMatches(world: World, owner: number): number[] | null {
-  const pool = singles(world, owner);
-  const gift = (id: number) => {
-    const s = world.settlers.get(id)!;
-    const fam = world.families.get(s.familyId);
-    return SKILLS.reduce((n, k) => n + s.skills[k], 0) + (fam?.boons.length ?? 0) * 100;
-  };
-  pool.sort((a, b) => gift(b.id) - gift(a.id) || a.id - b.id);
-  const pairs: [number, number][] = [];
-  const people = new Set<number>();
-  const unions = new Set<string>();
-  for (const a of pool) {
-    if (pairs.length >= 2 || people.has(a.id)) continue;
-    // A different union of families each time (so the two choices really differ).
-    const b = pool.find((o) => o.familyId !== a.familyId && !people.has(o.id) && !unions.has([a.familyId, o.familyId].sort().join()));
-    if (!b) continue;
-    pairs.push([a.id, b.id]);
-    people.add(a.id).add(b.id);
-    unions.add([a.familyId, b.familyId].sort().join());
-  }
-  return pairs.length === 2 ? pairs.flat() : null;
-}
-
-function blessMatch(world: World, owner: number, a: number, b: number): string {
-  const sa = world.settlers.get(a);
-  const sb = world.settlers.get(b);
-  const home = freeHome(world, owner);
-  if (!sa || !sb || !wed(world, world.players[owner], sa, sb, home)) return 'The match fell through: one of them found another.';
-  const fam = world.families.get(sa.familyId)!;
-  const deed = deedOf(fam);
-  return `${sa.name} and ${sb.name} wed: a new ${fam.surname} house with ${fam.boons.length} boons${deed ? ` and the ${DEEDS[deed].name} deed` : ''}.${home ? '' : ' Build them a home!'}`;
-}
-
 export const VALLEY_EVENTS: ValleyEventDef[] = [
-  {
-    id: 'betrothal',
-    title: 'A Betrothal',
-    icon: '💐',
-    text: 'Two matches are being talked of at the well. Bless one, and the new household inherits the best of both families: their crafts, their boons, their deeds.',
-    weight: 3,
-    when: (w, o) => w.players[o].rank >= 1,
-    setup: chooseMatches,
-    options: [
-      {
-        label: 'Bless the first match',
-        detail: '',
-        describe: (w, _o, d) => ({ label: 'Bless this match', detail: `${matchName(w, d[0])} & ${matchName(w, d[1])}` }),
-        apply: (w, o, d) => blessMatch(w, o, d[0], d[1]),
-      },
-      {
-        label: 'Bless the second match',
-        detail: '',
-        describe: (w, _o, d) => ({ label: 'Bless this match', detail: `${matchName(w, d[2])} & ${matchName(w, d[3])}` }),
-        apply: (w, o, d) => blessMatch(w, o, d[2], d[3]),
-      },
-      { label: 'Let love decide', detail: 'They’ll find their own way', apply: () => 'The gossip moves on to other things.' },
-    ],
-  },
   {
     id: 'trader',
     title: 'A Travelling Trader',
@@ -269,11 +195,11 @@ export const VALLEY_EVENTS: ValleyEventDef[] = [
     id: 'pilgrims',
     title: 'Pilgrims at the Stones',
     icon: '🕯️',
-    text: 'Pilgrims gather at your standing stones and offer a blessing to one of your families.',
+    text: 'Pilgrims gather at your standing stones and offer a blessing on your Great Houses.',
     weight: 3,
     when: (w, o) => w.sites.some((s) => s.kind === 'stones' && s.claimedBy === o),
     options: [
-      { label: 'Accept the blessing', detail: 'A family chooses a new boon', apply: (w, o) => bless(w, o) },
+      { label: 'Accept the blessing', detail: 'Every house power is ready at once', apply: (w, o) => bless(w, o) },
       { label: 'Ask for alms', detail: '+10 food', apply: (w, o) => (give(w, o, 'berries', 10), 'The pilgrims share their bread.') },
     ],
   },
@@ -351,11 +277,10 @@ function joinFamily(world: World, owner: number): string {
 }
 
 function bless(world: World, owner: number): string {
-  const fams = [...world.families.values()].filter((f) => f.owner === owner && f.boons.length < 5);
-  if (!fams.length) return 'Every family is already richly blessed.';
-  const fam = fams[world.rng.int(fams.length)];
-  offerBoon(world, fam, 'Blessed at the stones');
-  return `The ${plural(fam.surname)} are blessed.`;
+  const seats = world.players[owner].seats;
+  if (!seats.length) return 'The pilgrims pray for you all the same.';
+  for (const seat of seats) seat.ready = Math.min(seat.ready, world.tick);
+  return 'Blessed: every Great House stands ready to act.';
 }
 
 /** Draw the next event for a player, if it's time. Runs about once a second. */

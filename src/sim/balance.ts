@@ -52,7 +52,7 @@ export const BALANCE = {
   /** Each frontier tower a player already has makes the next this much (percent) dearer. */
   towerCostPct: 25,
   /** Frontier buildings (towers and outposts) a settlement can hold at each rank: Camp, Hamlet, Village, Town. */
-  frontierCap: [4, 7, 10, 13] as number[],
+  frontierCap: [4, 6, 9, 12] as number[],
   /** Tiles of reach an unmanned post loses (all of it when no guard stands there; see territory.ts). */
   unmannedReach: 3,
   /** A post's counted guards fall by one at most this often (ticks, a multiple of 20). */
@@ -71,6 +71,8 @@ export const BALANCE = {
   repelRenown: 12,
   raidCooldown: secs(90),
   interceptRange: 12,
+  /** The Shield Wall: radius and extra defence. */
+  shieldWall: [9, 40] as [number, number],
   /**
    * Reavers: from 12:00 a band lands every 4–5 minutes and marches on the weakest post of the
    * settlement with the most (at least `reaverMinPosts`). Strength grows over the game.
@@ -82,6 +84,10 @@ export const BALANCE = {
   reaverStrength: [20, 10] as [number, number],
   reaverRepel: 15,
   reaverLoot: 12,
+  /** A landmark pays only with a manned post (or the hall) this close (see renown.ts). */
+  watchRange: 9,
+  /** A landmark a manned Stockade watches pays this much more a minute. */
+  tendedBonus: 2,
   /** Extra home influence per Master in the household (up to four). */
   masterPull: 15,
   /** Losing at least this many tiles at once is news. */

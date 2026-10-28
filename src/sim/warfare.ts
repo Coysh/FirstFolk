@@ -2,6 +2,7 @@ import { BALANCE } from './balance';
 import { BUILDINGS, GOODS, costTotal } from './defs';
 import { isWalkableTerrain } from './mapgen';
 import { hasOmen } from './omens';
+import { playerMod } from './houses';
 import { addRenown } from './renown';
 import { cheb, setIdle } from './settlers';
 import { NO_OWNER, recomputeTerritory } from './territory';
@@ -52,13 +53,17 @@ export function huscarls(world: World, hall: Building | undefined): number {
 }
 
 /** A warband's strength: its huscarls, plus the settlement's war bonus. */
-export function raidStrength(_world: World, _owner: number, n: number): number {
-  return n * BALANCE.guardStrength;
+export function raidStrength(world: World, owner: number, n: number): number {
+  const s = n * (BALANCE.guardStrength + playerMod(world, owner, 'husc'));
+  // The War-Horn has sounded: half as strong again.
+  return world.players[owner]?.warhorn ? Math.floor((s * 3) / 2) : s;
 }
 
 /** How hard a building is to take: its guards, nearby stockades, the hall's ward and huscarls close by. */
 export function defenceOf(world: World, b: Building): number {
-  let d = b.guarded * BALANCE.guardStrength;
+  let d = Math.floor((b.guarded * BALANCE.guardStrength * (100 + playerMod(world, b.owner, 'guard'))) / 100);
+  const wall = world.players[b.owner]?.shieldWall;
+  if (wall && wall.until > world.tick && cheb(wall.x, wall.y, b.x, b.y) <= BALANCE.shieldWall[0]) d += BALANCE.shieldWall[1];
   for (const o of world.buildings.values()) {
     if (o.owner !== b.owner || !o.done) continue;
     const def = BUILDINGS[o.type];
@@ -66,7 +71,7 @@ export function defenceOf(world: World, b: Building): number {
     if (def.defence && dist <= def.defence[0]) d += def.defence[1];
     if (o.type === 'wagon' && dist <= BALANCE.hallWard[0]) d += BALANCE.hallWard[1] + BALANCE.hallWard[2] * (world.players[b.owner]?.rank ?? 0);
     // A Mustering Hall's huscarls turn out for any post close enough (unless they are away raiding).
-    if (o.type === 'musterhall' && o !== b && dist <= BALANCE.interceptRange) d += huscarls(world, o) * BALANCE.guardStrength;
+    if (o.type === 'musterhall' && o !== b && dist <= BALANCE.interceptRange) d += huscarls(world, o) * (BALANCE.guardStrength + playerMod(world, b.owner, 'husc'));
   }
   return d;
 }
@@ -105,6 +110,7 @@ export function launchRaid(world: World, owner: number, targetId: number): void 
     }
   const e = world.entrance(hall);
   const band: Warband = { id: world.newId(), owner, members, strength: raidStrength(world, owner, members.length), path, step: 0, progress: 0, targetId, homeId: hall.id, phase: 'march', x: e.x, y: e.y };
+  world.players[owner].warhorn = false;
   world.warbands.push(band);
   world.emit({ type: 'raidLaunched', owner, defender: target.owner, targetId, buildingType: target.type, x: target.x, y: target.y, strength: band.strength, eta: Math.ceil((path.length * 1000) / BALANCE.adultSpeed / 10) });
 }
@@ -148,7 +154,8 @@ function skirmish(world: World, band: Warband): void {
     addRenown(world, defender, renown, 'defence', target.x, target.y);
     world.players[defender].repelled++;
   }
-  world.emit({ type: 'raidResolved', owner: band.owner, defender, won, buildingType: target?.type ?? 'lookout', x: band.x, y: band.y, attack: band.strength, defence, renown });
+  // A target that burned (or was pulled down) before they arrived: they simply turn for home.
+  if (target) world.emit({ type: 'raidResolved', owner: band.owner, defender, won, buildingType: target.type, x: band.x, y: band.y, attack: band.strength, defence, renown });
   // Home again (the way they came).
   band.phase = 'home';
   band.path = band.path.slice(0, -1).reverse();

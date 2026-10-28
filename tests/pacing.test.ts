@@ -31,7 +31,7 @@ describe('pacing (headless playtests)', () => {
       expect(r.timeline.some((l) => l.includes('arrives'))).toBe(true);
       expect(r.timeline.some((l) => l.includes('sawpit unlocked'))).toBe(true);
       expect(r.timeline.some((l) => l.includes('RANK UP: Hamlet'))).toBe(true);
-      expect(r.timeline.some((l) => l.includes('boon choice'))).toBe(true);
+      expect(r.timeline.some((l) => l.includes('house choice'))).toBe(true);
     });
   }
 });

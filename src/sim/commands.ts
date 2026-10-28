@@ -2,7 +2,7 @@ import { BUILDINGS, GOODS, RANK_NAMES, type BuildingType, type Good } from './de
 import { sell, setTrade } from './market';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
 import { owns, territoryBox } from './territory';
-import { chooseBoon } from './boons';
+import { chooseHouse } from './houses';
 import { resolveEvent } from './events';
 import { tradeTitle } from './trades';
 import { performDeed } from './deeds';
@@ -14,9 +14,9 @@ import type { Building, World } from './world';
 export type Command =
   | { type: 'place'; owner: number; building: BuildingType; x: number; y: number }
   | { type: 'demolish'; owner: number; id: number }
-  | { type: 'chooseBoon'; owner: number; offerId: number; choice: number }
+  | { type: 'chooseHouse'; owner: number; offerId: number; choice: number }
   | { type: 'chooseEvent'; owner: number; eventId: number; option: number }
-  | { type: 'deed'; owner: number; familyId: number; x: number; y: number }
+  | { type: 'deed'; owner: number; seat: number; x: number; y: number }
   | { type: 'sell'; owner: number; good: Good }
   | { type: 'setTrade'; owner: number; good: Good; keep: number | null }
   | { type: 'setAutoHomes'; owner: number; on: boolean }
@@ -203,13 +203,13 @@ export function applyCommand(world: World, cmd: Command): void {
       setTrade(world, cmd.owner, cmd.good, cmd.keep);
       return;
     case 'deed':
-      performDeed(world, cmd.owner, cmd.familyId, cmd.x, cmd.y);
+      performDeed(world, cmd.owner, cmd.seat, cmd.x, cmd.y);
       return;
     case 'chooseEvent':
       resolveEvent(world, cmd.owner, cmd.eventId, cmd.option);
       return;
-    case 'chooseBoon':
-      chooseBoon(world, cmd.owner, cmd.offerId, cmd.choice);
+    case 'chooseHouse':
+      chooseHouse(world, cmd.owner, cmd.offerId, cmd.choice);
       return;
     case 'demolish': {
       const b = world.buildings.get(cmd.id);

@@ -199,7 +199,7 @@ export class GameRenderer {
       else if (e.type === 'rankUp' && e.owner === 0) {
         const wagon = [...this.world.buildings.values()].find((b) => b.owner === 0 && b.type === 'wagon');
         if (wagon) this.effects.emit('sparkle', wagon.x + 1, this.hf.at(wagon.x + 1, wagon.y + 1) + 1.5, wagon.y + 1, 60);
-      } else if (e.type === 'deed' && seen(Math.max(0, e.x), Math.max(0, e.y)) && e.deed !== 'timber' && e.deed !== 'harvest' && e.deed !== 'lessons') {
+      } else if (e.type === 'deed' && seen(Math.max(0, e.x), Math.max(0, e.y)) && e.deed !== 'timber' && e.deed !== 'harvest' && e.deed !== 'warhorn') {
         const y = this.hf.at(e.x + 0.5, e.y + 0.5);
         this.effects.emit('sparkle', e.x + 0.5, y + 1.2, e.y + 0.5, 70);
         this.effects.emit('dust', e.x + 0.5, y + 0.2, e.y + 0.5, 24);

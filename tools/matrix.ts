@@ -97,6 +97,15 @@ export async function runMatrix(o: MatrixOptions): Promise<void> {
   }
   lengths.sort((p, q) => p - q);
   console.log(`\nside wins P/R ${sides[0]}/${sides[1]} · length median ${lengths[Math.floor(lengths.length / 2)]?.toFixed(1)} min · avg lead changes ${(leads / results.length).toFixed(1)} · comebacks ${Math.round((100 * comebacks) / results.length)}%`);
+  // Opener balance: how each origin (its founding house) fares, whichever side and style played it.
+  const byOrigin: Record<string, [number, number]> = {};
+  for (const { r } of results)
+    r.origins.forEach((o, side) => {
+      const t = (byOrigin[o || 'classic'] ??= [0, 0]);
+      t[1]++;
+      if (r.winner === side) t[0]++;
+    });
+  console.log('origin wins/games: ' + Object.entries(byOrigin).map(([o, [w, n]]) => `${o} ${w}/${n}`).join(' · '));
   // Dominance alarm: a style that is far ahead overall, or beats every other one.
   for (const x of o.styles) {
     const overall = per[x].wins / per[x].games;
