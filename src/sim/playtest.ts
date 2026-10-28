@@ -97,7 +97,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     world.step();
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
-      if (e.type === 'buildingComplete' && (BUILDINGS[e.buildingType].frontier || e.buildingType === 'outpost')) towers[e.owner]++;
+      if (e.type === 'buildingComplete' && BUILDINGS[e.buildingType].capped) towers[e.owner]++;
       if ('owner' in e && e.owner !== 0 && !['claimed', 'rankUp', 'deed', 'workBegun'].includes(e.type) && !(e.type === 'holdingChanged' && e.from === 0)) continue;
       if (e.type === 'buildingComplete') timeline.push(`${t} built ${e.buildingType}`);
       else if (e.type === 'familyApproaching') timeline.push(`${t} the ${e.surname} family (${e.size}) arrives`);

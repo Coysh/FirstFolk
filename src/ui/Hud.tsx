@@ -25,6 +25,7 @@ import { OMENS } from '../sim/omens';
 import { ORIGINS } from '../sim/origins';
 import { workOwner } from '../sim/works';
 import { workSlots } from '../sim/settlers';
+import { defenceOf } from '../sim/warfare';
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
@@ -861,6 +862,21 @@ function InfoPanel({ game }: { game: Game }) {
           ) : (
             <p class="muted">Waiting for a free adult</p>
           )}
+        </div>
+      )}
+      {b.done && def.garrison && (
+        <div class="worker">
+          <p>
+            <img class="inline-icon" src={ICON.shield} alt="" /> Guards: <strong>{b.guarded}/{def.garrison}</strong>
+            <span class="muted small"> · defence {defenceOf(w, b)}</span>
+          </p>
+          <p class="muted small">
+            {w.players[PLAYER].rank < 1
+              ? 'From Hamlet, posts need guards to push at full strength.'
+              : b.guarded < def.garrison
+                ? `Short-handed: it pushes at ${Math.round((100 * (1 + b.guarded)) / (1 + def.garrison))}% strength. Free adults (more homes, more folk) take up the watch.`
+                : 'Fully manned: it pushes at full strength.'}
+          </p>
         </div>
       )}
       {b.done && def.job && def.job.kind !== 'plant' && (

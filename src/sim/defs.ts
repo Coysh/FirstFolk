@@ -7,9 +7,9 @@ export const FOODS: readonly Good[] = ['berries', 'fish'];
 
 export type NodeKind = 'tree' | 'rock' | 'bush' | 'fish';
 
-export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary';
+export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'stockade' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary';
 
-export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw';
+export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw' | 'spear';
 
 /** Skills settlers learn by working; trades (see trades.ts) are tiers of these. */
 export type Skill = 'woodcraft' | 'stonework' | 'husbandry';
@@ -77,6 +77,15 @@ export interface BuildingDef {
   power?: number;
   /** Towers: a builder family's Wanderlust widens their reach, and each one makes the next dearer. */
   frontier?: boolean;
+  /** Counts against the settlement's frontier cap (towers, outposts and stockades). */
+  capped?: boolean;
+  /**
+   * Guard posts. From Hamlet a post's influence follows its garrison: unmanned it pushes with
+   * half its power and a shorter reach, so every banner needs a spear behind it.
+   */
+  garrison?: number;
+  /** Strength (and radius) it adds to the defence of your buildings around it. */
+  defence?: [number, number];
   /** Builders who can work on the site at once (default 1). */
   crew?: number;
   /**
@@ -186,6 +195,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     claim: 8,
     power: 60,
     frontier: true,
+    capped: true,
+    garrison: 1,
     reveal: 14,
   },
   watchtower: {
@@ -201,7 +212,26 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     claim: 12,
     power: 100,
     frontier: true,
+    capped: true,
+    garrison: 2,
     reveal: 20,
+  },
+  stockade: {
+    type: 'stockade',
+    name: 'Stockade',
+    icon: '🛡️',
+    blurb: 'A ring of sharpened stakes around a guardhouse. It claims little land but holds it hard, and its three guards shield your buildings nearby. Build one by a landmark to keep it. Needs a Hamlet.',
+    cost: { logs: 10, stone: 6 },
+    buildTicks: secs(14),
+    size: 2,
+    buildable: true,
+    rank: 1,
+    claim: 6,
+    power: 110,
+    capped: true,
+    garrison: 3,
+    defence: [7, 20],
+    reveal: 10,
   },
   longhouse: {
     type: 'longhouse',
@@ -228,6 +258,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildable: false,
     claim: 7,
     power: 70,
+    capped: true,
+    garrison: 1,
     reveal: 12,
   },
   henge: {
@@ -305,7 +337,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
 };
 
-export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse', 'watchtower', 'longhouse', 'henge', 'meadhall', 'granary'];
+export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse', 'watchtower', 'stockade', 'longhouse', 'henge', 'meadhall', 'granary'];
 
 export const GREAT_WORKS: BuildingType[] = ['henge', 'meadhall', 'granary'];
 

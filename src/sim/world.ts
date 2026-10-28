@@ -77,6 +77,8 @@ export interface Building {
   reach: number;
   /** Materials this building costs (frontier towers get dearer the more you have). */
   cost: Partial<Record<Good, number>>;
+  /** Guards counted for its influence: rises at once, falls one at a time (see territory.ts). */
+  guarded: number;
 }
 
 export interface Discovery {
@@ -120,7 +122,9 @@ export type Job =
   | { kind: 'arrive' }
   | { kind: 'work'; buildingId: number; phase: 'toBuilding' | 'seek' | 'toNode' | 'harvest' | 'return' | 'rest' | 'process' | 'deliver'; nodeId: number; tile: number; extra: number }
   | { kind: 'build'; siteId: number; phase: 'toSite' | 'build' }
-  | { kind: 'haul'; good: Good; fromId: number; toId: number; phase: 'toSource' | 'toDest' };
+  | { kind: 'haul'; good: Good; fromId: number; toId: number; phase: 'toSource' | 'toDest' }
+  /** Standing watch at a guard post ('away' while marching with a warband). */
+  | { kind: 'guard'; buildingId: number; phase: 'toPost' | 'watch' | 'away' };
 
 export interface Settler {
   id: number;
@@ -493,6 +497,7 @@ export class World {
       builtBy: 0,
       reach: 0,
       cost: this.buildCost(owner, type),
+      guarded: 0,
     };
     this.buildings.set(b.id, b);
     this.buildingsVersion++;
@@ -642,10 +647,10 @@ export class World {
     return BALANCE.frontierCap[Math.min(BALANCE.frontierCap.length - 1, this.players[owner]?.rank ?? 0)];
   }
 
-  /** Frontier buildings a player has, standing or under way: towers and outposts. */
+  /** Frontier buildings a player has, standing or under way: towers, outposts and stockades. */
   frontierCount(owner: number): number {
     let n = 0;
-    for (const b of this.buildings.values()) if (b.owner === owner && (BUILDINGS[b.type].frontier || b.type === 'outpost')) n++;
+    for (const b of this.buildings.values()) if (b.owner === owner && BUILDINGS[b.type].capped) n++;
     return n;
   }
 

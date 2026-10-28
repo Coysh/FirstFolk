@@ -65,7 +65,7 @@ export interface DeedPreview {
 }
 
 const AUTOSAVE_SECONDS = 45;
-const STRIKE_SFX: Record<Tool, Sfx> = { axe: 'chop', pick: 'pick', hammer: 'hammer', saw: 'saw', shovel: 'shovel', basket: 'click' };
+const STRIKE_SFX: Record<Tool, Sfx> = { axe: 'chop', pick: 'pick', hammer: 'hammer', saw: 'saw', shovel: 'shovel', basket: 'click', spear: 'click' };
 
 /**
  * Glue between simulation, renderer, input and UI: runs the fixed-timestep loop, turns

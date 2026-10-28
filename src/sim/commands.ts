@@ -44,8 +44,8 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
     if (holder >= 0) return { ok: false, reason: holder === owner ? 'Already yours' : 'Your rival raised it first' };
     if (world.countBuildings(owner, type, true)) return { ok: false, reason: 'Already begun' };
   }
-  if (def.frontier && world.frontierCount(owner) >= world.frontierCap(owner))
-    return { ok: false, reason: `Your folk can hold ${world.frontierCap(owner)} towers at this rank: rank up for more` };
+  if (def.capped && world.frontierCount(owner) >= world.frontierCap(owner))
+    return { ok: false, reason: `Your folk can hold ${world.frontierCap(owner)} towers and stockades at this rank: rank up for more` };
   const size = def.size;
   const ex = x;
   const ey = y + size;
@@ -232,6 +232,7 @@ export function demolish(world: World, id: number): void {
     const touches =
       (j.kind === 'work' && j.buildingId === id) ||
       (j.kind === 'build' && j.siteId === id) ||
+      (j.kind === 'guard' && j.buildingId === id) ||
       (j.kind === 'haul' && (j.fromId === id || j.toId === id));
     if (!touches) continue;
     if (j.kind === 'haul') {

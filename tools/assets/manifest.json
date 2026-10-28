@@ -30,6 +30,8 @@
     { "id": "icon-meadhall", "kind": "icon", "out": "icons/meadhall.png", "size": 128, "prompt": "A grand carved timber mead hall with a long steep dark thatched roof, carved dragon-head gable ends, and a foaming wooden mead tankard in front." },
     { "id": "icon-granary", "kind": "icon", "out": "icons/granary.png", "size": 128, "prompt": "A great timber granary raised on mushroom-shaped staddle stones, with a big golden thatched roof, two cream grain sacks and a basket of bilberries in front." },
     { "id": "icon-renown", "kind": "icon", "out": "icons/renown.png", "size": 128, "prompt": "A golden laurel wreath around a shining five-pointed gold star." },
+    { "id": "icon-stockade", "kind": "icon", "out": "icons/stockade.png", "size": 128, "prompt": "A small round palisade fort: a ring of sharpened timber stakes around a little thatched guardhouse, an open gate at the front, a red round shield and two crossed spears by the gate." },
+    { "id": "icon-shield", "kind": "icon", "out": "icons/shield.png", "size": 128, "prompt": "A round wooden Saxon shield painted in red and cream quarters with an iron boss in the centre, a spear leaning behind it." },
     { "id": "icon-lookout", "kind": "icon", "out": "icons/lookout.png", "size": 128, "prompt": "A tall wooden lookout watchtower on a low stone base: four timber legs with cross-bracing, a ladder, a railed platform with a small pointed thatch roof, and a red pennant flying from the top." }
   ]
 }

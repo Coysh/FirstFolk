@@ -87,6 +87,8 @@ export class OpeningBot {
     const st = STYLES[this.style];
     // Push the border: towards a seen discovery, for room, or towards what we lack.
     const towers = count('lookout') + (this.style === 'balanced' ? 0 : count('watchtower') + count('outpost'));
+    const hold = this.landmarkToHold(world);
+    const keep: Idea = [!!hold && st.stockades, 'stockade', hold ?? undefined];
     const push: Idea = [towerSites === 0 && (!!target || !!want || (!st.towersOnlyWithAim && towers < pop / st.towerPer)), tower, target ?? undefined, want];
 
     // Ordered ideas; the first one that is wanted, affordable and has a valid site is done.
@@ -97,7 +99,7 @@ export class OpeningBot {
       [world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0, 'sawpit'],
       [world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0, 'watchtower', target ?? undefined],
       [world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0, 'storehouse'],
-      ...(st.towersFirst ? [push] : []),
+      ...(st.towersFirst ? [push, keep] : [keep]),
       // The late game's race: always have one Great Work under way.
       [!!work, work ?? 'hut'],
       [hungry && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 10), 'fisher'],
@@ -224,6 +226,25 @@ export class OpeningBot {
       const x = p.x + Math.round(((wagon.x - p.x) * i) / steps);
       const y = p.y + Math.round(((wagon.y - p.y) * i) / steps);
       if (world.territory[world.idx(x, y)] === this.owner) return Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) <= 12 ? { x, y } : null;
+    }
+    return null;
+  }
+
+  /** A landmark we hold with the rival's land close by and no stockade guarding it yet. */
+  private landmarkToHold(world: World): { x: number; y: number } | null {
+    if (!world.isUnlocked(this.owner, 'stockade') || world.countBuildings(this.owner, 'stockade', true) > world.countBuildings(this.owner, 'stockade')) return null;
+    for (const site of world.sites) {
+      if (site.heldBy !== this.owner || !DISCOVERIES[site.kind].renown) continue;
+      const guarded = [...world.buildings.values()].some((b) => b.owner === this.owner && b.type === 'stockade' && Math.max(Math.abs(b.x - site.x), Math.abs(b.y - site.y)) <= 7);
+      if (guarded) continue;
+      let threatened = false;
+      for (let dy = -10; dy <= 10 && !threatened; dy += 2)
+        for (let dx = -10; dx <= 10 && !threatened; dx += 2) {
+          const x = site.x + dx;
+          const y = site.y + dy;
+          if (world.inBounds(x, y) && world.territory[world.idx(x, y)] !== NO_OWNER && world.territory[world.idx(x, y)] !== this.owner) threatened = true;
+        }
+      if (threatened) return site;
     }
     return null;
   }

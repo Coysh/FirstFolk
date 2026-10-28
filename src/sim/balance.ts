@@ -53,6 +53,16 @@ export const BALANCE = {
   towerCostPct: 25,
   /** Frontier buildings (towers and outposts) a settlement can hold at each rank: Camp, Hamlet, Village, Town. */
   frontierCap: [4, 7, 10, 13] as number[],
+  /** Tiles of reach an unmanned post loses (all of it when no guard stands there; see territory.ts). */
+  unmannedReach: 3,
+  /** A post's counted guards fall by one at most this often (ticks, a multiple of 20). */
+  garrisonEase: secs(10),
+  /** One adult in this many is kept free to carry goods before anyone takes up the watch. */
+  porterShare: 4,
+  /** A guard's (and a huscarl's) strength in a skirmish. */
+  guardStrength: 10,
+  /** Close to home (radius) the hall wards its buildings: strength, plus more per rank. */
+  hallWard: [12, 20, 10] as [number, number, number],
   /** Extra home influence per Master in the household (up to four). */
   masterPull: 15,
   /** Losing at least this many tiles at once is news. */

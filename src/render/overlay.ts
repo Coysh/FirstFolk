@@ -25,6 +25,7 @@ export const ICON: Record<string, string> = {
   wagon: '/assets/icons/hut.png',
   lookout: '/assets/icons/lookout.png',
   renown: '/assets/icons/renown.png',
+  shield: '/assets/icons/shield.png',
 };
 
 interface Floater {
@@ -86,7 +87,7 @@ export class Overlay {
     // Problem bubbles.
     const seen = new Set<number>();
     for (const b of world.buildings.values()) {
-      const content = this.visible && b.owner === 0 ? bubbleFor(b) : null;
+      const content = this.visible && b.owner === 0 ? bubbleFor(b, world) : null;
       if (!content) continue;
       const c = buildings.centre(b.id);
       if (!c) continue;
@@ -191,8 +192,11 @@ export class Overlay {
   }
 }
 
-function bubbleFor(b: Building): { key: string; icon: string; glyph: string; tone: string } | null {
+function bubbleFor(b: Building, world: World): { key: string; icon: string; glyph: string; tone: string } | null {
   const job = BUILDINGS[b.type].job;
+  const slots = BUILDINGS[b.type].garrison;
+  // An unmanned post pushes at half strength (from Hamlet): it needs a guard.
+  if (b.done && slots && b.guarded === 0 && world.players[b.owner].rank >= 1) return { key: 'unguarded', icon: ICON.shield, glyph: '?', tone: 'warn' };
   switch (b.alert) {
     case 'noWorker':
       return { key: 'noWorker', icon: ICON.people, glyph: '?', tone: 'warn' };

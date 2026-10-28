@@ -45,6 +45,10 @@ function toolGeometry(tool: Tool): THREE.BufferGeometry {
       b.add(box(0.025, 0.06, 0.06), C.wood, { pos: [0, 0, 0.02] });
       b.add(box(0.01, 0.07, 0.34), C.iron, { pos: [0, -0.02, 0.2] });
       break;
+    case 'spear':
+      b.add(box(0.022, 0.022, 0.66), C.wood, { pos: [0, 0, 0.12] });
+      b.add(cone(0.026, 0.09, 4), C.iron, { pos: [0, 0, 0.49], rot: [Math.PI / 2, 0, 0] });
+      break;
   }
   return b.build();
 }
@@ -67,6 +71,8 @@ export class SettlersView {
   private apron: THREE.InstancedMesh;
   private badge: THREE.InstancedMesh;
   private feather: THREE.InstancedMesh;
+  /** Guards carry a round shield in their family's colour. */
+  private shield: THREE.InstancedMesh;
   /** Hooks for audio and footpaths. */
   onStrike: ((tool: Tool, x: number, y: number, z: number) => void) | null = null;
   onStep: ((x: number, z: number, amount: number) => void) | null = null;
@@ -116,7 +122,9 @@ export class SettlersView {
       shovel: mk(toolGeometry('shovel'), vmat, false),
       basket: mk(toolGeometry('basket'), vmat, false),
       saw: mk(toolGeometry('saw'), vmat, false),
+      spear: mk(toolGeometry('spear'), vmat, false),
     };
+    this.shield = mk(new THREE.CylinderGeometry(0.1, 0.1, 0.025, 9).rotateZ(Math.PI / 2).translate(-0.14, 0.3, 0.03), mat(), true);
     this.apron = mk(new THREE.BoxGeometry(0.15, 0.2, 0.03).translate(0, HIP_Y + 0.1, 0.085), mat(), true);
     this.badge = mk(new THREE.OctahedronGeometry(0.03).translate(0, 0.36, 0.085), new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0x6b4a00, metalness: 0.6, roughness: 0.3 }), false);
     this.feather = mk(new THREE.ConeGeometry(0.018, 0.16, 4).rotateZ(-0.5).translate(0.07, 0.62, 0), new THREE.MeshStandardMaterial({ color: 0xfff6e0, flatShading: true }), false);
@@ -161,10 +169,11 @@ export class SettlersView {
   }
 
   update(world: World, alpha: number, time: number, dt: number): void {
-    const counts = { tool: { axe: 0, pick: 0, hammer: 0, shovel: 0, basket: 0, saw: 0 } as Record<Tool, number>, cargo: { logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 } as Record<Good, number> };
+    const counts = { tool: { axe: 0, pick: 0, hammer: 0, shovel: 0, basket: 0, saw: 0, spear: 0 } as Record<Tool, number>, cargo: { logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 } as Record<Good, number> };
     let i = 0;
     let nApron = 0;
     let nBadge = 0;
+    let nShield = 0;
     for (const s of world.settlers.values()) {
       if (i >= MAX) break;
       if (s.owner !== 0 && !(world.explored[world.idx(s.x, s.y)] & 1)) continue;
@@ -273,15 +282,24 @@ export class SettlersView {
       this.limb(this.parts.armL, i, -0.105, SHOULDER_Y, armL);
       const handR = this.limb(this.parts.armR, i, 0.105, SHOULDER_Y, armR);
 
-      if (s.tool && !s.carry && (s.job.kind === 'work' || s.job.kind === 'build')) {
+      const guard = s.job.kind === 'guard' && s.job.phase !== 'away';
+      if (s.tool && !s.carry && (s.job.kind === 'work' || s.job.kind === 'build' || guard)) {
         const mesh = this.tools[s.tool];
-        if (s.anim === 'work' || s.tool === 'basket') {
+        if (guard && !moving) {
+          // On watch: the spear stands upright at their side.
+          this.m.copy(handR).multiply(this.t.makeTranslation(0, -ARM_LEN, 0)).multiply(this.t.makeRotationX(-Math.PI / 2 - armR));
+        } else if (s.anim === 'work' || s.tool === 'basket') {
           this.m.copy(handR).multiply(this.t.makeTranslation(0, -ARM_LEN, 0));
         } else {
           // Walking to or from work: tool resting on the shoulder, so the job reads at a glance.
           this.m.copy(this.base).multiply(this.t.makeTranslation(0.11, 0.42, -0.04)).multiply(this.t.makeRotationX(-2.2));
         }
         mesh.setMatrixAt(counts.tool[s.tool]++, this.m);
+      }
+      if (guard) {
+        const fam = world.families.get(s.familyId);
+        this.shield.setMatrixAt(nShield, this.base);
+        this.shield.setColorAt(nShield++, this.col.setHex(fam ? CREST_COLORS[fam.color] : 0x888888));
       }
       if (moving) this.onStep?.(x, z, dt * (s.carry ? 2.2 : 1.4));
 
@@ -329,6 +347,9 @@ export class SettlersView {
     this.apron.count = nApron;
     this.apron.instanceMatrix.needsUpdate = true;
     if (this.apron.instanceColor) this.apron.instanceColor.needsUpdate = true;
+    this.shield.count = nShield;
+    this.shield.instanceMatrix.needsUpdate = true;
+    if (this.shield.instanceColor) this.shield.instanceColor.needsUpdate = true;
     this.badge.count = nBadge;
     this.feather.count = nBadge;
     this.badge.instanceMatrix.needsUpdate = true;

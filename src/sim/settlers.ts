@@ -88,6 +88,7 @@ export function assignJobs(world: World): void {
   // Builders per site (Great Works take a crew) and workers per workplace (more as its trade grows).
   const crews = new Map<number, number>();
   const hands = new Map<number, number>();
+  const guards = guardCounts(world);
   for (const s of world.settlers.values()) {
     if (s.job.kind === 'build') crews.set(s.job.siteId, (crews.get(s.job.siteId) ?? 0) + 1);
     else if (s.job.kind === 'work') {
@@ -98,34 +99,27 @@ export function assignJobs(world: World): void {
   }
   for (const player of world.players) {
     const idle = idleSettlers(world, player.id, true);
+    // In order of need: builders and each workplace's first hand, then the watch, then extra crew.
     for (const b of world.buildings.values()) {
       if (b.owner !== player.id) continue;
       const def = BUILDINGS[b.type];
       const e = world.entrance(b);
-      const working = hands.get(b.id) ?? 0;
-      if (b.done && def.job && working < workSlots(b)) {
-        // A family business: extra hands come from the head worker's family when they can.
-        const head = working ? world.settlers.get(b.workerId) : undefined;
-        const s = nearestSkilled(idle, e.x, e.y, def.job.skill, head?.familyId ?? 0);
+      if (b.done && def.job && !hands.get(b.id)) {
+        let s = nearestSkilled(idle, e.x, e.y, def.job.skill);
+        // The watch steps down to work: guards are the town's reserve of hands.
+        if (s) idle.splice(idle.indexOf(s), 1);
+        else s = recallGuard(world, guards, player.id, e.x, e.y);
         if (!s) {
-          if (!working) {
-            b.status = 'Needs a worker';
-            b.alert = 'noWorker';
-          }
+          b.status = 'Needs a worker';
+          b.alert = 'noWorker';
           continue;
         }
-        if (!working) b.alert = '';
-        idle.splice(idle.indexOf(s), 1);
-        hands.set(b.id, working + 1);
-        if (!working) b.workerId = s.id;
-        s.job = { kind: 'work', buildingId: b.id, phase: 'toBuilding', nodeId: 0, tile: -1, extra: 0 };
-        s.busy = 0;
-        s.tool = def.job.tool;
-        walkTo(world, s, world.entranceIdx(b));
+        b.alert = '';
+        hire(world, b, s, hands);
       } else if (!b.done && (b.builderId === 0 || (crews.get(b.id) ?? 0) < (def.crew ?? 1)) && world.siteWorkAllowed(b) > b.work) {
         let s = nearest(world, idle, e.x, e.y);
         if (s) idle.splice(idle.indexOf(s), 1);
-        else if (!anyBuilder(world, player.id)) s = recallWorker(world, player.id, e.x, e.y);
+        else if (!anyBuilder(world, player.id)) s = recallGuard(world, guards, player.id, e.x, e.y) ?? recallWorker(world, player.id, e.x, e.y);
         if (!s) continue;
         b.builderId = s.id;
         crews.set(b.id, (crews.get(b.id) ?? 0) + 1);
@@ -135,7 +129,98 @@ export function assignJobs(world: World): void {
         walkTo(world, s, world.entranceIdx(b));
       }
     }
+    // Guard posts, one guard per post before any gets a second. An empty post calls a spare
+    // hand from a busy workplace's crew when nobody is free.
+    // Free hands are the porters, so the watch never takes the town's carriers.
+    let adults = 0;
+    let carrying = 0;
+    for (const s of world.settlers.values())
+      if (s.owner === player.id && !s.child && !s.elder) {
+        adults++;
+        if (s.job.kind === 'haul') carrying++;
+      }
+    const porters = Math.ceil(adults / BALANCE.porterShare);
+    let spare = idle.length - Math.max(0, porters - carrying);
+    const posts = [...world.buildings.values()].filter((b) => b.owner === player.id && b.done && BUILDINGS[b.type].garrison);
+    for (let k = 0; k < 3; k++)
+      for (const b of posts) {
+        if ((guards.get(b.id) ?? 0) !== k || k >= BUILDINGS[b.type].garrison!) continue;
+        const e = world.entrance(b);
+        let s = spare > 0 ? nearest(world, idle, e.x, e.y) : undefined;
+        if (s) {
+          idle.splice(idle.indexOf(s), 1);
+          spare--;
+        } else if (k === 0 && carrying >= porters) s = spareHand(world, hands, player.id, e.x, e.y);
+        if (!s) continue;
+        guards.set(b.id, k + 1);
+        s.job = { kind: 'guard', buildingId: b.id, phase: 'toPost' };
+        s.busy = 0;
+        s.tool = 'spear';
+        walkTo(world, s, world.entranceIdx(b));
+      }
+    // A family business: extra hands come from the head worker's family when they can.
+    for (const b of world.buildings.values()) {
+      if (!idle.length) break;
+      const def = BUILDINGS[b.type];
+      const working = hands.get(b.id) ?? 0;
+      if (b.owner !== player.id || !b.done || !def.job || !working || working >= workSlots(b)) continue;
+      const e = world.entrance(b);
+      const s = nearestSkilled(idle, e.x, e.y, def.job.skill, world.settlers.get(b.workerId)?.familyId ?? 0)!;
+      idle.splice(idle.indexOf(s), 1);
+      hire(world, b, s, hands);
+    }
   }
+}
+
+function hire(world: World, b: Building, s: Settler, hands: Map<number, number>): void {
+  const working = hands.get(b.id) ?? 0;
+  hands.set(b.id, working + 1);
+  if (!working) b.workerId = s.id;
+  s.job = { kind: 'work', buildingId: b.id, phase: 'toBuilding', nodeId: 0, tile: -1, extra: 0 };
+  s.busy = 0;
+  s.tool = BUILDINGS[b.type].job!.tool;
+  walkTo(world, s, world.entranceIdx(b));
+}
+
+/** An extra crew hand (never a workplace's head worker, never mid-carry), freed to stand guard. */
+function spareHand(world: World, hands: Map<number, number>, owner: number, x: number, y: number): Settler | undefined {
+  const candidates: Settler[] = [];
+  for (const s of world.settlers.values())
+    if (s.owner === owner && s.job.kind === 'work' && !s.carry && (hands.get(s.job.buildingId) ?? 0) > 1 && world.buildings.get(s.job.buildingId)?.workerId !== s.id && s.job.phase !== 'harvest' && s.job.phase !== 'process' && s.job.phase !== 'deliver') candidates.push(s);
+  const s = nearest(world, candidates, x, y);
+  if (!s || s.job.kind !== 'work') return undefined;
+  hands.set(s.job.buildingId, (hands.get(s.job.buildingId) ?? 1) - 1);
+  const node = world.nodes.get(s.job.nodeId);
+  if (node && node.reservedBy === s.id) node.reservedBy = 0;
+  setIdle(s);
+  s.path = [];
+  return s;
+}
+
+/** Guards standing watch (or on their way) at each post. */
+export function guardCounts(world: World): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const s of world.settlers.values()) if (s.job.kind === 'guard' && s.job.phase !== 'away') out.set(s.job.buildingId, (out.get(s.job.buildingId) ?? 0) + 1);
+  return out;
+}
+
+/** Take the nearest guard off watch to work (posts with the most guards give theirs up first). */
+function recallGuard(world: World, guards: Map<number, number>, owner: number, x: number, y: number): Settler | undefined {
+  let best: Settler | undefined;
+  let bestD = Infinity;
+  for (const s of world.settlers.values()) {
+    if (s.owner !== owner || s.job.kind !== 'guard' || s.job.phase === 'away') continue;
+    const d = cheb(s.x, s.y, x, y) - (guards.get(s.job.buildingId) ?? 0) * 8;
+    if (d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+  if (!best || best.job.kind !== 'guard') return undefined;
+  guards.set(best.job.buildingId, (guards.get(best.job.buildingId) ?? 1) - 1);
+  setIdle(best);
+  best.path = [];
+  return best;
 }
 
 export { nearest as nearestSettler, idleSettlers };
@@ -317,6 +402,21 @@ function think(world: World, s: Settler): void {
       return thinkHaul(world, s, job);
     case 'work':
       return thinkWork(world, s, job);
+    case 'guard': {
+      const b = world.buildings.get(job.buildingId);
+      if (!b) return setIdle(s);
+      if (job.phase === 'away') return;
+      // On watch: stand by the post, now and then pacing a step or two along the stakes.
+      job.phase = 'watch';
+      s.anim = 'idle';
+      s.tool = 'spear';
+      s.busy = world.rng.range(40, 90);
+      const e = world.entrance(b);
+      const tx = e.x + world.rng.range(-1, 1);
+      const ty = e.y + world.rng.range(0, 1);
+      if (cheb(s.x, s.y, e.x, e.y) > 2 || world.rng.int(3) === 0) if (world.inBounds(tx, ty) && world.walkable(world.idx(tx, ty))) walkTo(world, s, world.idx(tx, ty));
+      return;
+    }
   }
 }
 

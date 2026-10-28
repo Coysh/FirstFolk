@@ -32,6 +32,8 @@ export function describeSettler(world: World, s: Settler): string {
       if (j.phase === 'toNode') return job.kind === 'plant' ? 'Looking for a spot to plant' : 'Heading out to work';
       return `Works at the ${BUILDINGS[b!.type].name}`;
     }
+    case 'guard':
+      return j.phase === 'away' ? 'Away with the warband' : j.phase === 'toPost' ? `Going to stand guard at the ${name(j.buildingId)}` : `On guard at the ${name(j.buildingId)}`;
   }
 }
 

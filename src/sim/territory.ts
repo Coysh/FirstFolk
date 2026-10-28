@@ -6,6 +6,7 @@ import { greatWorkDone } from './works';
 import { grantXp } from './settlers';
 import { TIER_XP } from './trades';
 import { offerBoon } from './boons';
+import { guardCounts } from './settlers';
 import type { Building, Discovery, World } from './world';
 
 /**
@@ -82,6 +83,12 @@ export function influenceSources(world: World): InfluenceSource[] {
       const pull = familyPull(world, b);
       p += pull;
       if (pull) r += 2;
+    }
+    const slots = def.garrison ?? 0;
+    if (slots && (world.players[b.owner]?.rank ?? 0) >= 1 && b.guarded < slots) {
+      // Every banner needs a spear: an unmanned post pushes with half its power and less reach.
+      p = Math.floor((p * (1 + b.guarded)) / (1 + slots));
+      r -= Math.ceil((BALANCE.unmannedReach * (slots - b.guarded)) / slots);
     }
     out.push({ owner: b.owner, x: b.x + Math.floor(size / 2), y: b.y + Math.floor(size / 2), r, p });
   }
@@ -178,6 +185,7 @@ let settleScratch: Int8Array = new Int8Array(0);
  * influence beats the holder's by a margin, so borders are stable until really pushed.
  */
 export function recomputeTerritory(world: World): void {
+  updateGarrisons(world);
   const n = world.size * world.size;
   if (settleScratch.length !== n) settleScratch = new Int8Array(n);
   const owners = settle(world, influenceSources(world), settleScratch);
@@ -208,6 +216,22 @@ export function recomputeTerritory(world: World): void {
   if (changed) {
     world.territoryVersion++;
     updateHoldings(world);
+  }
+}
+
+/**
+ * The guards a post counts for its influence: new guards count at once, but a post loses
+ * them one at a time (every 10 s), so a guard stepping down to work never makes borders flicker.
+ */
+export function updateGarrisons(world: World): void {
+  const guards = guardCounts(world);
+  const slow = world.tick % BALANCE.garrisonEase < 20;
+  for (const b of world.buildings.values()) {
+    const slots = BUILDINGS[b.type].garrison;
+    if (!slots) continue;
+    const n = Math.min(slots, guards.get(b.id) ?? 0);
+    if (n > b.guarded) b.guarded = n;
+    else if (n < b.guarded && slow) b.guarded--;
   }
 }
 

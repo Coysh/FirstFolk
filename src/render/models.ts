@@ -272,6 +272,36 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       b.add(box(0.2, 0.22, 0.05), C.darkTimber, { pos: [0, 1.4, 0.41] });
       break;
     }
+    case 'stockade': {
+      // A palisade of sharpened stakes around a little guardhouse, with a gate facing the road.
+      b.add(cyl(0.95, 0.98, 0.06, 14), 0x7a6646, { pos: [0, 0.02, -0.05] });
+      const stakes = 22;
+      for (let i = 0; i < stakes; i++) {
+        const a = (i / stakes) * Math.PI * 2;
+        // Leave a gap for the gate at the front (+z).
+        if (Math.abs(Math.atan2(Math.cos(a), Math.sin(a))) < 0.32) continue;
+        const h = 0.62 + ((i * 7) % 5) * 0.03;
+        const x = Math.sin(a) * 0.86;
+        const z = -0.05 + Math.cos(a) * 0.86;
+        b.add(cyl(0.055, 0.06, h, 5), C.timber, { pos: [x, h / 2, z] });
+        b.add(cone(0.06, 0.14, 5), C.lightWood, { pos: [x, h + 0.07, z] });
+      }
+      // A walkway band and two gate posts with a lintel.
+      for (const x of [-0.3, 0.3]) b.add(box(0.1, 0.95, 0.1), C.darkTimber, { pos: [x, 0.47, 0.78] });
+      b.add(box(0.72, 0.1, 0.12), C.darkTimber, { pos: [0, 0.92, 0.78] });
+      // The guardhouse: stone footing, timber walls, a steep roof and the family banner.
+      b.add(box(0.7, 0.14, 0.62), C.stoneDark, { pos: [0, 0.07, -0.2] });
+      b.add(box(0.6, 0.5, 0.52), C.wood, { pos: [0, 0.39, -0.2] });
+      b.add(cone(0.55, 0.55, 4), C.thatchDark, { pos: [0, 0.9, -0.2], rot: [0, Math.PI / 4, 0] });
+      b.add(box(0.18, 0.3, 0.04), C.door, { pos: [0, 0.22, 0.07] });
+      // A shield and crossed spears by the door.
+      b.add(cyl(0.12, 0.12, 0.03, 9), opts.crest ?? 0xc0392b, { pos: [0.22, 0.42, 0.08], rot: [Math.PI / 2, 0, 0] });
+      b.add(box(0.02, 0.7, 0.02), C.wood, { pos: [-0.22, 0.4, 0.08], rot: [0, 0, 0.35] });
+      b.add(box(0.02, 0.7, 0.02), C.wood, { pos: [-0.22, 0.4, 0.08], rot: [0, 0, -0.35] });
+      b.add(cyl(0.02, 0.02, 1.1, 5), C.wood, { pos: [0.55, 0.9, -0.55] });
+      b.add(box(0.03, 0.26, 0.38), opts.crest ?? 0xc0392b, { pos: [0.55, 1.32, -0.37] });
+      break;
+    }
     case 'longhouse': {
       // A long timber hall with a turf-and-thatch roof running the length of the plot.
       b.add(box(1.8, 0.12, 1.2), C.stoneDark, { pos: [0, 0.02, -0.1] });

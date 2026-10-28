@@ -280,6 +280,17 @@ The measurements behind each:
   - **Shared escalation.** Every frontier building, whether Lookout, Watchtower or Outpost, makes the next one 25% dearer. Expeditions cost +2 logs per frontier building. On its own this changed nothing (Expander 63%), because goods pile up anyway.
   - **A frontier cap by rank:** 4 at Camp, 7 at Hamlet, 10 at Village, 13 at Town. The build card shows it as "6/7". With the cap, the styles even out at 53/53/44, and towers per game fall from 15 to 12.
   - **What it doesn't fix:** every style still wins the same way, by holding landmarks (690–830 renown a game). Builder has no counter to play. The cap is a backstop; the real fix has to be counters.
+- **v0.14.0 garrisons:**
+  - **Guard slots** on Lookouts (1), Watchtowers (2), Outposts (1) and the new Stockade (3).
+  - **From Hamlet, an unmanned post pushes at reduced strength**: power × (1 + guards) / (1 + slots), and up to 3 tiles less reach.
+  - **Who takes up the watch.** Hands are given out in order: builders and each workplace's first hand, then guards, then extra crew.
+    - Guards never take the porters: a quarter of adults stay free to carry.
+    - An empty post may call a spare crew hand.
+    - When a workplace or site needs someone, the nearest guard steps down to work.
+  - **No flicker:** a post counts new guards at once but loses them one per 10 s.
+  - **The Stockade** (Hamlet: 10 logs and 6 stone): small reach (6), high power (110), and a defence aura (+20 to your buildings within 7). It counts against the frontier cap, so the cap becomes a choice between wide towers and tall stockades. The bots raise one by each contested landmark they hold.
+  - **Measured** (same matrix): Balanced 56%, Expander 53%, Builder 41%. Population at 30:00 is about 12% lower, which is the cost of standing guard. Expander still wins the land race without anything to fear, which is the job of raids.
+- **A trap found on the way.** Free adults are the porters. The first version of guards took every free adult, so nothing got hauled and the towns starved (population 125 fell to 42 on seed 1). That's why the porter reserve exists.
 - **With omens on (`--real`)** the rival side wins 37 of 48 games; Restless Neighbours tilts it on purpose. Fairness checks therefore use `--origins` without omens.
 
 ---
@@ -1023,4 +1034,16 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **A frontier cap by rank** (4/7/10/13), shown on the tower build cards. It applies to Expeditions too.
 - **Matrix:** Expander's overall win rate falls from 63% to 53%. Every style still leans on landmarks (see §0c), and that's the job of v0.14.
 - **Pacing check:** a cap of 3 at Camp stalled seed 13's renown between 10:00 and 16:00, so it's 4.
+
+### v0.14.0 Garrisons and the Stockade (2026-10-28)
+- **Built:**
+  - guard posts (`garrison` on building defs, a `guard` job filled after first hands and before extra crew, and a porter reserve);
+  - the unmanned penalty from Hamlet;
+  - the Stockade, with its model and generated icon;
+  - spear-and-shield guards in their family's colours;
+  - an "unguarded" shield bubble;
+  - guards and defence in the building panel;
+  - `warfare.ts` with `defenceOf`;
+  - the bots raising stockades by contested landmarks.
+- **Tests:** guards staff posts, unmanned posts push less, and stockades shield their neighbours and count against the cap.
 

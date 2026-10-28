@@ -9,7 +9,7 @@ export function hashWorld(world: World): string {
     parts.push(s.id, s.x, s.y, s.next, s.progress, s.busy, s.carry ?? '-', j.kind, 'phase' in j ? j.phase : '', s.elder ? 1 : 0);
   }
   for (const b of world.buildings.values()) {
-    parts.push(b.id, b.type, b.x, b.y, b.done ? 1 : 0, b.work);
+    parts.push(b.id, b.type, b.x, b.y, b.done ? 1 : 0, b.work, b.guarded);
     for (const g of GOODS) parts.push(b.stock[g], b.delivered[g], b.reserved[g], b.incoming[g]);
   }
   for (const n of world.nodes.values()) parts.push(n.id, n.amount, n.growth, n.stump, n.reservedBy);

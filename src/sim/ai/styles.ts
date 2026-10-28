@@ -18,12 +18,14 @@ export interface StyleDef {
   towersOnlyWithAim: boolean;
   /** Goods kept back before selling a lot on Market Day. */
   sellKeep: number;
+  /** Raises a stockade by each contested landmark it holds. */
+  stockades: boolean;
 }
 
 export const STYLES: Record<BotStyle, StyleDef> = {
-  balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100 },
-  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120 },
-  builder: { name: 'Builder', towerPer: 16, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60 },
+  balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, sellKeep: 100, stockades: true },
+  expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, sellKeep: 120, stockades: false },
+  builder: { name: 'Builder', towerPer: 16, towersFirst: false, towersOnlyWithAim: true, sellKeep: 60, stockades: true },
 };
 
 /** The rival's character follows where it comes from (a classic start plays balanced). */
