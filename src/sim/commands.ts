@@ -1,5 +1,5 @@
 import { BUILDINGS, GOODS, RANK_NAMES, type BuildingType, type Good } from './defs';
-import { sell } from './market';
+import { sell, setTrade } from './market';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
 import { owns, territoryBox } from './territory';
 import { chooseBoon } from './boons';
@@ -16,7 +16,8 @@ export type Command =
   | { type: 'chooseBoon'; owner: number; offerId: number; choice: number }
   | { type: 'chooseEvent'; owner: number; eventId: number; option: number }
   | { type: 'deed'; owner: number; familyId: number; x: number; y: number }
-  | { type: 'sell'; owner: number; good: Good };
+  | { type: 'sell'; owner: number; good: Good }
+  | { type: 'setTrade'; owner: number; good: Good; keep: number | null };
 
 /** What a locked building is waiting for, e.g. "Hamlet" or "Journeyman Carpenter". */
 export function lockLabel(world: World, owner: number, type: BuildingType): string {
@@ -185,6 +186,9 @@ export function applyCommand(world: World, cmd: Command): void {
     }
     case 'sell':
       sell(world, cmd.owner, cmd.good);
+      return;
+    case 'setTrade':
+      setTrade(world, cmd.owner, cmd.good, cmd.keep);
       return;
     case 'deed':
       performDeed(world, cmd.owner, cmd.familyId, cmd.x, cmd.y);

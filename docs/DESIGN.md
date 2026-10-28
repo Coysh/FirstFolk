@@ -807,3 +807,27 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
   - Games ended (about 28 min) before a 30:00 Moot could matter, so the goal is now 1,500 and the Moot starts at 25:00.
 - **Tests:** origins, the rival's origin, omen rolls, Rich Seams, the Old Kingdom, the Moot, the barrow, hermit and hoard, and saves keeping origins, omens and labels (95 tests).
 
+### v0.9.1 Less noise, no chores: news priorities, standing trade orders, honours (2026-10-28)
+- **Measured the firehose:** about 20 notifications a minute reached the player (bot game, seed 7), and "hungry / fed again" alone fired 86 times in 5 minutes. Hunger flipped on every meal when food hovered at zero.
+- **Hunger hysteresis.** Once hungry, folk stay hungry until the stores hold a real buffer (pop/8, at least 4).
+- **News priorities.**
+  - **Throttled to one every 7 s (game time):** births, comings of age, newcomers, homes, marriages, boon picks, Journeymen, sales, elders, ordinary deaths and ordinary buildings finishing.
+  - **Always shown:** landmarks, deeds, rival news, Great Works, legends, ranks, the Moot, and a family's **first Master** in a craft (a new `firstMaster` event with its own fanfare).
+  - **Result:** about 6–12 important items a minute plus a capped trickle.
+- **Standing trade orders.** Each good on Market Day can carry an order: "sell everything above a reserve, a lot every 20 s". Selling is now a decision you set once, not 40 clicks a game. The glut still keeps it a trickle.
+- **Honours on the report:**
+
+  | Honour | Earned by |
+  |---|---|
+  | The Comeback | Winning after trailing by 150+ |
+  | Swift Renown | Winning before 28:00 |
+  | Landmark Lord | Taking 3+ landmarks |
+  | Wonder Builder | 2+ Great Works |
+  | Keeper of Legends | 3+ legends |
+  | Merchant Prince | 150+ renown from Market Day |
+  | Pathfinder | 4+ outposts |
+  | Great Houses | 25+ deeds |
+
+  These give a reason to try another way next game. The furthest each player has trailed is tracked as `maxDeficit`.
+- **Duels** (15 with origins and omens, seed block 100): median 31.2 min, 2.6 lead changes, **6 of 15 comeback wins**, 4.7 landmark flips per game, idle 9%.
+

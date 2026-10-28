@@ -92,7 +92,8 @@ function eat(world: World, player: PlayerState): void {
       }
   if (best) {
     best.stock[food]--;
-    if (player.hungry) {
+    // Hysteresis: folk stay hungry until there's a real buffer again, so hunger can't flap meal by meal.
+    if (player.hungry && world.food(player.id) >= Math.max(4, Math.floor(world.population(player.id) / 8))) {
       player.hungry = false;
       world.emit({ type: 'fed', owner: player.id });
     }

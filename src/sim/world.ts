@@ -158,6 +158,7 @@ export type SimEvent =
   | { type: 'familyApproaching'; owner: number; familyId: number; surname: string; size: number; skill: Skill }
   | { type: 'cameOfAge'; owner: number; settlerId: number; name: string; surname: string }
   | { type: 'born'; owner: number; settlerId: number; name: string; surname: string }
+  | { type: 'firstMaster'; owner: number; settlerId: number; name: string; surname: string; skill: Skill }
   | { type: 'elder'; owner: number; settlerId: number; name: string; surname: string }
   | { type: 'died'; owner: number; name: string; surname: string; age: number; legend: Skill | null; x: number; y: number }
   | { type: 'hungry'; owner: number }
@@ -224,6 +225,8 @@ export interface PlayerState {
   renownFrac: [number, number];
   /** Landmarks taken from another settlement. */
   taken: number;
+  /** The furthest this player has trailed the leader in renown (for comeback honours). */
+  maxDeficit: number;
   /** Temporary influence (festivals and the like). */
   boosts: { x: number; y: number; r: number; p: number; until: number }[];
   /** Masters who died: each makes the settlement better at their craft, for good. */
@@ -231,6 +234,8 @@ export interface PlayerState {
   /** Market glut per good (percent) and goods sold, see market.ts. */
   glut: Stock;
   sold: number;
+  /** Standing trade orders: good → reserve to keep (see market.ts). */
+  routes: Partial<Record<Good, number>>;
   /** Founding origin ('' when the founders chose a boon instead). */
   origin: OriginId | '';
   /** Deed effects running until a tick. */
@@ -513,7 +518,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, origin: originId ?? '' };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, offers: [], nextOfferAt: 0, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, boosts: [], legends: [], buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '' };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);

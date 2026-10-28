@@ -177,7 +177,10 @@ export function grantXp(world: World, s: Settler, skill: Skill, amount: number, 
   if (fam && tierOf(fam.skills[skill]) > famBefore) {
     offerBoon(world, fam, `${s.name} became a ${tradeTitle(skill, after)}`);
     // A family's first Master of a craft makes the whole settlement famous.
-    if (after === 2) addRenown(world, s.owner, BALANCE.renown.master, 'masters', s.x, s.y);
+    if (after === 2) {
+      addRenown(world, s.owner, BALANCE.renown.master, 'masters', s.x, s.y);
+      world.emit({ type: 'firstMaster', owner: s.owner, settlerId: s.id, name: s.name, surname: fam.surname, skill });
+    }
   }
   if (after > before) {
     world.emit({ type: 'tierUp', owner: s.owner, settlerId: s.id, buildingId, skill, tier: after });

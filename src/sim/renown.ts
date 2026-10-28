@@ -38,7 +38,9 @@ export const mootUnderway = (world: World) => !!world.scenario.timeLimit && worl
 export function updateRenown(world: World): void {
   const minute = 60 * TICK_HZ;
   if (world.scenario.timeLimit && world.tick >= BALANCE.mootAt && world.tick < BALANCE.mootAt + BALANCE.renownTick) world.emit({ type: 'moot' });
+  const top = Math.max(...world.players.map((p) => p.renown));
   for (const p of world.players) {
+    p.maxDeficit = Math.max(p.maxDeficit, top - p.renown);
     const rate = renownRate(world, p.id);
     const sources = [['landmarks', rate.landmarks], ['land', rate.land]] as const;
     sources.forEach(([source, perMin], k) => {

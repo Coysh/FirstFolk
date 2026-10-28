@@ -170,6 +170,20 @@ describe('Market Day', () => {
     expect(w.players[0].glut.logs).toBeGreaterThan(0);
   });
 
+  it('a standing order sells whatever is above the reserve, a lot at a time', () => {
+    const w = newWorld();
+    w.players[0].rank = 1;
+    wagon(w).stock.stone = 120;
+    w.enqueue({ type: 'setTrade', owner: 0, good: 'stone', keep: 60 });
+    w.run(secs(90));
+    expect(w.stored(0, 'stone')).toBeLessThanOrEqual(80);
+    expect(w.stored(0, 'stone')).toBeGreaterThanOrEqual(60);
+    expect(w.players[0].renownBy.trade ?? 0).toBeGreaterThan(0);
+    w.enqueue({ type: 'setTrade', owner: 0, good: 'stone', keep: null });
+    w.step();
+    expect(w.players[0].routes.stone).toBeUndefined();
+  });
+
   it('is closed to a mere camp', () => {
     const w = newWorld();
     wagon(w).stock.logs = 100;

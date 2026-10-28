@@ -1825,7 +1825,7 @@ button.danger.armed {
   top: calc(64px + var(--safe-t));
   left: 50%;
   transform: translateX(-50%);
-  margin-top: 70px;
+  margin-top: 92px;
   width: 270px;
   padding: 8px 12px 10px;
   z-index: 3;
@@ -1863,6 +1863,17 @@ button.danger.armed {
 .mk-row button {
   padding: 3px 8px;
   font-size: 12px;
+}
+.market {
+  width: 340px;
+}
+.mk-route {
+  min-width: 82px;
+}
+.mk-route.on {
+  border-color: var(--good);
+  background: linear-gradient(#eaf7e4, #cfe8c4);
+  font-weight: 800;
 }
 
 /* ---------- landmarks ---------- */
@@ -2072,4 +2083,31 @@ button.danger.armed {
   .race-omens {
     display: none;
   }
+}
+
+.awards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+.award {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 110px;
+  padding: 6px 10px;
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  background: linear-gradient(#fff7dc, #f1dca6);
+  font: 800 13px var(--body);
+}
+.award b {
+  font-size: 22px;
+}
+.award small {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--ink-soft);
 }

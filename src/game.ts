@@ -30,6 +30,9 @@ export interface Toast {
   tone: 'info' | 'good' | 'warn' | 'big';
 }
 
+/** Routine news (births, sales, finished huts) is throttled so the important news stands out. */
+const LOW_NEWS_GAP_MS = 7000;
+
 export interface GhostState {
   type: BuildingType;
   x: number;
@@ -162,7 +165,7 @@ export class Game {
         case 'buildingComplete': {
           const p = this.posOf(e.id);
           if (p) audio.play('complete', this.distanceTo(p.x, p.z), this.hearing() * 1.5);
-          if (e.buildingType !== 'wagon') this.toast(icon(e.buildingType), `${BUILDINGS[e.buildingType].name} finished`, 'good');
+          if (e.buildingType !== 'wagon') (BUILDINGS[e.buildingType].great || e.buildingType === 'watchtower' ? this.toast.bind(this) : this.news.bind(this))(icon(e.buildingType), `${BUILDINGS[e.buildingType].name} finished`, 'good');
           break;
         }
         case 'buildingPlaced':
@@ -184,21 +187,23 @@ export class Game {
         }
         case 'familyApproaching':
           audio.play('arrive');
-          this.toast('/assets/icons/people.png', `The ${e.surname} family (${e.size}) are settling in. They know a little ${TRADES[e.skill].name.toLowerCase()}.`, 'good');
+          this.news('/assets/icons/people.png', `The ${e.surname} family (${e.size}) are settling in. They know a little ${TRADES[e.skill].name.toLowerCase()}.`, 'good');
           break;
         case 'cameOfAge':
-          this.toast('/assets/icons/people.png', `${e.name} ${e.surname} has come of age and learned from the family`, 'info');
+          this.news('/assets/icons/people.png', `${e.name} ${e.surname} has come of age and learned from the family`);
           break;
         case 'born':
           audio.play('arrive');
-          this.toast('/assets/icons/people.png', `${e.name} is born to the ${e.surname} family`, 'good');
+          this.news('/assets/icons/people.png', `${e.name} is born to the ${e.surname} family`, 'good');
           break;
         case 'tierUp': {
           const s = this.world.settlers.get(e.settlerId);
           const fam = s && this.world.families.get(s.familyId);
           const trade = TRADES[e.skill];
-          audio.play('tierUp');
-          this.toast(icon(this.world.buildings.get(e.buildingId)?.type ?? 'woodcutter'), `${s?.name} ${fam?.surname ?? ''} is now a ${tradeTitle(e.skill, e.tier)}! ${trade.perks[e.tier]}`, 'big');
+          const text = `${s?.name} ${fam?.surname ?? ''} is now a ${tradeTitle(e.skill, e.tier)}! ${trade.perks[e.tier]}`;
+          const at = icon(this.world.buildings.get(e.buildingId)?.type ?? 'woodcutter');
+          // Every tier-up is routine news; a family's first Master gets its own fanfare below.
+          this.news(at, text, 'good');
           break;
         }
         case 'unlocked':
@@ -209,7 +214,7 @@ export class Game {
           this.toast('/assets/icons/berries.png', 'Your folk are hungry and working slowly. Build another Forager.', 'warn');
           break;
         case 'fed':
-          this.toast('/assets/icons/berries.png', 'Bellies are full again', 'good');
+          this.news('/assets/icons/berries.png', 'Bellies are full again', 'good');
           break;
         case 'discovered':
           if (e.owner !== PLAYER) break;
@@ -238,14 +243,14 @@ export class Game {
         case 'boonChosen':
           if (e.owner !== PLAYER) break;
           audio.play('tierUp');
-          this.toast('/assets/icons/people.png', `The ${plural(e.surname)} are now ${BOONS[e.boon].name}: ${BOONS[e.boon].blurb}`, 'good');
+          this.news('/assets/icons/people.png', `The ${plural(e.surname)} are now ${BOONS[e.boon].name}: ${BOONS[e.boon].blurb}`, 'good');
           break;
         case 'married': {
           if (e.owner !== PLAYER) break;
           const a = this.world.settlers.get(e.a);
           const b = this.world.settlers.get(e.b);
           audio.play('arrive');
-          this.toast('/assets/icons/hut.png', `${a?.name} and ${b?.name} marry and found a new ${e.surname} household, with the gifts of both families`, 'good');
+          this.news('/assets/icons/hut.png', `${a?.name} and ${b?.name} marry and found a new ${e.surname} household, with the gifts of both families`, 'good');
           break;
         }
         case 'season':
@@ -284,7 +289,7 @@ export class Game {
           break;
         }
         case 'familySettled':
-          this.toast('/assets/icons/hut.png', `The ${e.surname} family have a home at last`, 'good');
+          this.news('/assets/icons/hut.png', `The ${e.surname} family have a home at last`, 'good');
           break;
         case 'objectiveComplete':
           audio.play('objective');
@@ -330,7 +335,7 @@ export class Game {
         }
         case 'sold':
           audio.play('deliver');
-          this.toast(`/assets/icons/${e.good}.png`, `Market Day: ${e.n} ${GOOD_INFO[e.good].name.toLowerCase()} sold for +${e.renown} renown`, 'good');
+          this.news(`/assets/icons/${e.good}.png`, `Market Day: ${e.n} ${GOOD_INFO[e.good].name.toLowerCase()} sold for +${e.renown} renown`, 'good');
           break;
         case 'workBegun':
           if (e.owner === PLAYER) break;
@@ -341,15 +346,19 @@ export class Game {
           audio.play('warn');
           this.toast(icon(e.buildingType), `Your rival finished ${BUILDINGS[e.buildingType].name} first. Your site is abandoned; half its materials came home.`, 'warn');
           break;
+        case 'firstMaster':
+          audio.play('tierUp');
+          this.toast('/assets/icons/renown.png', `${e.name} is the first ${tradeTitle(e.skill, 2)} of the ${e.surname} family! +10 renown, and their deed grows stronger.`, 'big');
+          break;
         case 'elder':
-          this.toast('/assets/icons/people.png', `${e.name} ${e.surname} is an elder now: no more hard work, but they teach the family their craft.`, 'info');
+          this.news('/assets/icons/people.png', `${e.name} ${e.surname} is an elder now: no more hard work, but they teach the family their craft.`);
           break;
         case 'died':
           if (e.legend) {
             audio.play('tierUp');
             this.banner.value = { title: `${e.name} ${e.surname} has died`, sub: `A Master to the last, aged ${e.age}. Their legend lives on: ${SKILLS.includes(e.legend) ? TRADES[e.legend].name.toLowerCase() : ''} is faster for all, and +15 renown` };
             setTimeout(() => (this.banner.value = null), 5200);
-          } else this.toast('/assets/icons/people.png', `${e.name} ${e.surname} has died, aged ${e.age}. The family mourns.`, 'info');
+          } else this.news('/assets/icons/people.png', `${e.name} ${e.surname} has died, aged ${e.age}. The family mourns.`);
           break;
         case 'moot':
           audio.play('tierUp');
@@ -363,6 +372,15 @@ export class Game {
           break;
       }
     }
+  }
+
+  /** Routine news: shown only if nothing routine was shown in the last few seconds. */
+  private lowNewsAt = 0;
+  news(iconUrl: string, text: string, tone: Toast['tone'] = 'info'): void {
+    const now = performance.now();
+    if (now - this.lowNewsAt < LOW_NEWS_GAP_MS / Math.max(1, this.speed.value)) return;
+    this.lowNewsAt = now;
+    this.toast(iconUrl, text, tone);
   }
 
   toast(iconUrl: string, text: string, tone: Toast['tone']): void {
@@ -480,6 +498,11 @@ export class Game {
 
   sell(good: Good): void {
     this.world.enqueue({ type: 'sell', owner: PLAYER, good });
+  }
+
+  setTrade(good: Good, keep: number | null): void {
+    audio.play('click');
+    this.world.enqueue({ type: 'setTrade', owner: PLAYER, good, keep });
   }
 
   demolish(id: number): void {

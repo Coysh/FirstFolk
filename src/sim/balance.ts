@@ -79,6 +79,8 @@ export const BALANCE = {
 
   /** Market Day: each lot sold gluts that good by this much (percent), easing 1 point every 2 s. */
   glutPerSale: 25,
+  /** Standing trade orders sell a lot this often (a multiple of 20 ticks). */
+  routeEvery: secs(20),
 
   /** Family deeds: how many houses sit on the council, and how far an Expedition may reach past the border. */
   councilSize: 4,

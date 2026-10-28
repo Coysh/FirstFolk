@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { icon, PLAYER, type Game } from '../game';
 import { ICON } from '../render/overlay';
-import { BUILDINGS, BUILD_MENU, DISCOVERIES, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
+import { BUILDINGS, BUILD_MENU, DISCOVERIES, FOODS, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
 import { BOONS, BOON_TIMEOUT, familyTitle } from '../sim/boons';
 import { BALANCE, TICK_HZ, secs } from '../sim/balance';
@@ -360,10 +360,11 @@ function DeedBar({ game }: { game: Game }) {
   );
 }
 
-/** Market Day: sell a lot of anything for renown; prices drop as you sell and recover. */
+/** Market Day: sell a lot of anything for renown, or set a standing order; prices drop as you sell and recover. */
 function Market({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
+  const routes = w.players[PLAYER].routes;
   return (
     <section class="market panel" aria-label="Market Day">
       <header>
@@ -372,17 +373,26 @@ function Market({ game }: { game: Game }) {
           ✕
         </button>
       </header>
-      <p class="muted small">Traders take {FAIR_LOT} at a time. Each sale floods the market for a while.</p>
+      <p class="muted small">Traders take {FAIR_LOT} at a time; each sale floods the market for a while. A standing order sells whatever is above the reserve, every 20 s.</p>
       {GOODS.map((g) => {
         const price = fairPrice(w, PLAYER, g);
         const have = w.stored(PLAYER, g);
+        const keep = routes[g];
+        const reserve = FOODS.includes(g) ? Math.max(40, Math.ceil(w.population(PLAYER) / 10) * 10) : 60;
         return (
           <div class="mk-row" key={g}>
-            <img src={ICON[g]} alt="" />
+            <img src={ICON[g]} alt={GOOD_INFO[g].name} />
             <span class="mk-have">{have}</span>
             <span class={`mk-price ${price < FAIR_VALUE[g] ? 'low' : ''}`}>{price}★</span>
             <button disabled={have < FAIR_LOT || price <= 0} onClick={() => game.sell(g)}>
               Sell {FAIR_LOT}
+            </button>
+            <button
+              class={`mk-route ${keep !== undefined ? 'on' : ''}`}
+              onClick={() => game.setTrade(g, keep === undefined ? reserve : null)}
+              title={keep !== undefined ? `Selling everything above ${keep}. Click to stop.` : `Keep selling ${GOOD_INFO[g].name.toLowerCase()} above a reserve of ${reserve}`}
+            >
+              {keep !== undefined ? `↻ above ${keep}` : '↻ Order'}
             </button>
           </div>
         );
@@ -786,6 +796,33 @@ const SOURCE_NAMES: Record<string, string> = {
   trade: 'Market Day',
 };
 
+/** Honours for how the game was played: a reason to try another way next time. */
+function Awards({ w, won }: { w: World; won: boolean }) {
+  const me = w.players[PLAYER];
+  const works = BUILD_MENU.filter((t) => BUILDINGS[t].great && workOwner(w, t) === PLAYER).length;
+  const outposts = w.countBuildings(PLAYER, 'outpost');
+  const list: [string, string, string][] = [];
+  if (won && me.maxDeficit >= 150) list.push(['⚡', 'The Comeback', `Won after trailing by ${me.maxDeficit}`]);
+  if (won && w.tick < 28 * 60 * TICK_HZ) list.push(['⏱️', 'Swift Renown', `Won in ${formatTime(w.tick)}`]);
+  if (me.taken >= 3) list.push(['⚑', 'Landmark Lord', `${me.taken} landmarks taken from your rival`]);
+  if (works >= 2) list.push(['🏛️', 'Wonder Builder', `${works} Great Works raised`]);
+  if (me.legends.length >= 3) list.push(['🕯️', 'Keeper of Legends', `${me.legends.length} legends`]);
+  if ((me.renownBy.trade ?? 0) >= 150) list.push(['⚖️', 'Merchant Prince', `${me.renownBy.trade} renown from Market Day`]);
+  if (outposts >= 4) list.push(['🧭', 'Pathfinder', `${outposts} outposts`]);
+  if (me.deedsUsed >= 25) list.push(['✦', 'Great Houses', `${me.deedsUsed} family deeds`]);
+  if (!list.length) return null;
+  return (
+    <div class="awards">
+      {list.slice(0, 4).map(([icon, name, why]) => (
+        <span class="award" key={name} title={why}>
+          <b>{icon}</b> {name}
+          <small>{why}</small>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function Victory({ game }: { game: Game }) {
   useWorldRefresh(game);
   const v = game.victory.value;
@@ -807,6 +844,7 @@ function Victory({ game }: { game: Game }) {
           {v.byTime ? 'The valley gathered at the end of the season to judge. ' : ''}
           After {formatTime(w.tick)}: <b>{me.renown}★</b> to your rival’s <b>{them?.renown ?? 0}★</b>.
         </p>
+        <Awards w={w} won={won} />
         <div class="report-grid">
           <div>
             <h4>Where your renown came from</h4>
@@ -837,11 +875,13 @@ function Victory({ game }: { game: Game }) {
               <li>
                 {w.population(PLAYER)} folk in {fams.length} households · {me.deedsUsed} deeds done
               </li>
-              <li>{me.taken} landmarks taken from your rival</li>
+              <li>
+                {me.taken} landmark{me.taken === 1 ? '' : 's'} taken from your rival
+              </li>
               {works.length > 0 && <li>Raised {works.map((t) => BUILDINGS[t].name).join(' and ')}</li>}
               {me.legends.slice(0, 4).map((l) => (
                 <li key={l.tick}>
-                  Legend: {l.name} {l.surname}, Master of {TRADES[l.skill].name.toLowerCase()}
+                  Legend: {l.surname ? `${l.name} ${l.surname}` : l.name}, Master of {TRADES[l.skill].name.toLowerCase()}
                 </li>
               ))}
             </ul>
