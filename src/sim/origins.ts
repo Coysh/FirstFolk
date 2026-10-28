@@ -22,6 +22,8 @@ export interface OriginDef {
   stock: Partial<Record<Good, number>>;
   /** Extra children in the founding family. */
   children?: number;
+  /** A few words for the New Game card. */
+  lead: string;
 }
 
 export const ORIGINS: Record<OriginId, OriginDef> = {
@@ -29,6 +31,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     id: 'woodfolk',
     name: 'Woodfolk',
     icon: '🪓',
+    lead: 'Planks from day one',
     blurb: 'Journeyman Carpenters from the deep forest: the Sawpit from the start, and the House of the Axe (40% faster woodcraft, Timber Drive).',
     skill: 'woodcraft',
     house: 'axe',
@@ -38,6 +41,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     id: 'hillclan',
     name: 'Hill Clan',
     icon: '⛏️',
+    lead: 'Build fast, quarry deep',
     blurb: 'Journeyman Masons: a Storehouse from the start, and the House of the Hammer (build 40% faster, quarry 20% faster, Raise finishes a site at once).',
     skill: 'stonework',
     house: 'hammer',
@@ -47,6 +51,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     id: 'riverfolk',
     name: 'River Folk',
     icon: '🐟',
+    lead: 'Fish from day one',
     blurb: 'Journeyman Gatherers: Fishers from the start, and the House of the Plough (15% faster gathering, Harvest Home).',
     skill: 'husbandry',
     house: 'plough',
@@ -56,6 +61,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     id: 'wayfarers',
     name: 'Wayfarers',
     icon: '🧭',
+    lead: 'Claim far and wide',
     blurb: 'Restless explorers: the House of the Horn (towers reach 3 further, folk see 4 further, Expeditions plant outposts beyond the border).',
     house: 'horn',
     stock: { logs: 16, berries: 10 },
@@ -64,6 +70,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     id: 'dynasty',
     name: 'Dynasty',
     icon: '👑',
+    lead: 'Your winning house returns',
     blurb: 'Your greatest house from a valley you won, founding a new one.',
     house: 'hearth',
     stock: { logs: 6, berries: 6 },
@@ -72,6 +79,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     id: 'kinfolk',
     name: 'Kinfolk',
     icon: '❤️',
+    lead: 'A bigger family',
     blurb: 'A big, warm-hearted clan: another child, and the House of the Hearth (a third more births, Festivals that pull the border their way).',
     house: 'hearth',
     stock: { berries: 10 },

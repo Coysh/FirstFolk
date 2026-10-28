@@ -59,7 +59,7 @@ for (let g = 0; g < games; g++) {
   }
   if (!quiet || games === 1)
     console.log(
-      `seed ${r.seed}${real ? ` [${r.origins.join(' v ')} | ${r.omens.join(', ')}]` : ''}: winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'}${r.byTime ? ' (time)' : ''} at ${r.victorySec < 0 ? '-' : `${(r.victorySec / 60).toFixed(1)}m`} · renown ${r.renownByMinute.at(-1)?.join(':')} · leads ${r.leadChanges} · comeback ${r.winnerDeficit} · flips ${r.holdingFlips} · idle ${r.idleAdultPct}% · major gap ${r.longestMajorGapSec}s · stock ${r.stockAt.join('/')} · chapters ${JSON.stringify(r.chapters)} · pop ${r.populationByMinute.at(-1)} · towers ${r.towers.join(':')} · ${Math.round(performance.now() - t0)}ms`,
+      `seed ${r.seed}${real ? ` [${r.origins.join(' v ')} | ${r.omens.join(', ')}]` : ''}: winner ${r.winner === 0 ? 'P' : r.winner === 1 ? 'RIVAL' : '-'}${r.byTime ? ' (time)' : ''} at ${r.victorySec < 0 ? '-' : `${(r.victorySec / 60).toFixed(1)}m`} · renown ${r.renownByMinute.at(-1)?.join(':')} · leads ${r.leadChanges} · comeback ${r.winnerDeficit} · flips ${r.holdingFlips} · idle ${r.idleAdultPct}% · major gap ${r.longestMajorGapSec}s · stock ${r.stockAt.join('/')} · chapters ${JSON.stringify(r.chapters)} · pop ${r.populationByMinute.at(-1)} · towers ${r.towers.join(':')} · news ${r.newsPerMinute}/min (${r.bannersPerGame} banners) · ${Math.round(performance.now() - t0)}ms`,
     );
 }
 if (games > 1) {

@@ -3,7 +3,7 @@ import { audio } from '../audio/audio';
 import { DIFFICULTY_INFO, type Difficulty } from '../sim/rules';
 import { dailyBest, dailySeed, dynasties, saveSettings, saveSummary, settings, todayKey, type Quality, type StoredDynasty } from '../settings';
 import { HOUSES } from '../sim/houses';
-import { TRADES } from '../sim/trades';
+import { DEEDS } from '../sim/deeds';
 import { ORIGINS, ORIGIN_IDS, type OriginId } from '../sim/origins';
 import { OMENS, rollOmens } from '../sim/omens';
 import type { Shell } from '../shell';
@@ -40,13 +40,13 @@ function Title({ shell }: { shell: Shell }) {
       <div class="title-vignette" />
       <div class="title-col">
         <img class="logo" src={LOGO} alt="FirstFolk" />
-        <p class="tagline">Found a village. Raise a family. Pass down the craft.</p>
+        <p class="tagline">Found a village. Claim the valley. Outshine your rival.</p>
         <nav class="title-menu">
           {summary && (
             <button class="plaque primary" onClick={() => void shell.continueGame()}>
               <span class="pl-title">Continue</span>
               <span class="pl-sub">
-                {formatTime(summary.tick)} played · {summary.population} folk · {summary.families} families · {timeAgo(summary.savedAt)}
+                {formatTime(summary.tick)} played · {summary.population} folk · {timeAgo(summary.savedAt)}
               </span>
             </button>
           )}
@@ -117,110 +117,118 @@ function OmensLine(seed: number): string {
 
 /**
  * New Game, and the Daily Valley (today's fixed seed and omens, Normal, against the rival).
- * The opener (origin) is chosen before the clock starts.
+ * A picture-first screen: choose who your founders are, and go. The rest is a row of small
+ * chips with sensible defaults.
  */
 function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void; daily?: boolean }) {
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-  const [seed, setSeed] = useState(String(daily ? dailySeed(todayKey()) : randomSeed()));
+  const [seed, setSeed] = useState(daily ? dailySeed(todayKey()) : randomSeed());
   const [rival, setRival] = useState(true);
   const [origin, setOrigin] = useState<OriginId>('woodfolk');
   const [heir, setHeir] = useState<StoredDynasty | null>(null);
-  const seedNum = Number(seed.replace(/\D/g, '')) || 0;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Enter') start();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
   const pick = heir ? 'dynasty' : origin;
   const start = () =>
     daily
       ? void shell.newGame(dailySeed(todayKey()), 'normal', true, pick, `daily-${todayKey()}`, heir ?? undefined)
-      : void shell.newGame(seedNum || randomSeed(), difficulty, rival, pick, '', heir ?? undefined);
+      : void shell.newGame(seed, difficulty, rival, pick, '', heir ?? undefined);
+  const choose = (id: OriginId) => {
+    audio.play('click');
+    setOrigin(id);
+    setHeir(null);
+  };
+  const chosen = heir ? HOUSES[heir.house] : HOUSES[ORIGINS[origin].house];
+  const power = DEEDS[chosen.power];
   return (
-    <Modal title={daily ? `Daily Valley · ${todayKey()}` : 'New Game'} onClose={onClose} wide>
-      <p class="muted">{daily ? 'Everyone gets the same valley today. Win it, then beat your own renown.' : 'Your family arrives with a wagon of supplies in an unexplored valley.'}</p>
-      <div class="field-label">Your founding house</div>
-      <div class="choices origins">
-        {ORIGIN_IDS.map((id) => (
-          <button
-            key={id}
-            class={`choice origin ${!heir && origin === id ? 'on' : ''}`}
-            onClick={() => {
-              setOrigin(id);
-              setHeir(null);
-            }}
-            aria-pressed={!heir && origin === id}
-          >
-            <strong>
-              <span class="or-icon">{ORIGINS[id].icon}</span> {ORIGINS[id].name}
-            </strong>
-            <span>{ORIGINS[id].blurb}</span>
-          </button>
-        ))}
+    <div class="newgame" role="dialog" aria-label={daily ? 'Daily Valley' : 'New Game'}>
+      <button class="close" onClick={onClose} aria-label="Back">
+        ✕
+      </button>
+      <h2 class="ng-title">{daily ? `Daily Valley · ${todayKey()}` : 'Who are your founders?'}</h2>
+      <div class="ng-origins">
+        {ORIGIN_IDS.map((id) => {
+          const o = ORIGINS[id];
+          const h = HOUSES[o.house];
+          const on = !heir && origin === id;
+          return (
+            <button key={id} class={`ng-origin ${on ? 'on' : ''}`} onClick={() => choose(id)} aria-pressed={on} title={o.blurb}>
+              <span class="ng-art" style={{ backgroundImage: `url(/assets/ui/origin-${id}.jpg)` }} />
+              <span class="ng-tag" style={{ background: hex(h.color) }}>
+                {h.icon} {h.tag}
+              </span>
+              <span class="ng-name">{o.name}</span>
+              <span class="ng-lead">{o.lead}</span>
+            </button>
+          );
+        })}
+        {dynasties.value.map((d) => {
+          const on = heir?.surname === d.surname;
+          return (
+            <button key={d.surname} class={`ng-origin dynasty ${on ? 'on' : ''}`} onClick={() => setHeir(d)} aria-pressed={on} title={`Won with ${d.renown}★`}>
+              <span class="ng-art crown">👑</span>
+              <span class="ng-tag" style={{ background: hex(HOUSES[d.house].color) }}>
+                {HOUSES[d.house].icon} {HOUSES[d.house].tag}
+              </span>
+              <span class="ng-name">The {d.surname} line</span>
+              <span class="ng-lead">{d.generation > 1 ? `Generation ${d.generation}` : 'Your winning house returns'}</span>
+            </button>
+          );
+        })}
       </div>
-      {dynasties.value.length > 0 && (
-        <>
-          <div class="field-label">Or carry on a dynasty (houses that won you a valley)</div>
-          <div class="choices origins">
-            {dynasties.value.map((d) => (
-              <button key={d.surname} class={`choice origin dynasty ${heir?.surname === d.surname ? 'on' : ''}`} onClick={() => setHeir(d)} aria-pressed={heir?.surname === d.surname}>
-                <strong>
-                  <span class="or-icon">👑</span> The {d.surname} line{d.generation > 1 ? `, generation ${d.generation}` : ''}
-                </strong>
-                <span>
-                  {HOUSES[d.house].icon} {HOUSES[d.house].name}
-                  {d.skill ? ` · ${TRADES[d.skill].name} from the start` : ''} · won with {d.renown}★
-                </span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {seedNum > 0 && (
-        <div class="omens">
-          <span class="field-label">This valley’s omens</span>
-          {rollOmens(daily ? dailySeed(todayKey()) : seedNum).map((o) => (
-            <span class="omen" key={o} title={OMENS[o].blurb}>
-              {OMENS[o].icon} <b>{OMENS[o].name}</b> <small>{OMENS[o].blurb}</small>
-            </span>
-          ))}
-        </div>
-      )}
-      {!daily && (
-        <>
-          <div class="field-label">Difficulty</div>
-          <div class="choices">
+      <div class="ng-house" key={chosen.id}>
+        <span class="ng-house-icon">{chosen.icon}</span>
+        <span>
+          <b>{chosen.bonus}</b> · {power.icon} {power.name}: {power.short.toLowerCase()}
+        </span>
+      </div>
+      <div class="ng-options">
+        {!daily && (
+          <div class="seg" role="group" aria-label="Difficulty">
             {(Object.keys(DIFFICULTY_INFO) as Difficulty[]).map((d) => (
-              <button key={d} class={`choice ${difficulty === d ? 'on' : ''}`} onClick={() => setDifficulty(d)} aria-pressed={difficulty === d}>
-                <strong>{DIFFICULTY_INFO[d].name}</strong>
-                <span>{DIFFICULTY_INFO[d].blurb}</span>
+              <button key={d} class={difficulty === d ? 'on' : ''} onClick={() => setDifficulty(d)} title={DIFFICULTY_INFO[d].blurb} aria-pressed={difficulty === d}>
+                {DIFFICULTY_INFO[d].name}
               </button>
             ))}
           </div>
-          <div class="field-label">Rival</div>
-          <div class="choices">
-            <button class={`choice ${rival ? 'on' : ''}`} onClick={() => setRival(true)} aria-pressed={rival}>
-              <strong>Race a rival</strong>
-              <span>Another settlement across the valley races you for renown. First to 1,600 wins.</span>
+        )}
+        {!daily && (
+          <div class="seg" role="group" aria-label="Rival">
+            <button class={rival ? 'on' : ''} onClick={() => setRival(true)} aria-pressed={rival} title="Race a rival settlement for renown">
+              ⚔️ Rival
             </button>
-            <button class={`choice ${!rival ? 'on' : ''}`} onClick={() => setRival(false)} aria-pressed={!rival}>
-              <strong>Peaceful</strong>
-              <span>The valley is yours alone. Build and explore at your own pace.</span>
+            <button class={!rival ? 'on' : ''} onClick={() => setRival(false)} aria-pressed={!rival} title="The valley is yours alone">
+              🕊️ Peaceful
             </button>
           </div>
-          <label class="field-label" for="seed">
-            Valley seed
-          </label>
-          <div class="seed-row">
-            <input id="seed" inputMode="numeric" value={seed} onInput={(e) => setSeed((e.target as HTMLInputElement).value)} onKeyDown={(e) => e.key === 'Enter' && start()} />
-            <button onClick={() => setSeed(String(randomSeed()))} title="Random valley" aria-label="Random seed">
+        )}
+        <div class="valley-chip" title={rollOmens(seed).map((o) => `${OMENS[o].name}: ${OMENS[o].blurb}`).join('\n')}>
+          {rollOmens(seed).map((o) => (
+            <span key={o}>{OMENS[o].icon}</span>
+          ))}
+          <span class="valley-name">Valley {seed}</span>
+          {!daily && (
+            <button onClick={() => setSeed(randomSeed())} title="Another valley" aria-label="Another valley">
               🎲
             </button>
-          </div>
-        </>
-      )}
-      {saveSummary.value && <p class="warn-note">Starting a new game replaces your current save.</p>}
-      <button class="primary big" onClick={start}>
-        {daily ? 'Take on today’s valley' : 'Found your village'}
+          )}
+        </div>
+      </div>
+      <button class="primary big ng-go" onClick={start}>
+        {daily ? 'Begin today’s valley' : 'Begin'}
       </button>
-    </Modal>
+      {saveSummary.value && <p class="ng-note">This replaces your saved game.</p>}
+    </div>
   );
 }
+
+const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const s = settings.value;

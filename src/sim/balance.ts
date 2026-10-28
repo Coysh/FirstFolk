@@ -116,8 +116,6 @@ export const BALANCE = {
   /** Challenges: the first is called at 7:00, then one every 3½–4½ minutes after the last ends. */
   firstChallenge: secs(7 * 60),
   challengeGap: [secs(210), secs(270)] as [number, number],
-  /** Acclaim: after the Moot begins, a lead this large ends the race early. */
-  acclaimLead: 600,
   /** Star-fall: a new landmark lands between the settlements from this tick (≡ 5 mod 10). */
   starfallAt: secs(15 * 60) + 5,
 

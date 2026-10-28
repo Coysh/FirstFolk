@@ -2480,3 +2480,309 @@ button.danger.armed {
 .pin.mine.unwatched .pin-rate {
   color: var(--warn);
 }
+
+/* The race bar and the news column: stacked, never overlapping (phones keep their own spots). */
+.top-center {
+  display: contents;
+}
+@media (min-width: 721px) {
+  .top-center {
+    display: flex;
+    position: absolute;
+    top: calc(64px + var(--safe-t));
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none !important;
+    z-index: 5;
+  }
+  .top-center > .race {
+    pointer-events: auto;
+  }
+  .top-center .race,
+  .top-center .toasts {
+    position: static;
+    transform: none;
+  }
+}
+.toast span {
+  line-height: 1.25;
+}
+
+/* House cards: an icon, a name, a tag, one line for the bonus and one for the power. */
+.house-card {
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+.house-card .bc-icon {
+  font-size: 40px;
+}
+.house-card strong {
+  font-size: 18px;
+}
+.bc-tag {
+  font: 800 10px var(--body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--wood);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.bc-line {
+  font-weight: 800;
+  font-size: 13px;
+}
+.bc-line.power {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--wood-light);
+  width: 100%;
+}
+.bc-line small {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.deed.house {
+  border-top: 4px solid var(--gold);
+  width: 92px;
+}
+
+/* ---------- New Game: picture first ---------- */
+.newgame {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: calc(24px + var(--safe-t)) 16px calc(24px + var(--safe-b));
+  background: radial-gradient(ellipse at 50% 30%, rgba(40, 26, 14, 0.55), rgba(20, 12, 6, 0.88));
+  backdrop-filter: blur(3px);
+  color: #fff4d2;
+  overflow-y: auto;
+  animation: ng-in 0.35s ease-out;
+}
+@keyframes ng-in {
+  from {
+    opacity: 0;
+  }
+}
+.newgame > .close {
+  position: absolute;
+  top: calc(14px + var(--safe-t));
+  right: 16px;
+}
+.ng-title {
+  margin: 0;
+  font: 700 34px var(--heading);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+.ng-origins {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 1100px;
+}
+.ng-origin {
+  position: relative;
+  width: 196px;
+  padding: 0 0 12px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--paper);
+  border: 3px solid var(--wood);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.ng-origin:hover {
+  transform: translateY(-4px);
+}
+.ng-origin.on {
+  border-color: var(--gold);
+  transform: translateY(-6px) scale(1.04);
+  box-shadow: 0 0 0 4px rgba(242, 193, 78, 0.55), 0 14px 30px rgba(0, 0, 0, 0.5);
+}
+.ng-art {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: #6b8e5a center / cover;
+  display: grid;
+  place-items: center;
+  font-size: 54px;
+}
+.ng-tag {
+  margin-top: -13px;
+  z-index: 1;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: #fff;
+  font: 800 11px var(--body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.ng-name {
+  font: 700 21px var(--heading);
+  margin-top: 4px;
+}
+.ng-lead {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+.ng-house {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 246, 224, 0.12);
+  border: 1px solid rgba(255, 246, 224, 0.3);
+  font-weight: 700;
+  animation: ng-in 0.3s ease-out;
+}
+.ng-house-icon {
+  font-size: 24px;
+}
+.ng-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+.seg {
+  display: flex;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 3px;
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  color: #f3dfb0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  box-shadow: none;
+}
+.seg button.on {
+  background: var(--paper);
+  color: var(--ink);
+}
+.valley-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  font-weight: 800;
+  font-size: 18px;
+}
+.valley-name {
+  font-size: 13px;
+  color: #f3dfb0;
+}
+.valley-chip button {
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+.ng-go {
+  min-width: 260px;
+  font-size: 22px !important;
+  padding: 14px 40px !important;
+}
+.ng-note {
+  margin: 0;
+  font-size: 12px;
+  color: #f3c9b0;
+}
+@media (max-width: 720px) {
+  .newgame {
+    justify-content: flex-start;
+    gap: 12px;
+  }
+  .ng-title {
+    font-size: 24px;
+    margin-top: 28px;
+  }
+  .ng-origins {
+    gap: 8px;
+  }
+  .ng-origin {
+    width: calc(50% - 4px);
+  }
+  .ng-name {
+    font-size: 17px;
+  }
+  .ng-lead {
+    font-size: 11.5px;
+  }
+  .ng-house {
+    font-size: 13px;
+    border-radius: 14px;
+  }
+}
+.newgame {
+  background: radial-gradient(ellipse at 50% 30%, rgba(40, 26, 14, 0.72), rgba(20, 12, 6, 0.94));
+}
+.newgame > .close {
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+}
+.ng-go {
+  width: auto !important;
+  align-self: center;
+}
+@media (max-width: 720px) {
+  .ng-origin {
+    width: calc(33.3% - 6px);
+    padding-bottom: 6px;
+    border-width: 2px;
+    border-radius: 12px;
+  }
+  .ng-origin.on {
+    transform: none;
+  }
+  .ng-art {
+    aspect-ratio: 4 / 3;
+    font-size: 36px;
+  }
+  .ng-tag {
+    font-size: 8.5px;
+    padding: 1px 6px;
+    margin-top: -10px;
+  }
+  .ng-name {
+    font-size: 14px;
+  }
+  .ng-lead {
+    display: none;
+  }
+  .ng-go {
+    position: sticky;
+    bottom: calc(8px + var(--safe-b));
+    min-width: 70vw;
+  }
+}

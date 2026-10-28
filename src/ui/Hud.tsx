@@ -4,7 +4,7 @@ import { audio } from '../audio/audio';
 import { ICON } from '../render/overlay';
 import { BUILDINGS, BUILD_MENU, DISCOVERIES, FOODS, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
-import { HOUSES, HOUSE_TIMEOUT, MAX_SEATS } from '../sim/houses';
+import { HOUSES, HOUSE_TIMEOUT } from '../sim/houses';
 import { BALANCE, TICK_HZ, secs } from '../sim/balance';
 import { canAfford, eventDef } from '../sim/events';
 import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
@@ -17,6 +17,7 @@ import { ageYears, describeSettler, formatTime } from './describe';
 import { HowTo, SettingsPanel } from './Screens';
 import { DEED_KEYS, HOTKEYS } from '../input/input';
 import { lockLabel } from '../sim/commands';
+import { renownGoal as scenarioGoal } from '../sim/scenario';
 import { DEEDS, activePowers, deedCooldown, deedProblem, deedWait } from '../sim/deeds';
 import { FAIR_LOT, FAIR_VALUE, fairPrice, marketOpen } from '../sim/market';
 import { mootUnderway, renownRate } from '../sim/renown';
@@ -37,10 +38,13 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
     <div class="hud">
       <TopBar game={game} />
       <Goals game={game} />
-      <RaceBar game={game} />
+      {/* The race and the news share one column, so they can never overlap. */}
+      <div class="top-center">
+        <RaceBar game={game} />
+        <Toasts game={game} />
+      </div>
       <Frontier game={game} />
       <Ledger game={game} />
-      <Toasts game={game} />
       <InfoPanel game={game} />
       {game.marketOpen.value && <Market game={game} />}
       <Threats game={game} />
@@ -315,10 +319,7 @@ function Contest({ game }: { game: Game }) {
   );
 }
 
-const renownGoal = (w: World) => {
-  const o = [...w.scenario.objectives].reverse().find((x) => x.id.startsWith('renown-'));
-  return o ? Number(o.id.slice(7)) : 0;
-};
+const renownGoal = (w: World) => scenarioGoal(w.scenario);
 
 /** Warbands marching on your posts: who, where, and how long until they arrive. */
 function Threats({ game }: { game: Game }) {
@@ -418,7 +419,7 @@ function Council({ game }: { game: Game }) {
   const running = activePowers(w, PLAYER);
   return (
     <section class="council" aria-label="Great Houses">
-      <span class="council-label">Great Houses {p.seats.length < MAX_SEATS && <small>· {p.seats.length}/{MAX_SEATS} seats</small>}</span>
+      <span class="council-label">Great Houses</span>
       {p.seats.map((seat, i) => {
         const h = HOUSES[seat.house];
         const d = DEEDS[h.power];
@@ -428,31 +429,26 @@ function Council({ game }: { game: Game }) {
         const full = deedCooldown(w, PLAYER, h.power);
         const pct = wait ? 1 - wait / Math.max(1, full) : 1;
         const run = running.find((r) => r.id === h.power);
-        const fam = w.families.get(seat.familyId);
         return (
           <button
             key={seat.house}
             class={`deed house ${ready ? 'ready' : ''}`}
+            style={{ borderTopColor: hex(h.color) }}
             onClick={() => game.useDeed(i)}
-            title={`${h.name}${fam ? ` (banner: the ${plural(fam.surname)})` : ''}. Always: ${h.passive} Power (${DEED_KEYS[i].toUpperCase()}): ${d.blurb}${problem ? ` Now: ${problem}.` : ''}`}
+            title={`${d.name} (${DEED_KEYS[i].toUpperCase()}): ${d.blurb}${problem ? `\nNow: ${problem}.` : ''}\n${h.icon} ${h.name}: ${h.passive}`}
           >
             <span class="deed-ring" style={{ background: `conic-gradient(var(--gold) ${pct * 360}deg, rgba(0,0,0,0.35) 0)` }}>
               <span class="deed-icon">{d.icon}</span>
             </span>
             <span class="deed-name">{d.name}</span>
-            <span class="deed-fam">
-              <span class="crest" style={{ background: hex(h.color) }} />
-              {h.icon} {h.name.replace('House of the ', '')}
-            </span>
-            <span class="deed-short">{d.short}</span>
             {run && run.left > 0 ? (
-              <span class="deed-wait running">{Math.ceil(run.left / TICK_HZ)}s left</span>
+              <span class="deed-wait running">{Math.ceil(run.left / TICK_HZ)}s</span>
             ) : run ? (
-              <span class="deed-wait running">sounded</span>
+              <span class="deed-wait running">ready to raid</span>
             ) : wait > 0 ? (
               <span class="deed-wait">{Math.ceil(wait / TICK_HZ)}s</span>
             ) : problem ? (
-              <span class="deed-wait">{problem.replace(/^Needs /, '')}</span>
+              <span class="deed-wait">✕</span>
             ) : (
               <span class="hotkey">{DEED_KEYS[i].toUpperCase()}</span>
             )}
@@ -674,7 +670,7 @@ function HouseLetter({ game }: { game: Game }) {
   if (!o) return null;
   return (
     <div class="letter-open boon-letter" key={o.id}>
-      <LetterHead game={game} icon="🏰" sub={o.reason} title={`Choose your ${['first', 'second', 'third'][p.seats.length] ?? 'next'} Great House`} left={(o.expires - w.tick) / HOUSE_TIMEOUT} />
+      <LetterHead game={game} icon="🏰" sub={o.reason} title={`Choose a Great House`} left={(o.expires - w.tick) / HOUSE_TIMEOUT} />
       <div class="boon-cards">
         {o.choices.map((id, i) => {
           const h = HOUSES[id];
@@ -690,14 +686,15 @@ function HouseLetter({ game }: { game: Game }) {
               }}
             >
               <span class="bc-icon">{h.icon}</span>
-              <strong>{h.name}</strong>
-              <span class="bc-blurb">
-                <b>Always:</b> {h.passive}
+              <strong>{h.name.replace('House of the ', '')}</strong>
+              <span class="bc-tag">{h.tag}</span>
+              <span class="bc-line" title={h.passive}>
+                ✦ {h.bonus}
               </span>
-              <span class="bc-deed">
-                <b>Power:</b> {d.icon} {d.name}. {d.blurb}
+              <span class="bc-line power" title={d.blurb}>
+                {d.icon} {d.name}
+                <small>{d.short}</small>
               </span>
-              <span class="bc-suits">{h.suits}</span>
             </button>
           );
         })}
@@ -1114,7 +1111,7 @@ function Victory({ game }: { game: Game }) {
         <img class="modal-icon" src={ICON.hut} alt="" />
         <h2>{won ? `${v.scenario}: your folk are renowned!` : 'Your rival is the valley’s renowned town'}</h2>
         <p>
-          {v.byTime ? 'The valley gathered at the end of the season to judge. ' : v.acclaim ? 'At the Moot the whole valley acclaimed the winner: the lead was beyond doubt. ' : ''}
+          {v.byTime ? 'The clock ran out: the valley judged by renown. ' : ''}
           After {formatTime(w.tick)}: <b>{me.renown}★</b> to your rival’s <b>{them?.renown ?? 0}★</b>.
         </p>
         <Awards w={w} won={won} />

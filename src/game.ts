@@ -4,25 +4,23 @@ import { audio, type Sfx } from './audio/audio';
 import { BALANCE, TICK_MS } from './sim/balance';
 import { seasonOf } from './sim/seasons';
 import { canPlace } from './sim/commands';
-import { BUILDINGS, DISCOVERIES, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Tool } from './sim/defs';
+import { BUILDINGS, DISCOVERIES, SKILLS, type BuildingType, type Good, type Tool } from './sim/defs';
 import { DEEDS, deedProblem, deedTargetProblem, outpostSpot, type DeedId } from './sim/deeds';
 import { HOUSES, playerMod } from './sim/houses';
 import { NO_OWNER, previewInfluence, previewRemoval } from './sim/territory';
 import { defenceOf, hallOf, huscarls, raidProblem, raidStrength } from './sim/warfare';
 import { ICON } from './render/overlay';
 import { serializeWorld } from './sim/save';
-import { eventDef } from './sim/events';
-import { plural } from './sim/population';
-import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
-import { TIER_XP, TRADES, tradeTitle } from './sim/trades';
+import { objectiveStatus, renownGoal, type ObjectiveStatus } from './sim/scenario';
+import { TIER_XP } from './sim/trades';
 import type { SimEvent, World } from './sim/world';
 import type { Overlay } from './render/overlay';
 import type { GameRenderer } from './render/scene';
 import { recordDaily, recordDynasty, writeSave, type StoredDynasty } from './settings';
 import { ORIGINS, type OriginId } from './sim/origins';
 import { OMENS } from './sim/omens';
-import { challengeDef } from './sim/challenges';
 import { rivalLine, type RivalMoment } from './ui/rivalVoice';
+import { newsFor, type News } from './ui/news';
 
 export const PLAYER = 0;
 
@@ -36,8 +34,6 @@ export interface Toast {
   tone: 'info' | 'good' | 'warn' | 'big' | 'rival';
 }
 
-/** Routine news (births, sales, finished huts) is throttled so the important news stands out. */
-const LOW_NEWS_GAP_MS = 7000;
 
 export interface GhostState {
   type: BuildingType;
@@ -115,7 +111,6 @@ export class Game {
   private autosaveTimer = AUTOSAVE_SECONDS;
   private toastId = 0;
   private hovered: { kind: 'building' | 'settler'; id: number } | null = null;
-  private landLostCooldown = 0;
 
   constructor(
     readonly world: World,
@@ -134,11 +129,19 @@ export class Game {
     rig.goalYaw = 0;
     rig.goalDistance = 21;
     if (fresh) {
-      this.toast('/assets/icons/hut.png', 'Your family has arrived in the valley. Build a Woodcutter near the trees!', 'info');
+      // One opening banner: the goal, who you face, and the valley's omens.
       const rival = this.world.players[1];
-      if (rival?.origin) setTimeout(() => this.toast('/assets/icons/scroll.png', `Across the valley a rival house has settled: ${ORIGINS[rival.origin as OriginId].icon} ${ORIGINS[rival.origin as OriginId].name}.`, 'warn'), 2500);
+      const goal = renownGoal(this.world.scenario);
+      const rivalName = rival?.origin && rival.origin !== 'dynasty' ? `${ORIGINS[rival.origin as OriginId].icon} ${ORIGINS[rival.origin as OriginId].name}` : rival ? 'a rival house' : '';
+      this.notify({
+        channel: 'banner',
+        priority: 3,
+        icon: '/assets/icons/renown.png',
+        text: goal ? `First to ${goal.toLocaleString('en-GB')}★ wins` : 'Your valley awaits',
+        sub: [rival ? `vs ${rivalName}` : '', this.world.omens.map((o) => `${OMENS[o].icon} ${OMENS[o].name}`).join(' · ')].filter(Boolean).join(' · '),
+        tone: 'big',
+      });
       if (rival) setTimeout(() => this.rivalVoice('greet'), 9000);
-      if (this.world.omens.length) setTimeout(() => this.toast('/assets/icons/scroll.png', `Omens for this valley: ${this.world.omens.map((o) => `${OMENS[o].icon} ${OMENS[o].name}`).join(', ')}.`, 'info'), 5000);
     }
     else this.toast('/assets/icons/scroll.png', 'Welcome back. Your folk carried on where you left them.', 'info');
   }
@@ -242,13 +245,14 @@ export class Game {
     });
   }
 
-  /** The rival's house and its head, for their messages. */
+  /** The rival speaks now and then (at most once every two minutes), in a quiet toast. */
+  private rivalSpokeAt = -Infinity;
   private rivalVoice(moment: RivalMoment, vars: Record<string, string> = {}): void {
-    const fam = [...this.world.families.values()].find((f) => f.owner === 1);
-    const head = [...this.world.settlers.values()].find((s) => s.owner === 1 && !s.child);
-    if (!fam) return;
-    const house = `the ${plural(fam.surname)}`;
-    this.toast('/assets/icons/scroll.png', `${head?.name ?? 'The rival'} of ${house}: ${rivalLine(moment, { house, ...vars })}`, 'rival');
+    if (!this.world.players[1] || this.world.tick - this.rivalSpokeAt < 1200) return;
+    this.rivalSpokeAt = this.world.tick;
+    const origin = this.world.players[1].origin;
+    const house = origin && origin !== 'dynasty' ? `the ${ORIGINS[origin].name}` : 'your rival';
+    this.notify({ channel: 'toast', priority: 1, icon: '/assets/icons/scroll.png', text: rivalLine(moment, { house, ...vars }), tone: 'rival' });
   }
 
   save(manual: boolean): boolean {
@@ -265,36 +269,35 @@ export class Game {
 
   private handleEvents(events: SimEvent[]): void {
     for (const e of events) {
-      // Only news about the rival that we choose to share gets through.
-      if ('owner' in e && e.owner !== PLAYER && !RIVAL_NEWS.has(e.type) && !(e.type === 'holdingChanged' && e.from === PLAYER) && !(e.type === 'buildingComplete' && BUILDINGS[e.buildingType].great)) continue;
+      // What the player is told is decided in one place (ui/news.ts); here only sounds, floaters,
+      // the rival's voice and the music's tension.
+      const n = newsFor(this.world, e, PLAYER);
+      if (n) this.notify(n);
+      const mine = !('owner' in e) || e.owner === PLAYER;
       switch (e.type) {
         case 'buildingComplete': {
-          const p = this.posOf(e.id);
           if (e.owner !== PLAYER) {
-            // Only a rival's Great Work gets this far: they boast.
-            this.toast(icon(e.buildingType), `Your rival has finished ${BUILDINGS[e.buildingType].name}.`, 'warn');
-            this.rivalVoice('theirWork', { work: BUILDINGS[e.buildingType].name });
+            if (BUILDINGS[e.buildingType].great) this.rivalVoice('theirWork', { work: BUILDINGS[e.buildingType].name });
             break;
           }
+          const p = this.posOf(e.id);
           if (BUILDINGS[e.buildingType].great) {
             audio.stinger('work');
             setTimeout(() => this.rivalVoice('yourWork', { work: BUILDINGS[e.buildingType].name }), 3000);
-          }
-          else if (p) audio.play('complete', this.distanceTo(p.x, p.z), this.hearing() * 1.5);
-          if (e.buildingType !== 'wagon') (BUILDINGS[e.buildingType].great || e.buildingType === 'watchtower' ? this.toast.bind(this) : this.news.bind(this))(icon(e.buildingType), `${BUILDINGS[e.buildingType].name} finished`, 'good');
+          } else if (p) audio.play('complete', this.distanceTo(p.x, p.z), this.hearing() * 1.5);
           break;
         }
         case 'buildingPlaced':
-          audio.play('place');
+          if (mine) audio.play('place');
           break;
         case 'produced': {
-          const p = this.posOf(e.buildingId);
+          const p = mine ? this.posOf(e.buildingId) : null;
           if (p) this.overlay.floater(`p${e.buildingId}`, p, e.good, e.bonus);
           break;
         }
         case 'delivered': {
           const b = this.world.buildings.get(e.buildingId);
-          const p = this.posOf(e.buildingId);
+          const p = mine ? this.posOf(e.buildingId) : null;
           if (b?.done && p) {
             this.overlay.floater(`d${e.buildingId}${e.good}`, p, e.good, false);
             audio.play('deliver', this.distanceTo(p.x, p.z), this.hearing());
@@ -302,268 +305,100 @@ export class Game {
           break;
         }
         case 'familyApproaching':
-          audio.play('arrive');
-          this.news('/assets/icons/people.png', `The ${e.surname} family (${e.size}) are settling in. They know a little ${TRADES[e.skill].name.toLowerCase()}.`, 'good');
-          break;
-        case 'cameOfAge':
-          this.news('/assets/icons/people.png', `${e.name} ${e.surname} has come of age and learned from the family`);
-          break;
         case 'born':
-          audio.play('arrive');
-          this.news('/assets/icons/people.png', `${e.name} is born to the ${e.surname} family`, 'good');
-          break;
-        case 'tierUp': {
-          const s = this.world.settlers.get(e.settlerId);
-          const fam = s && this.world.families.get(s.familyId);
-          const trade = TRADES[e.skill];
-          const text = `${s?.name} ${fam?.surname ?? ''} is now a ${tradeTitle(e.skill, e.tier)}! ${trade.perks[e.tier]}`;
-          const at = icon(this.world.buildings.get(e.buildingId)?.type ?? 'woodcutter');
-          // Every tier-up is routine news; a family's first Master gets its own fanfare below.
-          this.news(at, text, 'good');
-          break;
-        }
-        case 'unlocked':
-          this.toast(icon(e.buildingType), `New building: ${BUILDINGS[e.buildingType].name}`, 'good');
+          if (mine) audio.play('arrive');
           break;
         case 'hungry':
-          audio.play('warn');
-          this.toast('/assets/icons/berries.png', 'Your folk are hungry and working slowly. Build another Forager.', 'warn');
-          break;
-        case 'fed':
-          this.news('/assets/icons/berries.png', 'Bellies are full again', 'good');
+        case 'winterComing':
+        case 'rivalSighted':
+          if (mine) audio.play('warn');
           break;
         case 'discovered':
-          if (e.owner !== PLAYER) break;
-          audio.play('objective');
-          this.toast('/assets/icons/scroll.png', `Spotted beyond the border: ${DISCOVERIES[e.kind].name}. Build a Lookout towards it to claim it!`, 'info');
-          break;
-        case 'claimed': {
-          const d = DISCOVERIES[e.kind];
-          if (e.owner !== PLAYER) {
-            this.toast('/assets/icons/scroll.png', `Your rival claimed the ${d.name}.`, 'warn');
-            break;
-          }
-          audio.stinger('discovery');
-          this.banner.value = { title: `${d.icon} ${d.name} claimed!`, sub: e.text };
-          setTimeout(() => (this.banner.value = null), 4200);
-          break;
-        }
         case 'rumour':
-          if (e.owner !== PLAYER) break;
-          audio.play('objective');
-          this.toast('/assets/icons/people.png', `A traveller tells of the ${DISCOVERIES[e.kind].name} to the ${e.dir}. Push your border that way!`, 'info');
+          if (mine) audio.play('objective');
+          break;
+        case 'claimed':
+          if (mine) audio.stinger('discovery');
           break;
         case 'houseOffered':
+        case 'valleyEvent':
           // A letter arrives in the ledger: a soft chime, no interruption.
-          if (e.owner === PLAYER) audio.play('letter');
+          if (mine) audio.play('letter');
           break;
-        case 'houseSeated': {
-          const h = HOUSES[e.house];
-          const d = DEEDS[h.power];
-          if (e.owner !== PLAYER) {
-            this.toast('/assets/icons/scroll.png', `Your rival raises the banner of the ${h.name} ${h.icon}: ${h.suits.split(':')[0].toLowerCase()} ahead.`, 'rival');
-            break;
-          }
-          audio.play('tierUp');
-          this.toast('/assets/icons/people.png', `${h.icon} The ${h.name} takes a seat${e.surname ? `, its banner over the ${plural(e.surname)}` : ''}. ${h.passive} Power: ${d.icon} ${d.name}, ${d.short.toLowerCase()}.`, 'big');
-          break;
-        }
-        case 'married': {
-          if (e.owner !== PLAYER) break;
-          const a = this.world.settlers.get(e.a);
-          const b = this.world.settlers.get(e.b);
-          audio.play('arrive');
-          this.news('/assets/icons/hut.png', `${a?.name} and ${b?.name} marry and found a new ${e.surname} household, with the gifts of both families`, 'good');
-          break;
-        }
-        case 'season':
-          if (e.season === 3) {
-            audio.play('warn');
-            this.toast('/assets/icons/berries.png', 'Winter has come. Berries sleep and folk eat more, but Fishers still work.', 'warn');
-          } else if (e.season === 0) this.toast('/assets/icons/forester.png', `Spring! Another winter survived (${this.world.players[PLAYER].winters}). The bushes wake.`, 'good');
-          break;
-        case 'winterComing':
-          audio.play('warn');
-          this.toast('/assets/icons/berries.png', 'Winter is coming. Stock up on food: build Foragers, and Fishers if you can.', 'warn');
-          break;
-        case 'rivalSighted':
-          audio.play('warn');
-          this.toast('/assets/icons/lookout.png', 'Your scouts have sighted the rival settlement’s border! Race them for the valley’s prizes.', 'warn');
+        case 'houseSeated':
+        case 'objectiveComplete':
+          if (mine) audio.play('tierUp');
           break;
         case 'rankUp':
-          if (e.owner !== PLAYER) {
-            this.toast('/assets/icons/scroll.png', `Word arrives: the rival settlement is now a ${RANK_NAMES[e.rank]}.`, 'warn');
-            break;
-          }
-          audio.stinger('rankUp');
-          this.banner.value = {
-            title: `Your camp is now a ${RANK_NAMES[e.rank]}!`,
-            sub: e.unlocks.length ? `New: ${e.unlocks.map((t) => BUILDINGS[t].name).join(', ')} · the border grows · a family earns a boon` : 'The border grows · a family earns a boon',
-          };
-          setTimeout(() => (this.banner.value = null), 5200);
-          break;
-        case 'valleyEvent':
-          if (e.owner === PLAYER) audio.play('letter');
-          break;
-        case 'eventResolved': {
-          if (e.owner !== PLAYER) break;
-          const d = eventDef(e.def);
-          this.toast('/assets/icons/scroll.png', `${d?.icon ?? ''} ${e.text}`, 'info');
-          break;
-        }
-        case 'familySettled':
-          this.news('/assets/icons/hut.png', `The ${e.surname} family have a home at last`, 'good');
-          break;
-        case 'objectiveComplete':
-          audio.play('objective');
-          this.toast('/assets/icons/scroll.png', e.label, 'good');
-          break;
-        case 'chapterComplete':
-          audio.play('tierUp');
-          this.banner.value = { title: `${e.chapter} complete`, sub: e.next ? `Next chapter: ${e.next}` : 'Your settlement thrives' };
-          setTimeout(() => (this.banner.value = null), 4200);
+          if (mine) audio.stinger('rankUp');
           break;
         case 'holdingChanged': {
           const d = DISCOVERIES[e.kind];
           if (e.owner === PLAYER) {
             audio.stinger('landmark');
-            this.banner.value = { title: `${d.icon} ${d.name} is yours!`, sub: e.from >= 0 ? `Taken from your rival: +${d.renown} renown a minute while you hold it` : `+${d.renown} renown a minute while you hold it` };
-            setTimeout(() => (this.banner.value = null), 3800);
             if (e.from >= 0) setTimeout(() => this.rivalVoice('youTook', { site: d.name }), 2500);
           } else if (e.from === PLAYER) {
             audio.stinger('loss');
             this.tenseUntil = this.world.tick + 600;
-            this.toast('/assets/icons/lookout.png', `Your rival’s border has swallowed the ${d.name}! Push back with Watchtowers or a Festival.`, 'warn');
             setTimeout(() => this.rivalVoice('theyTook', { site: d.name }), 2000);
           }
           break;
         }
         case 'landLost':
-          this.tenseUntil = this.world.tick + 450;
-          if (this.landLostCooldown > this.world.tick) break;
-          this.landLostCooldown = this.world.tick + 300;
-          this.toast('/assets/icons/lookout.png', `Your rival’s influence is pushing into your land (${e.tiles} tiles lost).`, 'warn');
+          if (mine) this.tenseUntil = this.world.tick + 450;
           break;
         case 'renown': {
-          if (e.x < 0 || e.amount < 5) break;
+          if (!mine || e.x < 0 || e.amount < 5) break;
           const y = this.view.groundHeight(e.x + 0.5, e.y + 0.5);
           this.overlay.renownFloater(new THREE.Vector3(e.x + 0.5, y + 2.2, e.y + 0.5), e.amount);
           break;
         }
-        case 'deed': {
-          const d = DEEDS[e.deed];
-          if (e.owner !== PLAYER) {
-            if (e.deed === 'festival' || e.deed === 'expedition') this.toast('/assets/icons/scroll.png', `Your rival’s ${plural(e.surname)} ${e.deed === 'festival' ? 'hold a festival near your border' : 'raise an outpost in the wilds'}.`, 'warn');
-            break;
-          }
-          audio.stinger('deed');
-          this.toast('/assets/icons/people.png', `${d.icon} ${d.name}! ${e.text}`, 'big');
+        case 'deed':
+          if (mine) audio.stinger('deed');
           break;
-        }
-        case 'raidLaunched': {
-          const name = BUILDINGS[e.buildingType].name;
+        case 'raidLaunched':
           if (e.defender === PLAYER) {
             audio.stinger('warhorn');
             this.tenseUntil = this.world.tick + 600;
-            const who = e.owner === NO_OWNER ? 'Reavers' : 'Raiders from your rival';
-            this.banner.value = { title: `⚔ ${who} march on your ${name}!`, sub: `${e.strength} strong, there in about ${e.eta}s. Guards, a stockade or your huscarls nearby can hold it.` };
-            setTimeout(() => (this.banner.value = null), 4200);
-            if (e.owner !== NO_OWNER) setTimeout(() => this.rivalVoice('raid', { building: name }), 2500);
-          } else if (e.owner === PLAYER) {
-            audio.play('click');
-            this.toast(ICON.shield, `Your huscarls march on the rival’s ${name} (${e.strength} strong, about ${e.eta}s away).`, 'info');
-          }
+            if (e.owner !== NO_OWNER) setTimeout(() => this.rivalVoice('raid', { building: BUILDINGS[e.buildingType].name }), 2500);
+          } else if (e.owner === PLAYER) audio.play('click');
           break;
-        }
-        case 'raidResolved': {
-          const name = BUILDINGS[e.buildingType].name;
+        case 'raidResolved':
           if (e.owner === PLAYER) {
-            if (e.won) {
-              audio.stinger('clash');
-              this.toast(ICON.shield, `🔥 Your huscarls burned the rival’s ${name} (${e.attack} against ${e.defence}): +${e.renown} renown.`, 'big');
-              setTimeout(() => this.rivalVoice('burned', { building: name }), 2500);
-            } else {
-              audio.stinger('loss');
-              this.toast(ICON.shield, `Your huscarls were driven off from the ${name} (${e.attack} against ${e.defence}). They are coming home.`, 'warn');
-            }
+            audio.stinger(e.won ? 'clash' : 'loss');
+            if (e.won) setTimeout(() => this.rivalVoice('burned', { building: BUILDINGS[e.buildingType].name }), 2500);
           } else if (e.defender === PLAYER) {
-            if (e.won) {
-              audio.stinger('loss');
-              this.tenseUntil = this.world.tick + 600;
-              this.banner.value = { title: `🔥 Your ${name} burns`, sub: `${e.attack} against your ${e.defence}. More guards, a stockade or a Mustering Hall nearby would have held it.` };
-              setTimeout(() => (this.banner.value = null), 4200);
-            } else {
-              audio.stinger('clash');
-              this.toast(ICON.shield, `🛡 Your ${name} held the line (${e.defence} against ${e.attack}): +${e.renown} renown.`, 'big');
-              if (e.owner !== NO_OWNER) setTimeout(() => this.rivalVoice('repelled', {}), 2500);
-            }
+            audio.stinger(e.won ? 'loss' : 'clash');
+            if (e.won) this.tenseUntil = this.world.tick + 600;
+            else if (e.owner !== NO_OWNER) setTimeout(() => this.rivalVoice('repelled', {}), 2500);
           }
           break;
-        }
         case 'sold':
-          audio.play('deliver');
-          this.news(`/assets/icons/${e.good}.png`, `Market Day: ${e.n} ${GOOD_INFO[e.good].name.toLowerCase()} sold for +${e.renown} renown`, 'good');
+          if (mine) audio.play('deliver');
           break;
         case 'workBegun':
-          if (e.owner === PLAYER) break;
-          audio.play('warn');
-          this.toast(icon(e.buildingType), `Your rival has begun ${BUILDINGS[e.buildingType].name}! Only the first to finish it gets it.`, 'warn');
+          if (!mine) audio.play('warn');
           break;
         case 'workLost':
           audio.stinger('loss');
-          this.toast(icon(e.buildingType), `Your rival finished ${BUILDINGS[e.buildingType].name} first. Your site is abandoned; half its materials came home.`, 'warn');
           break;
-        case 'firstMaster':
-          audio.play('tierUp');
-          this.toast('/assets/icons/renown.png', `${e.name} is the first ${tradeTitle(e.skill, 2)} of the ${e.surname} family! +10 renown, and their deed grows stronger.`, 'big');
-          break;
-        case 'elder':
-          this.news('/assets/icons/people.png', `${e.name} ${e.surname} is an elder now: no more hard work, but they teach the family their craft.`);
-          break;
-        case 'died':
-          if (e.legend) {
-            audio.play('tierUp');
-            this.banner.value = { title: `${e.name} ${e.surname} has died`, sub: `A Master to the last, aged ${e.age}. Their legend lives on: ${SKILLS.includes(e.legend) ? TRADES[e.legend].name.toLowerCase() : ''} is faster for all, and +15 renown` };
-            setTimeout(() => (this.banner.value = null), 5200);
-          } else this.news('/assets/icons/people.png', `${e.name} ${e.surname} has died, aged ${e.age}. The family mourns.`);
-          break;
-        case 'challenge': {
-          const def = challengeDef(e.def)!;
+        case 'challenge':
           audio.stinger('moot');
-          this.toast('/assets/icons/renown.png', `${def.icon} ${def.title}! ${def.text} +${def.prize}★ to the winner.`, 'big');
           break;
-        }
-        case 'challengeWon': {
-          const def = challengeDef(e.def)!;
-          if (e.winner === PLAYER) {
-            audio.stinger('landmark');
-            this.banner.value = { title: `${def.icon} You won ${def.title}!`, sub: `+${e.prize} renown. The valley talks of nothing else.` };
-            setTimeout(() => (this.banner.value = null), 3600);
-            setTimeout(() => this.rivalVoice('youWon'), 2400);
-          } else {
-            audio.stinger('loss');
-            this.toast('/assets/icons/renown.png', `Your rival won ${def.title} (+${e.prize}★).`, 'warn');
-            setTimeout(() => this.rivalVoice('theyWon'), 1800);
-          }
-          break;
-        }
-        case 'challengeExpired':
-          this.news('/assets/icons/renown.png', `Nobody won ${challengeDef(e.def)?.title ?? 'the challenge'}. The prize goes unclaimed.`);
+        case 'challengeWon':
+          audio.stinger(e.winner === PLAYER ? 'landmark' : 'loss');
+          setTimeout(() => this.rivalVoice(e.winner === PLAYER ? 'youWon' : 'theyWon'), 2400);
           break;
         case 'starfall':
           setTimeout(() => this.rivalVoice('starfall'), 6500);
           audio.stinger('starfall');
-          this.banner.value = { title: '☄️ A star has fallen!', sub: 'It came down between you and your rival: a Star-Stone, the richest landmark in the valley. Push your border over it first!' };
-          setTimeout(() => (this.banner.value = null), 5600);
           break;
         case 'moot':
           setTimeout(() => this.rivalVoice('moot'), 6000);
           audio.stinger('moot');
-          this.banner.value = { title: '📯 The Valley Moot!', sub: 'Folk from all around gather for the final stretch: every landmark now pays double renown' };
-          setTimeout(() => (this.banner.value = null), 5200);
           break;
         case 'victory':
-          this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime, acclaim: !!e.acclaim };
+          this.victory.value = { scenario: e.scenario, winner: e.winner, byTime: e.byTime };
           audio.stinger(e.winner === PLAYER ? 'victory' : 'defeat');
           if (e.winner === PLAYER) this.rememberHouse();
           if (this.world.label.startsWith('daily-')) recordDaily({ date: this.world.label.slice(6), won: e.winner === PLAYER, renown: this.world.players[PLAYER].renown, time: Math.floor(this.world.tick / 10) });
@@ -573,21 +408,53 @@ export class Game {
     }
   }
 
-  /** Routine news: shown only if nothing routine was shown in the last few seconds. */
-  private lowNewsAt = 0;
-  news(iconUrl: string, text: string, tone: Toast['tone'] = 'info'): void {
+  /**
+   * The one way news reaches the screen. Banners queue and show one at a time; toasts show at
+   * most two at once, the rest wait in a short queue by priority, and quiet news (priority 1) is
+   * dropped rather than queued when the screen is busy. Same-key news replaces what's waiting.
+   */
+  private bannerQueue: News[] = [];
+  private toastQueue: News[] = [];
+  private bannerUntil = 0;
+  notify(n: News): void {
+    if (n.channel === 'banner') {
+      if (this.bannerQueue.length < 3) this.bannerQueue.push(n);
+    } else {
+      if (n.key) this.toastQueue = this.toastQueue.filter((q) => q.key !== n.key);
+      if (n.priority === 1 && (this.toasts.value.length >= 1 || this.toastQueue.length)) return;
+      this.toastQueue.push(n);
+      this.toastQueue.sort((a, b) => b.priority - a.priority);
+      this.toastQueue.length = Math.min(this.toastQueue.length, 3);
+    }
+    this.pumpNews();
+  }
+
+  private pumpNews(): void {
     const now = performance.now();
-    if (now - this.lowNewsAt < LOW_NEWS_GAP_MS / Math.max(1, this.speed.value)) return;
-    this.lowNewsAt = now;
-    this.toast(iconUrl, text, tone);
+    if (!this.banner.value && now >= this.bannerUntil) {
+      const b = this.bannerQueue.shift();
+      if (b) {
+        this.banner.value = { title: b.text, sub: b.sub ?? '' };
+        this.bannerUntil = now + 4200;
+        setTimeout(() => {
+          this.banner.value = null;
+          this.pumpNews();
+        }, 3800);
+      }
+    }
+    while (this.toasts.value.length < 2 && this.toastQueue.length) {
+      const n = this.toastQueue.shift()!;
+      this.toast(n.icon, n.sub ? `${n.text} · ${n.sub}` : n.text, n.tone);
+    }
   }
 
   toast(iconUrl: string, text: string, tone: Toast['tone']): void {
     const t: Toast = { id: ++this.toastId, icon: iconUrl, text, tone };
-    this.toasts.value = [...this.toasts.value, t].slice(-4);
+    this.toasts.value = [...this.toasts.value, t].slice(-2);
     setTimeout(() => {
       this.toasts.value = this.toasts.value.filter((x) => x.id !== t.id);
-    }, tone === 'big' ? 7000 : 4800);
+      this.pumpNews();
+    }, tone === 'big' ? 5500 : 4200);
   }
 
   // ---- intents ------------------------------------------------------------
@@ -906,8 +773,6 @@ export class Game {
   }
 }
 
-/** Rival news the player hears about. */
-const RIVAL_NEWS = new Set<SimEvent['type']>(['claimed', 'rankUp', 'deed', 'workBegun', 'raidLaunched', 'raidResolved', 'razed']);
 
 export function icon(type: BuildingType | string): string {
   return `/assets/icons/${type === 'wagon' ? 'hut' : type}.png`;

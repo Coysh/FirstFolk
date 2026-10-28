@@ -409,6 +409,34 @@ The measurements behind each:
 
 ---
 
+## 0d. The Calm Pass (v0.17+): easy to start, never overwhelming
+
+The fourth playtest made five points:
+1. **New Game** was a wall of text.
+2. **The Great Houses** explained too much.
+3. **Notifications** overlapped and flooded the screen.
+4. **The game was won before the advertised renown target**, with no military action.
+5. **The player didn't care about individual settlers,** family trees or personal skills at 100+ folk. They want to build, expand, optimise and compete.
+
+The evidence and the fixes:
+
+| Complaint | Evidence | Fix |
+|---|---|---|
+| Won early | A hidden **Acclaim** rule (a 600 lead after 25:00 wins) ended about 20% of duels, and nothing on screen mentioned it. Victory also required *every* chapter goal, not just the target. | **One rule:** first to the goal, or the most renown at 45:00. Chapters are ranks, never requirements. |
+| Notification flood | The old handler showed **9.0 items a minute** (four seeded bot games: births, marriages, tier-ups, sales, every objective, every claim), up to 4 toasts at once, positioned independently of a race bar that grows taller. | `ui/news.ts` decides everything in one pure function, described below. **About 3 a minute (−67%)**, at most 2 on screen, never overlapping. |
+| Text-heavy Great Houses | Cards carried three paragraphs. | A two-word bonus, a strategy tag, and the power with four words. The bar shows the power's name, a ring and a key. The details are in tooltips. |
+| Uninviting New Game | 5 paragraphs, 3 choice grids and a seed box. | Picture first: five painted origin cards (generated with gpt-image-2), one line about the chosen house, and three chips (difficulty, rival, valley with omen icons) above a big **Begin**. |
+
+**How `ui/news.ts` sorts the news:**
+- **Banners:** rank-ups, a raid on you, the star-fall, the Moot, your Great Work, and the opening goal. They show one at a time.
+- **Short toasts:** landmarks won or lost, raids, contests, house seats, hunger, new buildings.
+- **Nothing on screen:** routine life (births, marriages, sales, finished huts, objectives). The goals panel and the world show these.
+- **Priority:** quiet news is dropped when the screen is busy, and same-key news merges.
+- **The rival speaks** at most once every 2 minutes.
+- **The desk simulation** (`simulateDesk`) lets the harness report what a player sees per minute.
+
+---
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -1226,4 +1254,17 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **Acclaim** needs a 600 lead (was 500).
 - **Rank thresholds:** Village at 250 renown and Town at 650. Without them, the scripted player's Hamlet chapter missed 16:00 on seed 13.
 - **Measured:** see §0c. 60 real duels finished 30 : 30, and every style stayed between 38% and 58% across two seed blocks.
+
+### v0.17.0 The Calm Pass: one win rule, quiet news, minimal houses, a picture-first New Game (2026-10-28)
+- **Victory:**
+  - Acclaim is removed.
+  - `victory: 'goal'` wins at the renown target alone.
+  - The opening banner says the goal, who you face and the omens.
+- **News:**
+  - `ui/news.ts` (`newsFor`, `simulateDesk`) and a single notifier: one banner at a time, two toasts at most, priorities, merging.
+  - The race bar and toasts share a column, so they can't overlap.
+  - Rival lines are throttled.
+  - **Measured:** 9.0 items a minute before, about 3 a minute after.
+- **Great Houses:** a `bonus` and `tag` per house, cards cut to icon, name, tag, bonus and power, and a minimal bar.
+- **New Game:** full-screen with five illustrated origin cards (`public/assets/ui/origin-*.jpg`), a one-line house summary, chips for difficulty, rival and valley, and Begin (Enter starts). The title tagline no longer promises family lineage.
 

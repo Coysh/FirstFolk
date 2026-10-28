@@ -562,7 +562,7 @@ export class World {
     folk[1].spouseId = folk[0].id;
     if (!origin) {
       // The very first choice: which house founds the settlement?
-      offerHouse(this, owner, 'The founders set out: which house leads them?', FOUNDING_HOUSES);
+      offerHouse(this, owner, 'Who leads your founders?', FOUNDING_HOUSES);
       return;
     }
     // An origin is that choice made before the clock starts: a founding house, a craft, supplies.

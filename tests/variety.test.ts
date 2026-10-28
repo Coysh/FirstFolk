@@ -167,15 +167,18 @@ describe('challenges, acclaim and auto-homes', () => {
     expect(w.players[0].renown).toBe(before + def.prize);
   });
 
-  it('a crushing lead at the Moot ends the race by acclaim', async () => {
-    const { evaluateScenario } = await import('../src/sim/scenario');
+  it('the race is won only at the goal (or on the clock), whatever the lead and whatever chapters are left', async () => {
+    const { evaluateScenario, renownGoal } = await import('../src/sim/scenario');
     const w = new World({ seed: 3 });
     w.tick = BALANCE.mootAt + 10;
-    w.players[0].renown = 900;
-    w.players[1].renown = 900 - BALANCE.acclaimLead;
+    w.players[0].renown = renownGoal(w.scenario) - 1;
+    w.players[1].renown = 0;
+    evaluateScenario(w);
+    expect(w.scenarioState.winner).toBe(-1);
+    // Reaching the goal wins at once, even with earlier chapter goals unfinished.
+    w.players[0].renown = renownGoal(w.scenario);
     evaluateScenario(w);
     expect(w.scenarioState.winner).toBe(0);
-    expect(w.drainEvents().some((e) => e.type === 'victory' && e.acclaim)).toBe(true);
   });
 
   it('with auto-homes on, families put up a hut when every home is full', () => {

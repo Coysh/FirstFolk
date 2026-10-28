@@ -8,6 +8,7 @@ import { rollOmens } from './omens';
 import { plural } from './population';
 import { BUILDINGS } from './defs';
 import type { BotStyle } from './ai/styles';
+import { newsFor, simulateDesk, type News } from '../ui/news';
 
 export interface PlaytestReport {
   seed: number;
@@ -55,6 +56,9 @@ export interface PlaytestReport {
   raids: number[];
   raidsWon: number[];
   repelled: number[];
+  /** What the player would have seen on screen (see ui/news.ts): banners and toasts per minute. */
+  newsPerMinute: number;
+  bannersPerGame: number;
   /** Reaver bands that came for [player, rival], and how many of them burned a post. */
   reavers: number[];
   reaverBurns: number[];
@@ -85,6 +89,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   world.players[0].style = bot.style;
   const towers = [0, 0];
   const raids = [0, 0];
+  const newsItems: { tick: number; news: News }[] = [];
   const reavers = [0, 0];
   const reaverBurns = [0, 0];
   const renownByMinute: [number, number][] = [];
@@ -107,6 +112,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     world.step();
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
+      const n = newsFor(world, e, 0);
+      if (n) newsItems.push({ tick: world.tick, news: n });
       if (e.type === 'buildingComplete' && BUILDINGS[e.buildingType].capped) towers[e.owner]++;
       if (e.type === 'raidLaunched' && e.owner >= 0) raids[e.owner]++;
       if (e.type === 'raidLaunched' && e.owner < 0) reavers[e.defender]++;
@@ -222,6 +229,10 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     repelled: world.players.map((p) => p.repelled),
     reavers,
     reaverBurns,
+    ...(() => {
+      const desk = simulateDesk(newsItems);
+      return { newsPerMinute: Math.round(((desk.banners + desk.toasts) * 600 * 10) / Math.max(1, world.tick)) / 10, bannersPerGame: desk.banners };
+    })(),
     timeline,
   };
 }

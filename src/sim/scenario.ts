@@ -1,7 +1,7 @@
 import { BUILDINGS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Skill } from './defs';
 import { rankSeat } from './houses';
 import { recomputeTerritory } from './territory';
-import { addRenown, mootUnderway } from './renown';
+import { addRenown } from './renown';
 import { BALANCE, secs } from './balance';
 import { TIER_XP, tradeTitle } from './trades';
 import type { World } from './world';
@@ -28,7 +28,8 @@ export interface Scenario {
   description: string;
   objectives: Objective[];
   /** 'none' = sandbox: objectives are shown as milestones but never end the game. */
-  victory: 'all' | 'any' | 'none';
+  /** 'goal': the first to the final renown objective wins (the chapters on the way are ranks, not requirements). */
+  victory: 'all' | 'any' | 'goal' | 'none';
   /** A rival settlement races you from the far side of the valley (first to finish wins). */
   rival?: boolean;
   /** When the clock reaches this tick, the settlement with the most renown wins. */
@@ -148,7 +149,7 @@ export const LANDFALL: Scenario = {
   id: 'landfall',
   name: 'The First Valley',
   description: 'Found a camp, explore the valley and win more renown than your rival.',
-  victory: 'all',
+  victory: 'goal',
   rival: true,
   timeLimit: secs(45 * 60),
   // Landfall teaches the basics; after that each rank is earned with renown, and the first
@@ -187,6 +188,12 @@ export interface ObjectiveStatus extends ObjectiveProgress {
   done: boolean;
 }
 
+/** The renown a scenario's race is won at (its last renown objective), or 0. */
+export function renownGoal(scenario: Scenario): number {
+  const o = [...scenario.objectives].reverse().find((x) => x.id.startsWith('renown-'));
+  return o ? Number(o.id.slice(7)) : 0;
+}
+
 export function objectiveStatus(world: World, owner: number): ObjectiveStatus[] {
   const done = world.scenarioState.done[owner] ?? {};
   return world.scenario.objectives.map((o) => {
@@ -220,18 +227,10 @@ export function evaluateScenario(world: World): void {
     }
     if (state.winner >= 0 || world.scenario.victory === 'none' || !world.scenario.objectives.length) continue;
     const results = world.scenario.objectives.map((o) => !!done[o.id]);
-    if (world.scenario.victory === 'all' ? results.every(Boolean) : results.some(Boolean)) winners.push(player.id);
+    const won = world.scenario.victory === 'goal' ? player.renown >= renownGoal(world.scenario) : world.scenario.victory === 'all' ? results.every(Boolean) : results.some(Boolean);
+    if (won) winners.push(player.id);
   }
   if (state.winner >= 0 || world.scenario.victory === 'none') return;
-  // Acclaim: once the Moot is under way, a crushing lead ends the race (no dull walkovers).
-  if (!winners.length && mootUnderway(world) && world.players.length > 1) {
-    const sorted = [...world.players].sort((a, b) => b.renown - a.renown);
-    if (sorted[0].renown - sorted[1].renown >= BALANCE.acclaimLead) {
-      state.winner = sorted[0].id;
-      world.emit({ type: 'victory', scenario: world.scenario.name, winner: state.winner, byTime: false, acclaim: true });
-      return;
-    }
-  }
   // The clock runs out: whoever has the most renown wins.
   const timeUp = !!world.scenario.timeLimit && world.tick >= world.scenario.timeLimit;
   if (timeUp && !winners.length) winners.push(...world.players.map((p) => p.id));
