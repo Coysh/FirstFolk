@@ -15,6 +15,7 @@ import { NO_OWNER, onBuildingComplete, recomputeTerritory, updateExploration } f
 import { addRenown, updateRenown, type RenownSource } from './renown';
 import type { DeedId } from './deeds';
 import { updateMarket } from './market';
+import { updateHappenings } from './happenings';
 import { addBoon, offerBoon, updateOffers, type BoonId, type Mod } from './boons';
 import { ORIGINS, rivalOrigin, type OriginId } from './origins';
 import { hasOmen, type OmenId } from './omens';
@@ -188,6 +189,7 @@ export type SimEvent =
   | { type: 'renown'; owner: number; amount: number; source: RenownSource; x: number; y: number }
   | { type: 'deed'; owner: number; familyId: number; surname: string; deed: DeedId; x: number; y: number; text: string }
   | { type: 'moot' }
+  | { type: 'starfall'; siteId: number; x: number; y: number }
   | { type: 'sold'; owner: number; good: Good; n: number; renown: number }
   | { type: 'workBegun'; owner: number; buildingType: BuildingType }
   | { type: 'workLost'; owner: number; buildingType: BuildingType; winner: number }
@@ -214,7 +216,7 @@ export interface PlayerState {
   /** Settlement rank: 0 Camp, 1 Hamlet, 2 Village, 3 Town. */
   rank: number;
   /** The valley event awaiting a choice (see events.ts), and when the next one comes. */
-  event: { id: number; def: string; expires: number } | null;
+  event: { id: number; def: string; expires: number; data: number[] } | null;
   nextEventAt: number;
   lastEvent: string;
   /** Has this player's exploration reached another settlement's land yet? */
@@ -668,6 +670,7 @@ export class World {
     if (this.tick % BALANCE.renownTick === 55) updateRenown(this);
     if (this.tick % 10 === 5) {
       updateExploration(this);
+      updateHappenings(this);
       updateOffers(this);
       updateValleyEvents(this);
     }
@@ -776,7 +779,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['starfall', 'moot', 'deed', 'died', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'boonOffered', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'tierUp', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);

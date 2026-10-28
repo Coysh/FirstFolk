@@ -432,6 +432,16 @@ export function discoveryGeometry(kind: DiscoveryKind): THREE.BufferGeometry {
       }
       b.add(box(0.5, 0.12, 0.3), C.stone, { pos: [0, 0.06, 0] });
       break;
+    case 'starstone':
+      // A scorched crater with a dark, glowing star-stone at its heart.
+      b.add(cyl(0.95, 1.05, 0.08, 14), C.rockDark, { pos: [0, 0.02, 0] });
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        b.add(dodeca(0.16), C.rock, { pos: [Math.cos(a) * 0.95, 0.06, Math.sin(a) * 0.95] });
+      }
+      b.add(dodeca(0.42), 0x2b2540, { pos: [0, 0.32, 0], scale: [1, 1.25, 0.9] });
+      for (const [x, y, z] of [[0.18, 0.55, 0.12], [-0.2, 0.42, -0.1], [0.05, 0.75, -0.05]] as const) b.add(ico(0.09, 0), 0x9fe8ff, { pos: [x, y, z] });
+      break;
     case 'barrow':
       // A long grassy mound with a dark stone doorway and a capstone.
       b.add(sphere(0.9, 9, 6), C.moss, { pos: [0, -0.15, -0.1], scale: [1.2, 0.55, 0.9] });

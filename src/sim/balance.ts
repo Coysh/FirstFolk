@@ -76,6 +76,8 @@ export const BALANCE = {
   renownTick: secs(10),
   /** From this tick (the final stretch) the Moot doubles what landmarks pay. */
   mootAt: secs(25 * 60),
+  /** Star-fall: a new landmark lands between the settlements from this tick (≡ 5 mod 10). */
+  starfallAt: secs(15 * 60) + 5,
 
   /** Market Day: each lot sold gluts that good by this much (percent), easing 1 point every 2 s. */
   glutPerSale: 25,

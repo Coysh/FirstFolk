@@ -23,11 +23,13 @@ const difficulty = str('difficulty', 'normal') as Difficulty;
 const quiet = args.includes('--quiet');
 // --real: each game plays a rolled origin (cycling through all five) with the valley's omens.
 const real = args.includes('--real');
+const useOrigins = real || args.includes('--origins');
+const useOmens = real || args.includes('--omens');
 
 const reports: ReturnType<typeof playtest>[] = [];
 for (let g = 0; g < games; g++) {
   const t0 = performance.now();
-  const r = playtest(seed + g, minutes, { think, difficulty, origin: real ? ORIGIN_IDS[g % ORIGIN_IDS.length] : undefined, omens: real });
+  const r = playtest(seed + g, minutes, { think, difficulty, origin: useOrigins ? ORIGIN_IDS[g % ORIGIN_IDS.length] : undefined, omens: useOmens });
   reports.push(r);
   if (games === 1) {
     console.log(r.timeline.join('\n'));
@@ -54,7 +56,7 @@ if (games > 1) {
   const sources: Record<string, number> = {};
   for (const r of reports) for (const [k, v] of Object.entries(r.renownBy[0])) sources[k] = (sources[k] ?? 0) + (v ?? 0) / reports.length;
   console.log('avg player renown by source:', Object.entries(sources).map(([k, v]) => `${k} ${Math.round(v)}`).join(' · '));
-  if (real) {
+  if (useOrigins) {
     // Opener balance: how each origin fares, whichever side played it.
     const tally: Record<string, [number, number]> = {};
     for (const r of reports)

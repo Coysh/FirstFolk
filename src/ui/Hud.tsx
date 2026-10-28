@@ -420,10 +420,11 @@ function EventCard({ game }: { game: Game }) {
       <div class="ev-options">
         {def.options.map((o, i) => {
           const ok = canAfford(w, PLAYER, o.cost);
+          const d = o.describe ? o.describe(w, PLAYER, ev.data ?? []) : o;
           return (
-            <button key={o.label} class={`ev-opt ${i === def.options.length - 1 ? 'quiet' : ''}`} disabled={!ok} onClick={() => game.chooseEvent(ev.id, i)}>
-              <strong>{o.label}</strong>
-              <small>{o.detail}</small>
+            <button key={i} class={`ev-opt ${i === def.options.length - 1 ? 'quiet' : ''}`} disabled={!ok} onClick={() => game.chooseEvent(ev.id, i)}>
+              <strong>{d.label}</strong>
+              <small>{d.detail}</small>
             </button>
           );
         })}

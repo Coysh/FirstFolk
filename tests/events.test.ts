@@ -20,7 +20,7 @@ describe('valley events', () => {
   it('a chosen option pays its cost and applies its effect', () => {
     const w = new World({ scenario: 'peaceful', seed: 3 });
     const p = w.players[0];
-    p.event = { id: 999, def: 'trader', expires: w.tick + 100 };
+    p.event = { id: 999, def: 'trader', expires: w.tick + 100, data: [] };
     wagon(w).stock.logs = 20;
     const planks = wagon(w).stock.planks;
     resolveEvent(w, 0, 999, 0);
@@ -32,7 +32,7 @@ describe('valley events', () => {
 
   it('an unaffordable choice falls back to the free option', () => {
     const w = new World({ scenario: 'peaceful', seed: 3 });
-    w.players[0].event = { id: 5, def: 'trader', expires: w.tick + 100 };
+    w.players[0].event = { id: 5, def: 'trader', expires: w.tick + 100, data: [] };
     wagon(w).stock.logs = 2;
     resolveEvent(w, 0, 5, 0);
     expect(wagon(w).stock.logs).toBe(2);

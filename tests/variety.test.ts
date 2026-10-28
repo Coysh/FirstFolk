@@ -111,3 +111,47 @@ describe('new discoveries', () => {
     expect(w.players[0].renown).toBeGreaterThanOrEqual(BALANCE.renown.hoard);
   });
 });
+
+describe('happenings and matches', () => {
+  it('a star falls between the settlements mid-game: a landmark both can see', async () => {
+    const { starfallTick } = await import('../src/sim/happenings');
+    const w = new World({ seed: 6 });
+    w.tick = starfallTick(w) - 10;
+    w.run(20);
+    const star = w.sites.find((s) => s.kind === 'starstone')!;
+    expect(star).toBeDefined();
+    expect(star.revealed & 3).toBe(3);
+    expect(DISCOVERIES.starstone.renown).toBeGreaterThan(DISCOVERIES.stones.renown!);
+    expect(w.drainEvents().some((e) => e.type === 'starfall')).toBe(true);
+  });
+
+  it('a Betrothal lets you choose which families join, and the new house gets both sets of boons', async () => {
+    const { VALLEY_EVENTS, resolveEvent } = await import('../src/sim/events');
+    const { wed } = await import('../src/sim/population');
+    void wed;
+    const w = new World({ seed: 3, scenario: 'peaceful' });
+    w.players[0].rank = 1;
+    // Build a little town: three families with singles, and a free hut.
+    const home = [...w.buildings.values()].find((b) => b.type === 'wagon')!;
+    const fams = [0, 1, 2].map((i) => {
+      const hut = w.addBuilding('hut', 0, home.x - 8 + i * 4, home.y + 6, true);
+      const f = [...w.families.values()][0];
+      const fam = { ...f, id: w.newId(), surname: ['Ash', 'Brook', 'Cole'][i], homeId: hut.id, boons: [(['keenEyes', 'masterBuilders', 'bigHearts'] as const)[i]], mods: {}, parents: [], glory: 0, deedReady: 0, skills: { ...f.skills } };
+      w.families.set(fam.id, fam);
+      hut.familyId = fam.id;
+      for (let k = 0; k < 2; k++) w.addSettler(0, fam.id, `S${i}${k}`, 2, hut.x, hut.y + 2);
+      return fam;
+    });
+    w.addBuilding('hut', 0, home.x + 6, home.y + 6, true);
+    const def = VALLEY_EVENTS.find((d) => d.id === 'betrothal')!;
+    const data = def.setup!(w, 0)!;
+    expect(data.length).toBe(4);
+    w.players[0].event = { id: 77, def: 'betrothal', expires: w.tick + 100, data };
+    resolveEvent(w, 0, 77, 0);
+    const a = w.settlers.get(data[0])!;
+    const merged = w.families.get(a.familyId)!;
+    expect(merged.parents.length).toBe(2);
+    expect(merged.boons.length).toBeGreaterThanOrEqual(2);
+    expect(fams.length).toBe(3);
+  });
+});

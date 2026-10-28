@@ -1,7 +1,9 @@
 import { BALANCE } from './balance';
 import { offerBoon } from './boons';
 import { BUILDINGS, FOODS, SKILLS, type Good } from './defs';
-import { plural, spawnFamily } from './population';
+import { freeHome, plural, singles, spawnFamily, wed } from './population';
+import { DEEDS, deedOf } from './deeds';
+import { tierOf, tradeTitle } from './trades';
 import { isWinter, seasonOf } from './seasons';
 import { grantXp } from './settlers';
 import { NO_OWNER, revealArea } from './territory';
@@ -18,7 +20,10 @@ export interface EventOption {
   /** What it does, shown on the button. */
   detail: string;
   cost?: Partial<Record<Good | 'food', number>>;
-  apply(world: World, owner: number): string;
+  /** `data` is what the event's `setup` chose when it was drawn (e.g. who is to marry). */
+  apply(world: World, owner: number, data: number[]): string;
+  /** A label and detail that depend on the event's data, for the card. */
+  describe?(world: World, owner: number, data: number[]): { label: string; detail: string };
 }
 
 export interface ValleyEventDef {
@@ -29,6 +34,8 @@ export interface ValleyEventDef {
   /** Relative frequency; 0 or a failing condition skips it. */
   weight: number;
   when?(world: World, owner: number): boolean;
+  /** Choose what the event is about when it's drawn; null skips it. Stored with the event. */
+  setup?(world: World, owner: number): number[] | null;
   options: EventOption[];
 }
 
@@ -68,7 +75,78 @@ function loseFood(world: World, owner: number, n: number): number {
   return lost;
 }
 
+/** Who a single settler is, for a match card: "Edith Thorne, Master Mason (Builder)". */
+function matchName(world: World, id: number): string {
+  const s = world.settlers.get(id);
+  const fam = s && world.families.get(s.familyId);
+  if (!s || !fam) return 'someone';
+  const best = SKILLS.reduce((a, k) => (s.skills[k] > s.skills[a] ? k : a), SKILLS[0]);
+  const deed = deedOf(fam);
+  return `${s.name} ${fam.surname}${s.skills[best] > 0 ? `, ${tradeTitle(best, tierOf(s.skills[best]))}` : ''}${deed ? ` (${DEEDS[deed].name})` : ''}`;
+}
+
+/**
+ * Two matches for the player to choose between: the most gifted single and their best
+ * partner from another family, and a second pair from other families again.
+ */
+function chooseMatches(world: World, owner: number): number[] | null {
+  const pool = singles(world, owner);
+  const gift = (id: number) => {
+    const s = world.settlers.get(id)!;
+    const fam = world.families.get(s.familyId);
+    return SKILLS.reduce((n, k) => n + s.skills[k], 0) + (fam?.boons.length ?? 0) * 100;
+  };
+  pool.sort((a, b) => gift(b.id) - gift(a.id) || a.id - b.id);
+  const pairs: [number, number][] = [];
+  const people = new Set<number>();
+  const unions = new Set<string>();
+  for (const a of pool) {
+    if (pairs.length >= 2 || people.has(a.id)) continue;
+    // A different union of families each time (so the two choices really differ).
+    const b = pool.find((o) => o.familyId !== a.familyId && !people.has(o.id) && !unions.has([a.familyId, o.familyId].sort().join()));
+    if (!b) continue;
+    pairs.push([a.id, b.id]);
+    people.add(a.id).add(b.id);
+    unions.add([a.familyId, b.familyId].sort().join());
+  }
+  return pairs.length === 2 ? pairs.flat() : null;
+}
+
+function blessMatch(world: World, owner: number, a: number, b: number): string {
+  const sa = world.settlers.get(a);
+  const sb = world.settlers.get(b);
+  const home = freeHome(world, owner);
+  if (!sa || !sb || !wed(world, world.players[owner], sa, sb, home)) return 'The match fell through: one of them found another.';
+  const fam = world.families.get(sa.familyId)!;
+  const deed = deedOf(fam);
+  return `${sa.name} and ${sb.name} wed: a new ${fam.surname} house with ${fam.boons.length} boons${deed ? ` and the ${DEEDS[deed].name} deed` : ''}.${home ? '' : ' Build them a home!'}`;
+}
+
 export const VALLEY_EVENTS: ValleyEventDef[] = [
+  {
+    id: 'betrothal',
+    title: 'A Betrothal',
+    icon: '💐',
+    text: 'Two matches are being talked of at the well. Bless one, and the new household inherits the best of both families: their crafts, their boons, their deeds.',
+    weight: 3,
+    when: (w, o) => w.players[o].rank >= 1,
+    setup: chooseMatches,
+    options: [
+      {
+        label: 'Bless the first match',
+        detail: '',
+        describe: (w, _o, d) => ({ label: 'Bless this match', detail: `${matchName(w, d[0])} & ${matchName(w, d[1])}` }),
+        apply: (w, o, d) => blessMatch(w, o, d[0], d[1]),
+      },
+      {
+        label: 'Bless the second match',
+        detail: '',
+        describe: (w, _o, d) => ({ label: 'Bless this match', detail: `${matchName(w, d[2])} & ${matchName(w, d[3])}` }),
+        apply: (w, o, d) => blessMatch(w, o, d[2], d[3]),
+      },
+      { label: 'Let love decide', detail: 'They’ll find their own way', apply: () => 'The gossip moves on to other things.' },
+    ],
+  },
   {
     id: 'trader',
     title: 'A Travelling Trader',
@@ -292,7 +370,13 @@ export function updateValleyEvents(world: World): void {
     let i = 0;
     while (r >= pool[i].weight) r -= pool[i++].weight;
     const def = pool[i];
-    p.event = { id: world.newId(), def: def.id, expires: world.tick + BALANCE.eventTimeout };
+    const data = def.setup ? def.setup(world, p.id) : [];
+    if (!data) {
+      // Not possible right now (e.g. no free home for a match): try again shortly.
+      p.nextEventAt = world.tick + 50;
+      continue;
+    }
+    p.event = { id: world.newId(), def: def.id, expires: world.tick + BALANCE.eventTimeout, data };
     p.lastEvent = def.id;
     world.emit({ type: 'valleyEvent', owner: p.id, eventId: p.event.id, def: def.id });
   }
@@ -302,6 +386,7 @@ export function resolveEvent(world: World, owner: number, eventId: number, optio
   const p = world.players[owner];
   if (!p?.event || p.event.id !== eventId) return;
   const def = VALLEY_EVENTS.find((d) => d.id === p.event!.def);
+  const data = p.event.data ?? [];
   p.event = null;
   p.nextEventAt = world.tick + BALANCE.eventGap[0] + world.rng.int(BALANCE.eventGap[1] - BALANCE.eventGap[0]);
   if (!def) return;
@@ -309,7 +394,7 @@ export function resolveEvent(world: World, owner: number, eventId: number, optio
   let opt = def.options[Math.max(0, Math.min(def.options.length - 1, option))];
   if (!canAfford(world, owner, opt.cost)) opt = def.options[def.options.length - 1];
   pay(world, owner, opt.cost);
-  const text = opt.apply(world, owner);
+  const text = opt.apply(world, owner, data);
   world.emit({ type: 'eventResolved', owner, def: def.id, choice: opt.label, text });
 }
 

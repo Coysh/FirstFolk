@@ -149,30 +149,47 @@ function checkNewcomers(world: World, player: PlayerState): void {
  * the player's lever for breeding lineages.
  */
 function marry(world: World, player: PlayerState, hut: Building): boolean {
-  const single = [...world.settlers.values()].filter((s) => s.owner === player.id && !s.child && !s.elder && s.spouseId === 0);
+  const single = singles(world, player.id);
   for (let i = 0; i < single.length; i++)
     for (let j = i + 1; j < single.length; j++) {
-      const a = single[i];
-      const b = single[j];
-      if (a.familyId === b.familyId) continue;
-      const fa = world.families.get(a.familyId);
-      const fb = world.families.get(b.familyId);
-      if (!fa || !fb) continue;
-      const total = (f: Family) => SKILLS.reduce((n, k) => n + f.skills[k], 0);
-      const senior = total(fa) >= total(fb) ? fa : fb;
-      const fam = createFamily(world, player.id, hut.id, senior.surname);
-      hut.familyId = fam.id;
-      fam.parents = [fa.id, fb.id];
-      for (const k of SKILLS) fam.skills[k] = Math.max(fa.skills[k], fb.skills[k]);
-      for (const id of [...fa.boons, ...fb.boons]) addBoon(fam, id);
-      a.familyId = fam.id;
-      b.familyId = fam.id;
-      a.spouseId = b.id;
-      b.spouseId = a.id;
-      world.emit({ type: 'married', owner: player.id, a: a.id, b: b.id, familyId: fam.id, surname: fam.surname, buildingId: hut.id });
-      return true;
+      if (single[i].familyId === single[j].familyId) continue;
+      if (wed(world, player, single[i], single[j], hut)) return true;
     }
   return false;
+}
+
+/** Unmarried working adults, the candidates for a match. */
+export function singles(world: World, owner: number): Settler[] {
+  return [...world.settlers.values()].filter((s) => s.owner === owner && !s.child && !s.elder && s.spouseId === 0);
+}
+
+/** The first home with nobody in it, or null. */
+export function freeHome(world: World, owner: number): Building | null {
+  for (const b of world.buildings.values()) if (b.owner === owner && b.done && isHome(b.type) && b.familyId === 0) return b;
+  return null;
+}
+
+/**
+ * Two people from different families found a household with both families' best skills and
+ * boons. Without a free home they live as a homeless household until the next one is built.
+ */
+export function wed(world: World, player: PlayerState, a: Settler, b: Settler, hut: Building | null): boolean {
+  const fa = world.families.get(a.familyId);
+  const fb = world.families.get(b.familyId);
+  if (!fa || !fb || fa === fb || a.spouseId || b.spouseId) return false;
+  const total = (f: Family) => SKILLS.reduce((n, k) => n + f.skills[k], 0);
+  const senior = total(fa) >= total(fb) ? fa : fb;
+  const fam = createFamily(world, player.id, hut?.id ?? 0, senior.surname);
+  if (hut) hut.familyId = fam.id;
+  fam.parents = [fa.id, fb.id];
+  for (const k of SKILLS) fam.skills[k] = Math.max(fa.skills[k], fb.skills[k]);
+  for (const id of [...fa.boons, ...fb.boons]) addBoon(fam, id);
+  a.familyId = fam.id;
+  b.familyId = fam.id;
+  a.spouseId = b.id;
+  b.spouseId = a.id;
+  world.emit({ type: 'married', owner: player.id, a: a.id, b: b.id, familyId: fam.id, surname: fam.surname, buildingId: hut?.id ?? 0 });
+  return true;
 }
 
 /**

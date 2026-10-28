@@ -333,7 +333,7 @@ export function outputGood(type: BuildingType): Good | undefined {
 }
 
 /** Points of interest hidden in the fog. Whoever's border covers one first claims it. */
-export type DiscoveryKind = 'cart' | 'ruins' | 'wanderers' | 'grove' | 'oakwood' | 'outcrop' | 'stones' | 'barrow' | 'hermit' | 'spring' | 'shrine' | 'hoard';
+export type DiscoveryKind = 'cart' | 'ruins' | 'wanderers' | 'grove' | 'oakwood' | 'outcrop' | 'stones' | 'barrow' | 'hermit' | 'spring' | 'shrine' | 'hoard' | 'starstone';
 
 export interface DiscoveryDef {
   name: string;
@@ -360,5 +360,6 @@ export const DISCOVERIES: Record<DiscoveryKind, DiscoveryDef> = {
   hoard: { name: 'Buried Hoard', icon: '💰', blurb: 'Silver and fine things hidden long ago. Whoever digs it up is talked of for years.' },
   spring: { name: 'Healing Spring', icon: '💧', blurb: 'Clear, warm water that keeps old folk hale. A landmark: renown while you hold it, and your elders live a year longer.', renown: 3 },
   shrine: { name: 'Forest Shrine', icon: '🕯️', blurb: 'A carved shrine deep in the woods. A landmark: renown while you hold it, and a family is blessed when you first claim it.', renown: 3 },
+  starstone: { name: 'Star-Stone', icon: '☄️', blurb: 'A fallen star, still warm, between the two settlements. The richest landmark in the valley, and it pulls the land around it.', renown: 6, aura: [6, 60] },
   stones: { name: 'Standing Stones', icon: '🗿', blurb: 'A ring of old stones. The land around them follows whoever holds them. A great landmark.', renown: 5, aura: [7, 70] },
 };

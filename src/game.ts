@@ -4,7 +4,7 @@ import { audio, type Sfx } from './audio/audio';
 import { TICK_MS } from './sim/balance';
 import { canPlace } from './sim/commands';
 import { BUILDINGS, DISCOVERIES, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good, type Tool } from './sim/defs';
-import { DEEDS, deedOf, deedTargetProblem, type DeedId } from './sim/deeds';
+import { DEEDS, council, deedOf, deedTargetProblem, type DeedId } from './sim/deeds';
 import { serializeWorld } from './sim/save';
 import { BOONS } from './sim/boons';
 import { eventDef } from './sim/events';
@@ -142,7 +142,23 @@ export class Game {
       this.uiTimer = 0.2;
       this.version.value++;
       this.objectives.value = objectiveStatus(this.world, PLAYER);
+      this.watchCouncil();
     }
+  }
+
+  /** A family rising to the Great Houses is news: it means a new deed to call. */
+  private seated: number[] | null = null;
+  private watchCouncil(): void {
+    const now = council(this.world, PLAYER).map((f) => f.id);
+    if (this.seated)
+      for (const id of now) {
+        if (this.seated.includes(id)) continue;
+        const fam = this.world.families.get(id)!;
+        const deed = DEEDS[deedOf(fam)!];
+        audio.play('objective');
+        this.toast('/assets/icons/people.png', `The ${plural(fam.surname)} rise to the Great Houses: ${deed.icon} ${deed.name} is yours to call.`, 'good');
+      }
+    this.seated = now;
   }
 
   save(manual: boolean): boolean {
@@ -359,6 +375,11 @@ export class Game {
             this.banner.value = { title: `${e.name} ${e.surname} has died`, sub: `A Master to the last, aged ${e.age}. Their legend lives on: ${SKILLS.includes(e.legend) ? TRADES[e.legend].name.toLowerCase() : ''} is faster for all, and +15 renown` };
             setTimeout(() => (this.banner.value = null), 5200);
           } else this.news('/assets/icons/people.png', `${e.name} ${e.surname} has died, aged ${e.age}. The family mourns.`);
+          break;
+        case 'starfall':
+          audio.play('tierUp');
+          this.banner.value = { title: '☄️ A star has fallen!', sub: 'It came down between you and your rival: a Star-Stone, the richest landmark in the valley. Push your border over it first!' };
+          setTimeout(() => (this.banner.value = null), 5600);
           break;
         case 'moot':
           audio.play('tierUp');

@@ -81,7 +81,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     world.step();
     for (const e of world.drainEvents()) {
       const t = fmt(world.tick);
-      if ('owner' in e && e.owner !== 0 && e.type !== 'claimed' && e.type !== 'rankUp') continue;
+      if ('owner' in e && e.owner !== 0 && !['claimed', 'rankUp', 'deed', 'workBegun'].includes(e.type) && !(e.type === 'holdingChanged' && e.from === 0)) continue;
       if (e.type === 'buildingComplete') timeline.push(`${t} built ${e.buildingType}`);
       else if (e.type === 'familyApproaching') timeline.push(`${t} the ${e.surname} family (${e.size}) arrives`);
       else if (e.type === 'objectiveComplete') timeline.push(`${t} ✓ ${e.label}`);
@@ -98,6 +98,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       else if (e.type === 'valleyEvent' && e.owner === 0) timeline.push(`${t} 📜 event: ${e.def}`);
       else if (e.type === 'eventResolved' && e.owner === 0) timeline.push(`${t}    → ${e.choice}: ${e.text}`);
       else if (e.type === 'rivalSighted') timeline.push(`${t} ⚔ rival border sighted`);
+      else if (e.type === 'starfall') timeline.push(`${t} ☄ a star falls at ${e.x},${e.y}`);
+      else if (e.type === 'moot') timeline.push(`${t} 📯 the Moot: landmarks pay double`);
       else if (e.type === 'holdingChanged') {
         if (e.from >= 0) holdingFlips++;
         timeline.push(`${t} ${e.owner === 0 ? '⚑ took' : '⚐ LOST'} the ${e.kind}${e.from < 0 ? ' (unheld)' : ''}`);

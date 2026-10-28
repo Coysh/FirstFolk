@@ -170,6 +170,11 @@ Measured (60 fair duels with origins and omens: `npm run sim -- --seed 100 --min
 | Landmark flips per game | 2.2 | 4.4 |
 | Rival : player | 8 : 8 | 37 : 23, mostly from the Restless Neighbours omen |
 
+### v0.10: surprises and family choices that matter
+- **Star-fall** (`happenings.ts`). Between 15:00 and 16:30 a star comes down between the two settlements. It's placed as equidistant from both halls as the ground allows, preferring unclaimed land. It leaves a **Star-Stone**, the valley's richest landmark (+6★/min, with an aura), visible to both sides at once: a mid-game hotspot like Battle Drones' supply drops. In 16 duels it was claimed 9 times by one side and 7 by the other.
+- **Betrothal** (Valley Event, from Hamlet). The two most promising matches in your town are put to you by name, with their crafts and deeds, e.g. "Edith Thorne, Master Mason (Raise) & Osric Ashby (Expedition)". Bless one, and the new household inherits the best of both families: crafts, boons and so deeds. The player now *breeds* their council, the Spore lever made explicit. A couple with no free home lives as a homeless household until the next one is built. Events can now carry data chosen at draw time (`setup`) and show dynamic options (`describe`).
+- **Council news.** A family rising to the Great Houses is announced along with the deed it brings, so you can see how your families are evolving.
+
 ---
 
 ## 1. Design guardrails
@@ -830,4 +835,35 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 
   These give a reason to try another way next game. The furthest each player has trailed is tracked as `maxDeficit`.
 - **Duels** (15 with origins and omens, seed block 100): median 31.2 min, 2.6 lead changes, **6 of 15 comeback wins**, 4.7 landmark flips per game, idle 9%.
+
+### v0.10.0 Surprises and matches: star-fall, betrothals, council news (2026-10-28)
+- **Built:**
+  - Star-fall and the Star-Stone landmark, with its model, effects and banner;
+  - the Betrothal event, choosing between two named matches that merge families, boons and deeds;
+  - event data and dynamic option text;
+  - `wed()` extracted from automatic marriage, allowing homeless newlyweds;
+  - a toast when the council changes.
+- **Duels caught:**
+  - **Nobody claimed the star.** The bot's "stuck" rule gave up on any site with 3 of its towers within 16 tiles, which is every site in the middle once the borders meet. Now the towers must be within 10. Bot Festivals also target unheld landmarks near the border.
+  - **Betrothals almost never happened.** They needed a free home, and the bot fills homes at once.
+  - **The star landed up to 43 vs 19 tiles from the two halls.** Placement now penalises unequal distance; the worst spread is 31 vs 27.
+- **Fairness check:**
+
+  | Duel setup | Player : rival |
+  |---|---|
+  | Classic starts, no omens | 14 : 16 |
+  | Origins only | 15 : 15 |
+  | Omens only | 9 : 21 |
+
+  The Restless Neighbours omen (the rival thinks 25% faster in about 1 valley in 4) accounts for the tilt, by design.
+- **Per-omen fairness** (12 duels each, seeds 300–311):
+
+  | Omen | Player : rival |
+  |---|---|
+  | None | 7 : 5 |
+  | Restless Neighbours | 3 : 9 (by design) |
+  | Rich Seams | 4 : 8 (worth watching) |
+  | Each of the other six | 7 : 5 or 6 : 6 |
+
+- **Full batch** (60 duels, origins and omens): lengths 22–37 min with medians of 27–30, 2.1 lead changes, 20% comeback wins, idle adults 7–10%, and about 11 landmark flips per game. The tug-of-war over the Star-Stone and the middle of the valley is now constant.
 

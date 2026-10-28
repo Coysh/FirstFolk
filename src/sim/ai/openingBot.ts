@@ -193,7 +193,8 @@ export class OpeningBot {
           at = target && world.territory[world.idx(target.x, target.y)] !== this.owner && outpostSpot(world, this.owner, target.x, target.y) ? target : null;
           break;
         case 'festival': {
-          const contested = world.sites.find((st) => DISCOVERIES[st.kind].renown && st.heldBy !== this.owner && st.heldBy !== NO_OWNER && st.revealed & (1 << this.owner));
+          // A landmark we don't hold (a rival's, or nobody's yet) close to our border.
+          const contested = world.sites.find((st) => DISCOVERIES[st.kind].renown && st.heldBy !== this.owner && st.revealed & (1 << this.owner) && this.edgeToward(world, st));
           at = contested ? this.edgeToward(world, contested) : null;
           break;
         }
@@ -218,10 +219,10 @@ export class OpeningBot {
     return null;
   }
 
-  /** Three of our towers already stand near it and it's still not ours: try somewhere else. */
+  /** Three of our towers already stand right by it and it's still not ours: try somewhere else. */
   private stuckOn(world: World, site: { x: number; y: number }): boolean {
     let near = 0;
-    for (const b of world.buildings.values()) if (b.owner === this.owner && (BUILDINGS[b.type].frontier || b.type === 'outpost') && Math.max(Math.abs(b.x - site.x), Math.abs(b.y - site.y)) <= 16) near++;
+    for (const b of world.buildings.values()) if (b.owner === this.owner && (BUILDINGS[b.type].frontier || b.type === 'outpost') && Math.max(Math.abs(b.x - site.x), Math.abs(b.y - site.y)) <= 10) near++;
     return near >= 3;
   }
 

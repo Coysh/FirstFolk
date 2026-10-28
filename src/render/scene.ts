@@ -203,6 +203,10 @@ export class GameRenderer {
         const y = this.hf.at(e.x + 0.5, e.y + 0.5);
         this.effects.emit('sparkle', e.x + 0.5, y + 1.2, e.y + 0.5, 70);
         this.effects.emit('dust', e.x + 0.5, y + 0.2, e.y + 0.5, 24);
+      } else if (e.type === 'starfall') {
+        const y = this.hf.at(e.x + 0.5, e.y + 0.5);
+        this.effects.emit('sparkle', e.x + 0.5, y + 3, e.y + 0.5, 120);
+        this.effects.emit('dust', e.x + 0.5, y + 0.3, e.y + 0.5, 50);
       } else if (e.type === 'holdingChanged') {
         const p = this.sites.position(this.world, e.siteId);
         if (p && seen(Math.floor(p.x), Math.floor(p.z))) this.effects.emit('sparkle', p.x, p.y + 1.5, p.z, 50);
