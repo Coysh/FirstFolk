@@ -272,12 +272,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 export function HowTo({ onClose }: { onClose: () => void }) {
   const steps = [
     { icon: '/assets/icons/renown.png', title: 'Win renown', text: 'First to 1,400 renown wins, or the most renown when the clock reaches 45:00. From 25:00 the Moot makes landmarks pay double. Landmarks, land, raids, discoveries, Masters, Great Works and Market Day all count.' },
-    { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Families with room and food have children; empty huts draw newcomers; young adults marry into new households.' },
+    { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Free homes and spare food grow your town. All work fills your crafts (top bar): each new star upgrades every workplace of that craft.' },
     { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Lookouts and Watchtowers push your border, but every banner needs a spear: posts need guards (free adults) to push at full strength, and a landmark pays renown only while a manned post watches it. Your rank limits how many posts you can hold.' },
     { icon: '/assets/icons/stockade.png', title: 'Spears and shields', text: 'Wide or tall? A Stockade holds a little land hard and makes a landmark pay more. From 10:00 a Mustering Hall’s huscarls can raid (R) a rival post: the stronger side wins, and a burned post frees its land. Reavers strike the furthest post of whoever spreads widest.' },
     { icon: '/assets/icons/people.png', title: 'Choose your Great Houses', text: 'Your origin seats your first house; you choose a second at Hamlet and a third at Village (letters at the left). Each house gives a plain bonus and one power to call on (Z X C): Raise, Timber Drive, Harvest Home, Expedition, Festival, War-Horn or Shield Wall. Win, and your founding house can found your next valley.' },
     { icon: '/assets/icons/henge.png', title: 'Race for Great Works', text: 'From Village rank: the Stone Circle, Mead Hall and Great Granary. Only one of each in the valley, so finish first! Sell surplus on Market Day for renown.' },
-    { icon: '/assets/icons/berries.png', title: 'Generations', text: 'Winters bite, so stockpile food. Folk grow old, teach their families and die; a Master who dies becomes a legend that makes their craft faster for all.' },
+    { icon: '/assets/icons/berries.png', title: 'Seasons', text: 'Winters bite, so stockpile food: berries sleep and folk eat more, but Fishers keep working.' },
   ];
   return (
     <Modal title="How to Play" onClose={onClose} wide>

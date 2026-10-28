@@ -1333,3 +1333,8 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **Test:** a peaceable rival that falls behind raids a post it can beat.
 - **Measured:** see §0d.
 
+### v0.19.1 Fewer banners, current help (2026-10-28)
+- **Raid warnings are now an urgent toast, not a banner.** The warning strip already shows the march, its countdown and the odds. With war in every game, banners had reached 16 a game; they're back to 5–7 (rank-ups, the star, the Moot, Great Works, the opening).
+- **News on screen:** 2.8–3.9 items a minute across six real duels, against 9.0 before v0.17.
+- **How to Play** no longer describes ageing, families and legends. It covers crafts and seasons.
+

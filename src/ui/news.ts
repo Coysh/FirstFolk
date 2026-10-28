@@ -83,7 +83,8 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
       return e.owner === me ? { channel: 'toast', priority: 2, icon: ICONS.renown, text: `${DEEDS[e.deed].icon} ${e.text}`, tone: 'good' } : null;
     case 'raidLaunched': {
       const name = BUILDINGS[e.buildingType].name;
-      if (e.defender === me) return { channel: 'banner', priority: 3, icon: ICONS.shield, text: `⚔ ${e.owner === NO_OWNER ? 'Reavers' : 'Raiders'} march on your ${name}!`, sub: `${e.strength} strong · ${e.eta}s`, tone: 'warn' };
+      // The warning strip shows the march, its countdown and the odds; this toast just turns heads.
+      if (e.defender === me) return { channel: 'toast', priority: 3, icon: ICONS.shield, text: `⚔ ${e.owner === NO_OWNER ? 'Reavers' : 'Raiders'} march on your ${name}!`, tone: 'warn' };
       if (e.owner === me) return { channel: 'toast', priority: 2, icon: ICONS.shield, text: `⚔ Your huscarls march on their ${name}`, tone: 'info' };
       return null;
     }
