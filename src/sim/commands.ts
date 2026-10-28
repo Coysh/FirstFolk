@@ -8,6 +8,7 @@ import { TRADES } from './trades';
 import { performDeed } from './deeds';
 import { workOwner } from './works';
 import { launchRaid } from './warfare';
+import { placeBridge } from './bridges';
 import type { Building, World } from './world';
 
 /** Every player and AI action goes through a Command so games are replayable and the AI cannot cheat. */
@@ -20,7 +21,8 @@ export type Command =
   | { type: 'sell'; owner: number; good: Good }
   | { type: 'setTrade'; owner: number; good: Good; keep: number | null }
   | { type: 'setAutoHomes'; owner: number; on: boolean }
-  | { type: 'raid'; owner: number; targetId: number };
+  | { type: 'raid'; owner: number; targetId: number }
+  | { type: 'bridge'; owner: number; x: number; y: number; dir: 0 | 1; len: number };
 
 /** What a locked building is waiting for, e.g. "Hamlet" or "Journeyman Carpenter". */
 export function lockLabel(world: World, owner: number, type: BuildingType): string {
@@ -190,6 +192,9 @@ export function applyCommand(world: World, cmd: Command): void {
       if (BUILDINGS[b.type].great) world.emit({ type: 'workBegun', owner: b.owner, buildingType: b.type });
       return;
     }
+    case 'bridge':
+      placeBridge(world, cmd.owner, { x: cmd.x, y: cmd.y, dir: cmd.dir, len: cmd.len });
+      return;
     case 'sell':
       sell(world, cmd.owner, cmd.good);
       return;

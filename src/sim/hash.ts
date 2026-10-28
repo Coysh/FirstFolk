@@ -21,6 +21,7 @@ export function hashWorld(world: World): string {
   for (let i = 0; i < world.territory.length; i++) t = (t * 31 + world.territory[i] + 2 * world.explored[i]) | 0;
   parts.push(t, world.challenge?.def ?? '-', world.challenge?.endsAt ?? 0, world.nextChallengeAt);
   parts.push(world.nextReaversAt);
+  for (const b of world.bridges) parts.push(b.id, b.x, b.y, b.dir, b.len, b.done ? 1 : 0, b.work);
   for (const w of world.warbands) parts.push(w.id, w.owner, w.strength, w.step, w.progress, w.targetId, w.phase, w.members.join());
 
   const str = parts.join('|');

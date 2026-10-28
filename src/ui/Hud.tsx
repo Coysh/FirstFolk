@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { icon, PLAYER, type ClaimPreview, type Game } from '../game';
 import { audio } from '../audio/audio';
 import { ICON } from '../render/overlay';
+import { CALLINGS, CALLING_IDS, CALLING_TIERS, callingScores, callingTitle } from '../sim/callings';
+import { VALLEYS } from '../sim/mapgen';
+import { ORIGIN_IDS } from '../sim/origins';
+import { BRIDGE_MAX, BRIDGE_RANK, bestBridge, bridgeCost } from '../sim/bridges';
 import { BUILDINGS, BUILD_MENU, DISCOVERIES, FOODS, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
 import { HOUSES, HOUSE_TIMEOUT } from '../sim/houses';
@@ -49,9 +53,9 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       {game.marketOpen.value && <Market game={game} />}
       <Threats game={game} />
       {game.mode.value.kind === 'select' && <Council game={game} />}
-      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : <BuildBar game={game} />}
+      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : game.mode.value.kind === 'bridge' ? <BridgeBar game={game} /> : <BuildBar game={game} />}
       <Banner game={game} />
-      <Victory game={game} />
+      <Victory game={game} shell={shell} />
       {game.menuOpen.value && <PauseMenu game={game} shell={shell} />}
       {game.paused.value && !game.menuOpen.value && <div class="paused-tag">Paused</div>}
     </div>
@@ -167,10 +171,60 @@ function SeasonChip({ game }: { game: Game }) {
       <span class={`rank r${rank}`} title="Settlement rank: complete each chapter to rise">
         {RANK_NAMES[rank]}
       </span>
+      <CallingChip game={game} />
       <span class={`season ${season === 3 ? 'winter' : ''} ${warn ? 'warn pulse' : ''}`} title={season === 3 ? 'Winter: berries sleep, folk eat more, building is slower' : `${SEASON_NAMES[season]}: ${left}s left`}>
         {SEASON_ICONS[season]} {warn ? `Winter in ${left}s` : SEASON_NAMES[season]}
       </span>
     </div>
+  );
+}
+
+/** What the town has become: a chip that opens the four callings, how close each is, and what the current one grants. */
+function CallingChip({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const [open, setOpen] = useState(false);
+  const w = game.world;
+  const c = w.players[PLAYER].calling;
+  const title = callingTitle(c);
+  const scores = open ? callingScores(w, PLAYER) : null;
+  return (
+    <span class="calling-wrap">
+      <button class={`calling-chip ${c.id ? `on ${c.id}` : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} title={c.id ? `${title}: ${CALLINGS[c.id].perks[c.tier - 1]}` : 'Your town has no calling yet: it follows what you build'}>
+        {c.id ? (
+          <>
+            <span>{CALLINGS[c.id].icon}</span> {title} <span class="calling-stars">{'★'.repeat(c.tier)}</span>
+          </>
+        ) : (
+          <span class="muted">Calling?</span>
+        )}
+      </button>
+      {open && scores && (
+        <div class="calling-panel panel" role="dialog" aria-label="Your town's calling">
+          <p class="calling-intro">What your town becomes follows what you build and do. The leading calling grants its perks, and it shows beside your hall.</p>
+          {CALLING_IDS.map((id) => {
+            const d = CALLINGS[id];
+            const v = scores[id];
+            const mine = c.id === id;
+            const tier = mine ? c.tier : 0;
+            const next = CALLING_TIERS.find((t) => v < t) ?? CALLING_TIERS[2];
+            return (
+              <div class={`calling-row ${mine ? 'mine' : ''}`} key={id}>
+                <span class="calling-icon">{d.icon}</span>
+                <div class="calling-body">
+                  <strong>
+                    {tier ? d.titles[tier - 1] : d.name} <span class="calling-stars">{'★'.repeat(tier)}{'☆'.repeat(3 - tier)}</span>
+                  </strong>
+                  <div class="calling-bar">
+                    <div style={{ width: `${Math.min(100, (v / CALLING_TIERS[2]) * 100)}%`, background: `#${d.color.toString(16).padStart(6, '0')}` }} />
+                  </div>
+                  <small>{mine ? d.perks[tier - 1] : `${d.earned}. ${v < CALLING_TIERS[0] ? `${CALLING_TIERS[0] - v} more to begin` : `Next tier at ${next}`}`}</small>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -735,6 +789,10 @@ function costChips(type: BuildingType, cost = BUILDINGS[type].cost) {
 function BuildBar({ game }: { game: Game }) {
   useWorldRefresh(game);
   const w = game.world;
+  const bridgeOpen = w.players[PLAYER].rank >= BRIDGE_RANK;
+  // The bridge worth building, re-checked every five seconds of game time (the search walks the map).
+  const hint = useMemo(() => (bridgeOpen ? bestBridge(w, PLAYER) : null), [bridgeOpen, Math.floor(w.tick / 50)]);
+  const hinted = hint && hint.score >= 60 ? hint : null;
   return (
     <nav class="buildbar shelf" aria-label="Build">
       {BUILD_MENU.map((t, i) => {
@@ -767,7 +825,66 @@ function BuildBar({ game }: { game: Game }) {
           </button>
         );
       })}
+      <button
+        class={`card bridge ${bridgeOpen ? '' : 'locked'} ${hinted ? 'hinted' : ''}`}
+        onClick={() => bridgeOpen && game.startBridging(hinted?.span)}
+        aria-disabled={!bridgeOpen}
+        title={bridgeOpen ? `Bridge (B): plank over water of up to ${BRIDGE_MAX} tiles, for ${BALANCE.bridgeCost.logs} logs and ${BALANCE.bridgeCost.stone} stone a tile.${hinted ? ' A bridge nearby would open new ground.' : ''}` : 'Bridge: needs Hamlet rank'}
+      >
+        <span class="hotkey">B</span>
+        {hinted && <span class="card-count hint" title="A bridge nearby would open new ground">★</span>}
+        <span class="card-icon glyph">🌉</span>
+        <span class="card-name">Bridge</span>
+        <span class="card-cost">
+          {bridgeOpen ? (
+            <>
+              <span class="cost"><img src={ICON.logs} alt="Logs" />{BALANCE.bridgeCost.logs}</span>
+              <span class="cost"><img src={ICON.stone} alt="Stone" />{BALANCE.bridgeCost.stone}</span>
+            </>
+          ) : (
+            <span class="lock">🔒 Hamlet</span>
+          )}
+        </span>
+      </button>
     </nav>
+  );
+}
+
+/** Aim a bridge: the span under the pointer, what it costs, and whether it can go up. */
+function BridgeBar({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const g = game.bridgeGhost.value;
+  const touch = game.touchPlacing.value;
+  let hint: string;
+  let tone: 'ok' | 'bad' | 'warn' = 'ok';
+  if (!g) {
+    hint = touch ? 'Tap the water between two banks' : 'Point at water between two banks';
+    tone = 'warn';
+  } else if (!g.check.ok) {
+    hint = g.check.reason ?? 'Cannot bridge here';
+    tone = 'bad';
+  } else hint = touch ? `${g.span.len} tiles: tap it again to build` : `${g.span.len} tiles · click to build · Shift-click for more`;
+  const cost = g ? g.check.cost : bridgeCost(1);
+  return (
+    <div class="placebar panel">
+      <span class="card-icon glyph" style={{ width: '44px', height: '44px', fontSize: '34px' }}>🌉</span>
+      <div class="ptext">
+        <strong>Bridge</strong>
+        <span class={tone}>{hint}</span>
+      </div>
+      <span class="bridge-cost">
+        <span class="cost"><img src={ICON.logs} alt="Logs" />{cost.logs}</span>
+        <span class="cost"><img src={ICON.stone} alt="Stone" />{cost.stone}</span>
+      </span>
+      <div class="pbtns">
+        {touch && (
+          <button class="primary" disabled={!g?.check.ok} onClick={() => game.confirmBridge()}>
+            ✓ Build
+          </button>
+        )}
+        <button onClick={() => game.cancel()}>✕</button>
+      </div>
+    </div>
   );
 }
 
@@ -1028,6 +1145,7 @@ const SOURCE_NAMES: Record<string, string> = {
   contests: 'Challenges',
   raids: 'Raids',
   defence: 'Holding the line',
+  hearth: 'Hearth',
 };
 
 /** Honours for how the game was played: a reason to try another way next time. */
@@ -1060,7 +1178,16 @@ function Awards({ w, won }: { w: World; won: boolean }) {
   );
 }
 
-function Victory({ game }: { game: Game }) {
+/** The roads to renown, in plain words: what a game's renown says about how it was won, and one to try next. */
+const PATHS: { id: string; name: string; sources: string[]; tip: string }[] = [
+  { id: 'realm', name: 'the Realm', sources: ['landmarks', 'land', 'discoveries'], tip: 'Push the border, hold landmarks, and guard them.' },
+  { id: 'trade', name: 'Trade', sources: ['trade'], tip: 'Build storehouses, run a surplus, and sell it: Merchants earn 20% more a tier.' },
+  { id: 'craft', name: 'Craft', sources: ['works', 'masters', 'legends'], tip: 'Quarries, sawpits and the Great Works: Masons raise them for less and are paid more.' },
+  { id: 'hearth', name: 'the Hearth', sources: ['hearth', 'events'], tip: 'Fields, fish and full cradles: a big, well-fed town earns renown every minute.' },
+  { id: 'war', name: 'War', sources: ['raids', 'defence', 'contests'], tip: 'A Mustering Hall, raids on rival posts, and a Stockade at every landmark.' },
+];
+
+function Victory({ game, shell }: { game: Game; shell: Shell }) {
   useWorldRefresh(game);
   const v = game.victory.value;
   if (!v) return null;
@@ -1080,6 +1207,30 @@ function Victory({ game }: { game: Game }) {
           After {formatTime(w.tick)}: <b>{me.renown}★</b> to your rival’s <b>{them?.renown ?? 0}★</b>.
         </p>
         <Awards w={w} won={won} />
+        {(() => {
+          // How the renown was earned, as roads: the biggest, and one the town has barely walked.
+          const by = me.renownBy as Record<string, number>;
+          const totals = PATHS.map((p) => ({ ...p, n: p.sources.reduce((n, k) => n + (by[k] ?? 0), 0) })).sort((a, b) => b.n - a.n);
+          const top = totals[0];
+          const next = totals[totals.length - 1];
+          const title = callingTitle(me.calling);
+          return (
+            <p class="report-path">
+              {title && (
+                <>
+                  Your town became a <b>{CALLINGS[me.calling.id as keyof typeof CALLINGS].icon} {title}</b> in <b>{VALLEYS[w.map.valley].icon} {VALLEYS[w.map.valley].name}</b>.{' '}
+                </>
+              )}
+              {!title && (
+                <>
+                  Played in <b>{VALLEYS[w.map.valley].icon} {VALLEYS[w.map.valley].name}</b>.{' '}
+                </>
+              )}
+              Most of your renown came by <b>{top.name}</b> ({Math.round((top.n / Math.max(1, me.renown)) * 100)}%).
+              {next && next.id !== top.id ? <> Next time, try <b>{next.name}</b>: {next.tip}</> : null}
+            </p>
+          );
+        })()}
         <div class="report-grid">
           <div>
             <h4>Where your renown came from</h4>
@@ -1126,9 +1277,14 @@ function Victory({ game }: { game: Game }) {
           </p>
         )}
         <p class="muted">{won ? 'Keep building as long as you like.' : 'Your folk carry on. A new valley awaits whenever you want a rematch.'}</p>
-        <button class="primary big" onClick={() => (game.victory.value = null)}>
-          Keep playing
-        </button>
+        <div class="report-actions">
+          <button class="primary big" onClick={() => void shell.newGame(Math.floor(Math.random() * 899999) + 100000, w.difficulty, true, ORIGIN_IDS[Math.floor(Math.random() * ORIGIN_IDS.length)])}>
+            ▶ Another valley
+          </button>
+          <button class="big" onClick={() => (game.victory.value = null)}>
+            Keep playing
+          </button>
+        </div>
       </div>
     </div>
   );

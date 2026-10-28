@@ -225,9 +225,9 @@ describe('landmarks need watching', () => {
 describe('a rival with a mood', () => {
   it('a peaceable rival that falls far behind sends its huscarls against a post it can beat', async () => {
     const { OpeningBot } = await import('../src/sim/ai/openingBot');
-    const w = new World({ seed: 2, rivalStyle: 'builder' });
+    const w = new World({ seed: 2, rivalStyle: 'mason' });
     w.ais = [];
-    const bot = new OpeningBot(1, 10, 1, 'builder');
+    const bot = new OpeningBot(1, 10, 1, 'mason');
     w.tick = BALANCE.raidsFrom;
     const theirs = [...w.buildings.values()].find((b) => b.owner === 1 && b.type === 'wagon')!;
     const hall = w.addBuilding('musterhall', 1, theirs.x + 3, theirs.y - 4, true);

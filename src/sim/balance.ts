@@ -55,6 +55,14 @@ export const BALANCE = {
   towerCostPct: 25,
   /** Frontier buildings (towers and outposts) a settlement can hold at each rank: Camp, Hamlet, Village, Town. */
   frontierCap: [4, 6, 9, 12] as number[],
+  /** Bridges: the longest span (tiles), the cost per tile, and the laying time per tile. */
+  bridgeMax: 5,
+  bridgeCost: { logs: 3, stone: 1 },
+  bridgeTicks: secs(5),
+  /** A post within this many tiles of a bridge holds the crossing: its guards fight this much harder (percent). */
+  bridgeWard: [3, 25] as [number, number],
+  /** Each tile of open water or mountain between a post and a tile weakens its influence there by this many percent: rivers and ridges are real borders until a ford, a bridge or a pass crosses them. */
+  barrierPct: 35,
   /** Tiles of reach an unmanned post loses (all of it when no guard stands there; see territory.ts). */
   unmannedReach: 3,
   /** A post's counted guards fall by one at most this often (ticks, a multiple of 20). */

@@ -74,6 +74,10 @@ if (games > 1) {
       `\nbattles the player saw: avg ${avg((r) => r.battles)} · games with none ${reports.filter((r) => !r.battles).length}` +
       `\navg idle ${avg((r) => r.idleAdultPct)}% · avg hungry ${avg((r) => r.hungryPct)}% (worst ${Math.max(...reports.map((r) => r.hungryPct))}%) · avg major gap ${avg((r) => r.longestMajorGapSec)}s · avg stock@20m ${avg((r) => r.stockAt[1] ?? 0)} · avg pop ${avg((r) => r.populationByMinute.at(-1) ?? 0)}`,
   );
+  // How each valley plays: length, who wins, and how much bridging the bots chose.
+  const byValley: Record<string, typeof reports> = {};
+  for (const r of reports) (byValley[r.valley] ??= []).push(r);
+  console.log('by valley:', Object.entries(byValley).map(([v, rs]) => `${v} ×${rs.length} (P ${rs.filter((r) => r.winner === 0).length}:R ${rs.filter((r) => r.winner === 1).length}, bridges ${(rs.reduce((n, r) => n + r.bridges[0] + r.bridges[1], 0) / rs.length).toFixed(1)}/game, pop ${(rs.reduce((n, r) => n + (r.populationByMinute.at(-1) ?? 0), 0) / rs.length).toFixed(0)}, hungry ${(rs.reduce((n, r) => n + r.hungryPct, 0) / rs.length).toFixed(0)}%)`).join(' · '));
   const sources: Record<string, number> = {};
   for (const r of reports) for (const [k, v] of Object.entries(r.renownBy[0])) sources[k] = (sources[k] ?? 0) + (v ?? 0) / reports.length;
   console.log('avg player renown by source:', Object.entries(sources).map(([k, v]) => `${k} ${Math.round(v)}`).join(' · '));

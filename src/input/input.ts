@@ -1,3 +1,4 @@
+import { bestBridge } from '../sim/bridges';
 import { hallOf } from '../sim/warfare';
 import { BUILD_MENU } from '../sim/defs';
 import type { Game } from '../game';
@@ -166,6 +167,7 @@ export class Input {
       const type = BUILD_MENU[HOTKEYS.indexOf(k)];
       if (this.game.world.isUnlocked(0, type)) this.game.startPlacing(type);
     }
+    else if (k === 'b' && this.game.world.players[0].rank >= 1) this.game.startBridging(bestBridge(this.game.world, 0)?.span);
     else if (k === 'f') this.game.focusSelection();
     else if (k === 'm') toggleMute();
     else if (k === 'r' && hallOf(this.game.world, 0)) this.game.startRaid();

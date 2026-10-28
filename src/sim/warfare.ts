@@ -1,6 +1,8 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, GOODS, costTotal } from './defs';
 import { isWalkableTerrain } from './mapgen';
+import { spanTiles } from './bridges';
+import { callingTier } from './callings';
 import { hasOmen } from './omens';
 import { playerMod } from './houses';
 import { addRenown } from './renown';
@@ -54,7 +56,7 @@ export function huscarls(world: World, hall: Building | undefined): number {
 
 /** A warband's strength: its huscarls, plus the settlement's war bonus. */
 export function raidStrength(world: World, owner: number, n: number): number {
-  let s = n * (BALANCE.guardStrength + playerMod(world, owner, 'husc'));
+  let s = Math.floor((n * (BALANCE.guardStrength + playerMod(world, owner, 'husc')) * (100 + 10 * callingTier(world, owner, 'stronghold'))) / 100);
   // Fury of the underdog: a settlement far behind fights a quarter harder (a comeback lever).
   const p = world.players[owner];
   if (p && world.players.some((o) => o.id !== owner && o.renown - p.renown >= BALANCE.underdogGap)) s = Math.floor((s * (100 + BALANCE.underdogFury)) / 100);
@@ -63,8 +65,19 @@ export function raidStrength(world: World, owner: number, n: number): number {
 }
 
 /** How hard a building is to take: its guards, nearby stockades, the hall's ward and huscarls close by. */
+/** A post beside a finished bridge holds the crossing: a narrow place is easy to defend (and the one to burn). */
+export function holdsCrossing(world: World, b: Building): boolean {
+  const r = BALANCE.bridgeWard[0];
+  for (const br of world.bridges)
+    if (br.done && Math.max(Math.abs(br.x - b.x), Math.abs(br.y - b.y)) <= r + br.len) {
+      for (const [x, y] of spanTiles(br)) if (cheb(x, y, b.x, b.y) <= r) return true;
+    }
+  return false;
+}
+
 export function defenceOf(world: World, b: Building): number {
-  let d = Math.floor((b.guarded * BALANCE.guardStrength * (100 + playerMod(world, b.owner, 'guard'))) / 100);
+  const guard = (100 + playerMod(world, b.owner, 'guard') + 10 * callingTier(world, b.owner, 'stronghold')) + (holdsCrossing(world, b) ? BALANCE.bridgeWard[1] : 0);
+  let d = Math.floor((b.guarded * BALANCE.guardStrength * guard) / 100);
   const wall = world.players[b.owner]?.shieldWall;
   if (wall && wall.until > world.tick && cheb(wall.x, wall.y, b.x, b.y) <= BALANCE.shieldWall[0]) d += BALANCE.shieldWall[1];
   for (const o of world.buildings.values()) {
@@ -92,6 +105,7 @@ export function raidProblem(world: World, owner: number, targetId: number): stri
   if (!b || b.owner === owner || b.owner === NO_OWNER || !raidable(b)) return 'Pick a rival tower, outpost or stockade';
   if (!(world.explored[world.idx(b.x, b.y)] & (1 << owner))) return 'Your scouts haven’t seen it';
   if (cheb(b.x, b.y, hall.x, hall.y) > BALANCE.raidReach) return `Too far: raids reach ${BALANCE.raidReach} tiles from the Mustering Hall`;
+  if (!world.sameRegion(world.entranceIdx(hall), world.entranceIdx(b))) return 'No way there on foot: hold a ford, or bridge the water';
   return '';
 }
 
@@ -145,6 +159,8 @@ function skirmish(world: World, band: Warband): void {
   if (target && won) {
     // Spoils grow with what the post cost; an unmanned post is a poor prize.
     renown = Math.min(BALANCE.raidSpoils[1], BALANCE.raidSpoils[0] + Math.floor(costTotal(target.cost) / 2));
+    // A stronghold's raiders bring home richer spoils: +25% a tier.
+    if (band.owner !== NO_OWNER) renown = Math.floor((renown * (100 + 25 * callingTier(world, band.owner, 'stronghold'))) / 100);
     if (!target.guarded) renown = Math.floor(renown / 2);
     raze(world, target);
     if (band.owner !== NO_OWNER) {

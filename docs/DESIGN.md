@@ -584,6 +584,81 @@ Buildings at most 2,600 triangles, wild props at most 1,200, the settler at most
 
 ---
 
+## 0g. The Many Valleys Pass (v0.22+): geography that changes the game, and economies that can win
+
+The brief: every game should feel different; an economic path should compete with expansion and war; towns should become *something* through how they are built; and someone who finishes should want another round. The evidence came first, then the fixes.
+
+### What the playtests said
+- **Every valley was the same valley.** One north-south river, two fords at fixed heights, two fixed lakes, the same starts. Only the noise changed.
+- **Territory ignored the land.** Influence spread radially, so a tower on one bank claimed the other bank as if the water weren't there. Rivers could never be a border, so crossings and chokepoints never mattered.
+- **Economy could not win.** Renown came about 55% from landmarks and land, and the rest in small capped sums (trade averaged about 125 a game). In the strategy matrix the economy-minded Builder sat at 36% in every configuration, and once geography mattered, the expansion-first style rose to 58–76%.
+
+### Six valleys (`mapgen.ts`)
+A seed picks a valley (`valleyOf`, so the New Game screen can name it first, and let you pick a kind). Every strategic feature is built **point-symmetric about the map centre**, so both settlements get the same geography; start resource clusters turn to whichever way the land is best (judged by the thinnest cluster), then mirror.
+
+| Valley | What it is | What it asks |
+|---|---|---|
+| **Riverlands** | One river with a random course and orientation, 1–2 fords (or a single central one), a pond | Hold the ford, or bridge it |
+| **Long Lake** | An hourglass lake with the starts on opposite shores and a **prize island** (the Star-Stone) in the narrows | Bridge the narrows (two short spans) or walk the long way round |
+| **Highlands** | A mountain ridge with 1–3 passes, very rock-rich, thin timber and berries | Fortify the passes; trade for food |
+| **Three Rivers** | Two parallel rivers with offset fords, and a rich middle strip with the best prizes | Each side must ford twice to reach the centre |
+| **Wildwood** | Dense forest, two narrow crossing streams, scarce berries | Fish, trade, clear the land |
+| **Fens** | A dozen ponds, shallows and winding dry routes | Fish aplenty; bridges shorten everything |
+
+- **Always playable:** the generator verifies both starts are joined by land and falls back to the Riverlands if not (it did on 1% of 300 seeds). Fords were once circles too small to span a river on a bend; their reach now scales with the river's width, which took failures from 5% to 1%.
+- **Fair enough:** over 200 seeds, start-resource ratios in the worst case are 0.17–0.5, better than the old generator's 0.11–0.29, and every start has at least 15 trees, 4 rocks and 4 bushes in reach.
+- **Tested** (`tests/mapgen.test.ts`): all six appear, every one is playable, the geography really differs (Highlands ≥1.8× the rock and ≤0.6× the timber of the Riverlands, and so on), and the Long Lake island cannot be walked to but is within bridging distance.
+
+### Rivers are borders now (`territory.ts`)
+Each tile of open water or mountain between a post and a tile weakens its influence there by 35% (`BALANCE.barrierPct`), so a river of three or four tiles blocks a claim entirely and a ridge is a wall. A ford, a bridge or a mountain pass lets a border through along it. A post that holds a crossing fights harder (+25% for guards within 3 tiles of a bridge, `holdsCrossing`), and a raid is only offered against a post the huscarls can walk to.
+
+### Bridges (`bridges.ts`, `render/bridges.ts`)
+- A bridge is a span of 1–5 plank tiles joining two banks, for **3 logs and 1 stone a tile**, laid by the crew in 5 seconds a tile, from Hamlet. It needs one bank inside your border and the other to be dry land.
+- It is a Command (`bridge`), so the scripted player uses exactly what you do. `bestBridge` finds the span that opens the most ground (and unclaimed landmarks) and drives both the bot and a **★ hint** on the Bridge card; one click starts bridge mode with that span already aimed. On touch, the first tap aims and a second tap on the same span builds it. Hotkey **B**.
+- State is `world.bridges` (saved) plus `world.deck` (rebuilt on load); a finished deck is walkable water. The plank bridge has rope rails, piers, and lanterns that glow at night, and goes up plank by plank.
+- **Pathing got faster, not slower.** The new maps made failed searches expensive (45 s for six games against 13 s). Now connected regions of walkable ground are labelled once (rebuilt when a bridge opens), so a path to anything across the water is refused instantly, and gatherers skip nodes they cannot reach. Six games take about 5 s.
+
+### Callings: a town becomes something (`callings.ts`)
+Identity is **read off the town, never chosen**. Four scores follow what you build and do; the leader, if it leads the runner-up by 15%, is recognised at three tiers (scores 10, 22 and 40), and it takes a 30% lead to change an established calling (so identity never flickers).
+
+| Calling | Earned by | Each tier gives |
+|---|---|---|
+| **Merchants** (Market Town, Trading Town, Free Port) | Storehouses, the Great Granary, goods sold | Goods sell for **+20%**; the market's glut clears twice and three times as fast |
+| **Masons** (Quarry Town, Mason's Hold, Citadel of Works) | Quarries, sawpits, Great Works, stone and wood crafts | Great Works cost **15% less** and pay **50 more renown**; stone and timber work 8% faster |
+| **Wardens** (Garrison Town, Stronghold, Fortress) | Towers, stockades, the hall, raids won and repelled | Guards fight 10% harder and **eat less** (free at tier 3); raid spoils +25%; **+1 post at tier 2, +2 at tier 3** |
+| **Hearthfolk** (Farmstead, Hearth Town, Harvest Hall) | Foragers, fishers, homes, a well-fed town | Gatherers 8% faster, births 10% sooner, and **renown a minute for a fed, large town** |
+
+- **Visible:** a signature cluster grows behind the hall and larger with each tier (market stalls with striped awnings; a stone yard with a smoking forge and crane; a drill yard and palisade; haystacks, beehives, cabbage beds and a scarecrow), with a shower of sparks when it appears. A **calling chip** in the top bar opens all four with progress bars and what earns each.
+- **Quiet:** one toast when a calling is found or deepened. Nothing to manage, no menus.
+- **The scripted players now play economies.** The Builder style (never raided, claimed fewer landmarks) is replaced by **Trader, Mason and Hearthfolk**, each building toward its calling after the frontier, and Raider and Warden pursue the Stronghold. A bug the matrix exposed: their calling-building ideas sat ahead of the frontier idea, so they never pushed the border (4 towers against 8) and sat at 19–32%; frontier first, calling second fixed that.
+
+### Measured (strategy matrix: 12 seeds × both sides, origins, 7 styles, three seed blocks)
+| Style (what it builds toward) | Seeds 100 | Seeds 300 | Seeds 500 | **Average** |
+|---|---|---|---|---|
+| Balanced | 49% | 56% | 46% | **50%** |
+| Expander (the Realm) | 48% | 60% | 60% | **56%** |
+| Trader (Merchants) | 60% | 41% | 50% | **50%** |
+| Mason (Masons) | 42% | 46% | 53% | **47%** |
+| Hearthfolk (Hearth) | 55% | 55% | 51% | **54%** |
+| Raider (Wardens, raids) | 51% | 44% | 47% | **47%** |
+| Warden (Wardens, defence) | 46% | 49% | 44% | **46%** |
+
+Median length **35–36 min**, about 2.3 lead changes and about 20% comebacks. For comparison, with six valleys but no callings, Expander won 58%, 66% and 76% of its duels and the Builder fell to 31%; with the callings but the bots' building priorities wrong, Mason and Hearth sat at 19–32%. Every one of the three economy styles is now a real way to win, and no style averages above 56%.
+
+### The end of a game
+The report now names what the town became and the valley it was played in, says in plain words **how the renown was earned** (the Realm, Trade, Craft, the Hearth, War), names the road least walked ("Next time, try Trade: build storehouses...") and offers **▶ Another valley**, which starts a new game on a new valley and a new founder at once. The New Game screen shows the valley's kind, its blurb, and six icons to pick a kind.
+
+### Typography
+The serif is gone. Headings use **Bricolage Grotesque** (a warm, slightly quirky modern grotesque) and text uses **Nunito Sans**, both self-hosted variable fonts (126 KB, no third-party request, works offline).
+
+### Open
+- **Mason** is the weakest persona (about 42%): Great Works are a race, and the Masons' edge only helps once they win one.
+- **Expander** is still the strongest (about 55–60%) and the style most helped by rivers being borders; it deserves a deliberate counter next (raiders crossing at the fords it ignores).
+- **Roads.** Worn footpaths are still only decoration; letting them speed travel would reward clever layout.
+- Valleys could shape *rivals* too (a rival that bridges to flank you, or holds the far ford).
+
+---
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -1474,3 +1549,15 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **Harness:** `hungryPct` in the report and the sim summary; `tools/showcase.mjs` gallery with `--night`.
 - **Tests:** `tests/larder.test.ts` (the famine bug), and `tests/art.test.ts` covers every model.
 - **No save-format change.**
+
+### v0.22.0 The Many Valleys Pass (2026-10-28)
+- **Fonts:** Bricolage Grotesque headings and Nunito Sans text, self-hosted; the serif is gone.
+- **Six valleys:** Riverlands, Long Lake (with a prize island), Highlands, Three Rivers, Wildwood and Fens, all point-symmetric and always connected by land. `tools/valleys.ts` draws them and measures the generator; the New Game screen names the valley and lets you pick a kind. **Maps changed, so `SAVE_VERSION` is 19 and older saves are refused.**
+- **Rivers and ridges are borders:** water and mountains weaken influence (`barrierPct`), so crossings matter. A raid is only offered against a post you can reach.
+- **Bridges:** a new Command and mode (hotkey B, a ★ hint on the card, two-tap on touch), built plank by plank for 3 logs and 1 stone a tile; the bots use them; posts that hold a crossing fight 25% harder.
+- **Pathing:** connected-region labels reject unreachable paths instantly and gatherers skip unreachable nodes (6 games: 45 s to about 5 s).
+- **Callings:** Merchants, Masons, Wardens and Hearthfolk are read off the town, with three tiers each, real perks, a signature cluster beside the hall, a top-bar chip and one quiet toast.
+- **Bots:** Trader, Mason and Hearthfolk replace the Builder; calling-building comes after the frontier. The matrix now has seven styles.
+- **End of a game:** the town's calling and valley, how the renown was earned, a road to try next, and **▶ Another valley**.
+- **Harness:** `valley` and `bridges` in the playtest report and a per-valley summary line; `tools/valleys.ts`, `tools/fairness.ts`, `tools/bridge-shot.mjs`, `tools/calling-shot.mjs`.
+- **Tests:** valleys (variety, playability, geography, the island), bridges (spans, rules, laying, the island opened, save/load), callings (thresholds, hysteresis and every effect). 146 pass.

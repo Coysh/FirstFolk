@@ -7,6 +7,8 @@ export interface PartOpts {
   pos?: Vec3;
   rot?: Vec3;
   scale?: Vec3;
+  /** Per-vertex sway weight for the whole part (see withSway): 0..1 flutters, 2+ glows at night. */
+  sway?: number;
 }
 
 const tmpColor = new THREE.Color();
@@ -40,7 +42,7 @@ export class ModelBuilder {
     }
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     // Wind flutter weight for pennants (0 for everything built in code); see withSway in wind.ts.
-    g.setAttribute('sway', new THREE.BufferAttribute(new Float32Array(n), 1));
+    g.setAttribute('sway', new THREE.BufferAttribute(new Float32Array(n).fill(opts.sway ?? 0), 1));
     this.parts.push(g);
     return this;
   }

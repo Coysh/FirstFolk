@@ -7,7 +7,7 @@ import type { Effects } from './effects';
 import { buildingGeometry, goodGeometry, scaffoldGeometry } from './models';
 import { ModelBuilder, box } from './modelBuilder';
 import type { HeightField } from './terrain';
-import { artParts } from './art';
+import { artGeometry, artParts } from './art';
 import { nightLevel, windTime, withSway } from './wind';
 
 interface View {
@@ -45,6 +45,8 @@ export class BuildingsView {
   private scaffoldGeo = scaffoldGeometry();
   /** Warm pools of light on the ground by every lived-in building after dusk: one instanced draw call. */
   private pools: THREE.InstancedMesh;
+  /** The cluster that grows beside each hall as its town finds a calling (market stalls, a stone yard, a drill yard, a garden). */
+  private callingProps = new Map<number, { mesh: THREE.Mesh; key: string; smoke: number; smokeAt: [number, number, number] | null }>();
   private plinthGeo = new ModelBuilder().add(box(1.84, 1.0, 1.84), 0x8f7f5c, { pos: [0, -0.52, 0] }).build();
   private goodGeo = Object.fromEntries(GOODS.map((g) => [g, goodGeometry(g)])) as Record<Good, THREE.BufferGeometry>;
   /** Called when a construction finishes or a workplace transforms (for sounds / floaters). */
@@ -96,6 +98,7 @@ export class BuildingsView {
       }
     }
     this.updatePools(world);
+    this.updateCallingProps(world, dt);
     for (const b of world.buildings.values()) {
       // Other settlements stay hidden until your folk have explored their land.
       const seen = b.owner === 0 || (world.explored[world.idx(b.x, b.y)] & 1) !== 0;
@@ -107,6 +110,59 @@ export class BuildingsView {
       if (!v) v = this.create(b);
       v.group.visible = true;
       this.updateView(world, b, v, dt);
+    }
+  }
+
+  /** Where a settlement's calling cluster stands (beside and behind its hall), if it has one. */
+  callingSpot(owner: number): THREE.Vector3 | null {
+    const p = this.callingProps.get(owner);
+    return p && p.mesh.visible ? p.mesh.position.clone() : null;
+  }
+
+  private updateCallingProps(world: World, dt: number): void {
+    for (const pl of world.players) {
+      const hall = [...world.buildings.values()].find((b) => b.owner === pl.id && b.type === 'wagon');
+      const seen = hall && (pl.id === 0 || (world.explored[world.idx(hall.x, hall.y)] & 1) !== 0);
+      const key = pl.calling.id && pl.calling.tier ? pl.calling.id : '';
+      let v = this.callingProps.get(pl.id);
+      if (!v) {
+        const mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.visible = false;
+        this.group.add(mesh);
+        v = { mesh, key: '', smoke: 0, smokeAt: null };
+        this.callingProps.set(pl.id, v);
+      }
+      if (!seen || !key || !hall) {
+        v.mesh.visible = false;
+        continue;
+      }
+      if (v.key !== key) {
+        const g = artGeometry(`calling_${key}`);
+        v.key = key;
+        v.mesh.visible = !!g;
+        if (g) v.mesh.geometry = g;
+        const sm = g?.userData.smoke as [number, number, number] | undefined;
+        v.smokeAt = sm ?? null;
+      }
+      // It grows with the tier, and stands behind and beside the hall, on the ground it finds there.
+      const scale = [0, 0.85, 1.05, 1.25][pl.calling.tier];
+      const x = hall.x + 1 - 2.4;
+      const z = hall.y + 1 - 1.5;
+      v.mesh.position.set(x, this.hf.at(x, z), z);
+      const grew = v.mesh.scale.x !== scale;
+      v.mesh.scale.setScalar(scale);
+      v.mesh.visible = true;
+      if (grew) {
+        // It has just appeared or deepened: a shower of sparks over it.
+        this.effects.emit('sparkle', x, v.mesh.position.y + 1, z, 44);
+        this.effects.emit('dust', x, v.mesh.position.y + 0.2, z, 14);
+      }
+      if (v.smokeAt && (v.smoke -= dt) <= 0) {
+        this.effects.emit('smoke', x + v.smokeAt[0] * scale, v.mesh.position.y + v.smokeAt[1] * scale, z + v.smokeAt[2] * scale, 1);
+        v.smoke = 0.5;
+      }
     }
   }
 

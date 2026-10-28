@@ -1,6 +1,7 @@
 import { BALANCE } from './balance';
 import { GOODS, type Good } from './defs';
 import { pay } from './events';
+import { callingTier } from './callings';
 import { addRenown } from './renown';
 import type { World } from './world';
 
@@ -15,7 +16,8 @@ export const FAIR_VALUE: Record<Good, number> = { logs: 3, planks: 6, stone: 4, 
 
 export function fairPrice(world: World, owner: number, good: Good): number {
   const glut = world.players[owner]?.glut[good] ?? 0;
-  return Math.floor((FAIR_VALUE[good] * 100) / (100 + glut));
+  // Merchants get more for the same goods: +20% a tier.
+  return Math.floor((FAIR_VALUE[good] * (100 + 20 * callingTier(world, owner, 'trader'))) / (100 + glut));
 }
 
 export const marketOpen = (world: World, owner: number) => (world.players[owner]?.rank ?? 0) >= 1;
@@ -45,7 +47,8 @@ export function setTrade(world: World, owner: number, good: Good, keep: number |
 
 /** The glut eases (every 2 s), and standing orders sell (every 20 s). */
 export function updateMarket(world: World): void {
-  for (const p of world.players) for (const g of GOODS) if (p.glut[g] > 0) p.glut[g]--;
+  // The glut eases; a trading town's markets recover faster (twice, three times as fast).
+  for (const p of world.players) for (const g of GOODS) if (p.glut[g] > 0) p.glut[g] = Math.max(0, p.glut[g] - 1 - callingTier(world, p.id, 'trader'));
   if (world.tick % BALANCE.routeEvery !== 15) return;
   for (const p of world.players)
     for (const g of GOODS) {

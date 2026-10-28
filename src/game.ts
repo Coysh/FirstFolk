@@ -1,3 +1,4 @@
+import { canBridge, spanAt, type BridgeCheck, type Span } from './sim/bridges';
 import { signal } from '@preact/signals';
 import * as THREE from 'three';
 import { audio, type Sfx } from './audio/audio';
@@ -24,7 +25,7 @@ import { newsFor, type News } from './ui/news';
 
 export const PLAYER = 0;
 
-export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; seat: number; deed: DeedId } | { kind: 'raid' };
+export type Mode = { kind: 'select' } | { kind: 'place'; type: BuildingType } | { kind: 'deed'; seat: number; deed: DeedId } | { kind: 'raid' } | { kind: 'bridge' };
 export type Selection = { kind: 'building'; id: number } | { kind: 'settler'; id: number } | null;
 
 export interface Toast {
@@ -88,6 +89,8 @@ export class Game {
   readonly menuOpen = signal(false);
   readonly mode = signal<Mode>({ kind: 'select' });
   readonly ghost = signal<GhostState | null>(null);
+  /** The bridge being aimed: the span under the pointer (or the suggested one) and whether it can be built. */
+  readonly bridgeGhost = signal<{ span: Span; check: BridgeCheck } | null>(null);
   readonly selection = signal<Selection>(null);
   /** Bumped a few times a second; UI components read the world when it changes. */
   readonly version = signal(0);
@@ -486,8 +489,52 @@ export class Game {
     this.view.setGhost(null);
   }
 
+  /** Bridge mode: aim at water between two banks. With a suggestion (the best bridge), the ghost starts there. */
+  startBridging(suggest?: Span | null): void {
+    audio.play('click');
+    this.mode.value = { kind: 'bridge' };
+    this.selection.value = null;
+    this.ghost.value = null;
+    this.view.setGhost(null);
+    this.aimBridge(suggest ?? null);
+    if (suggest) this.view.rig.lookAt(suggest.x + 0.5, suggest.y + 0.5);
+  }
+
+  private aimBridge(span: Span | null): void {
+    if (!span) {
+      this.bridgeGhost.value = null;
+      this.view.setBridgeGhost(null, false);
+      return;
+    }
+    const check = canBridge(this.world, PLAYER, span);
+    this.bridgeGhost.value = { span, check };
+    this.view.setBridgeGhost(span, check.ok);
+  }
+
+  private updateBridgeGhost(sx: number, sy: number): void {
+    const p = this.view.groundAt(sx, sy);
+    if (!p) return;
+    const span = spanAt(this.world, Math.floor(p.x), Math.floor(p.z));
+    const prev = this.bridgeGhost.value?.span;
+    if (span && prev && prev.x === span.x && prev.y === span.y && prev.dir === span.dir && prev.len === span.len) return;
+    // Pointing at something that cannot be bridged keeps the last good aim, so a touch tap can't lose it.
+    if (span || !this.touchPlacing.value) this.aimBridge(span);
+  }
+
+  confirmBridge(keep = false): void {
+    const g = this.bridgeGhost.value;
+    if (!g || !g.check.ok) return;
+    this.world.enqueue({ type: 'bridge', owner: PLAYER, ...g.span });
+    audio.play('click');
+    if (!keep) this.cancel();
+  }
+
   cancel(): void {
-    if (this.mode.value.kind === 'raid') {
+    if (this.mode.value.kind === 'bridge') {
+      this.mode.value = { kind: 'select' };
+      this.bridgeGhost.value = null;
+      this.view.setBridgeGhost(null, false);
+    } else if (this.mode.value.kind === 'raid') {
       this.mode.value = { kind: 'select' };
       this.raidPreview.value = null;
     } else if (this.mode.value.kind === 'deed') {
@@ -503,6 +550,10 @@ export class Game {
   }
 
   hover(sx: number, sy: number): void {
+    if (this.mode.value.kind === 'bridge') {
+      this.updateBridgeGhost(sx, sy);
+      return;
+    }
     if (this.mode.value.kind === 'place') {
       this.updateGhost(sx, sy);
       return;
@@ -524,6 +575,15 @@ export class Game {
   tap(sx: number, sy: number, touch: boolean, keepPlacing = false): void {
     audio.start();
     const mode = this.mode.value;
+    if (mode.kind === 'bridge') {
+      // Mouse: click builds the span under the pointer. Touch: the first tap aims, a tap on the same span builds it.
+      const before = this.bridgeGhost.value?.span;
+      this.touchPlacing.value = touch;
+      this.updateBridgeGhost(sx, sy);
+      const now = this.bridgeGhost.value?.span;
+      if (!touch || (before && now && before.x === now.x && before.y === now.y && before.dir === now.dir && before.len === now.len)) this.confirmBridge(keepPlacing);
+      return;
+    }
     if (mode.kind === 'deed') {
       // Touch: the first tap aims (with a preview), the ✓ button confirms. Mouse: click to do it.
       this.deedPreview.value = null;

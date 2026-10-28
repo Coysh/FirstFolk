@@ -18,6 +18,7 @@ const SMALL = [
 const GREAT = ['henge', 'meadhall', 'granary'];
 const BUILDINGS = [...SMALL, ...GREAT];
 const LANDMARKS = Object.keys(DISCOVERIES).map((k) => `discovery_${k}`);
+const CALLING_PROPS = ['calling_trader', 'calling_masons', 'calling_stronghold', 'calling_hearth'];
 const SETTLER_PARTS = ['settler_body', 'settler_head', 'settler_hair', 'settler_hood', 'settler_arm', 'settler_leg'];
 
 const tris = (key: string) => artGeometry(key)!.getAttribute('position').count / 3;
@@ -38,7 +39,7 @@ beforeAll(async () => {
 
 describe('Blender art', () => {
   it('ships every expected model, and a prop for every discovery', () => {
-    for (const k of [...BUILDINGS, ...LANDMARKS, ...SETTLER_PARTS]) expect(hasArt(k), k).toBe(true);
+    for (const k of [...BUILDINGS, ...LANDMARKS, ...CALLING_PROPS, ...SETTLER_PARTS]) expect(hasArt(k), k).toBe(true);
   });
 
   it('keeps the files small', () => {
@@ -49,14 +50,14 @@ describe('Blender art', () => {
 
   it('stays inside its triangle budgets', () => {
     for (const k of BUILDINGS) expect(tris(k), k).toBeLessThanOrEqual(2600);
-    for (const k of LANDMARKS) expect(tris(k), k).toBeLessThanOrEqual(1200);
+    for (const k of [...LANDMARKS, ...CALLING_PROPS]) expect(tris(k), k).toBeLessThanOrEqual(1200);
     // A hundred settlers should cost about as little as they ever did.
     const settler = ['settler_body', 'settler_head', 'settler_hair', 'settler_hood'].reduce((n, k) => n + tris(k), 0) + 2 * tris('settler_arm') + 2 * tris('settler_leg');
     expect(settler).toBeLessThanOrEqual(420);
   });
 
   it('bakes the geometry layout the renderer expects', () => {
-    for (const k of [...BUILDINGS, ...LANDMARKS, ...SETTLER_PARTS]) {
+    for (const k of [...BUILDINGS, ...LANDMARKS, ...CALLING_PROPS, ...SETTLER_PARTS]) {
       const g = artGeometry(k)!;
       expect(g.index, k).toBeNull();
       expect(g.getAttribute('color').itemSize, k).toBe(3);
@@ -76,7 +77,7 @@ describe('Blender art', () => {
       expect(box.min.y, k).toBeGreaterThan(-0.05);
       expect(box.max.y, k).toBeGreaterThan(0.8);
     }
-    for (const k of LANDMARKS) {
+    for (const k of [...LANDMARKS, ...CALLING_PROPS]) {
       const box = artGeometry(k)!.boundingBox!;
       expect(box.min.x, k).toBeGreaterThan(-1.3);
       expect(box.max.x, k).toBeLessThan(1.3);

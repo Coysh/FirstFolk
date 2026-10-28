@@ -50,6 +50,9 @@ export interface PlaytestReport {
   populationByMinute: number[];
   /** Frontier buildings (towers and outposts) finished by [player, rival]: is spam paying? */
   towers: number[];
+  /** The valley this game was played in, and bridges finished by [player, rival]. */
+  valley: string;
+  bridges: number[];
   /** Share of the game the player's town was hungry (births, newcomers and work all slow while it is). */
   hungryPct: number;
   /** Each side's bot style. */
@@ -112,6 +115,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   let firstJourneyman = -1;
   const total = minutes * 60 * TICK_HZ;
   let hungryTicks = 0;
+  const bridges = [0, 0];
   for (let i = 0; i < total; i++) {
     if (victoryTick >= 0 && world.tick > victoryTick + 60 * TICK_HZ) break;
     bot.update(world);
@@ -122,6 +126,10 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       const n = newsFor(world, e, 0);
       if (n) newsItems.push({ tick: world.tick, news: n });
       if (e.type === 'buildingComplete' && BUILDINGS[e.buildingType].capped) towers[e.owner]++;
+      if (e.type === 'bridgeBuilt') {
+        bridges[e.owner]++;
+        if (e.owner === 0) timeline.push(`${t} 🌉 bridge (${e.len} tiles)`);
+      }
       if (e.type === 'raidLaunched' && e.owner >= 0) raids[e.owner]++;
       if (e.type === 'raidLaunched' && (e.owner === 0 || e.defender === 0)) battles++;
       if (e.type === 'raidLaunched' && e.owner < 0) reavers[e.defender]++;
@@ -229,6 +237,8 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     territoryByMinute,
     populationByMinute,
     towers,
+    valley: world.map.valley,
+    bridges,
     hungryPct: Math.round((1000 * hungryTicks) / Math.max(1, world.tick)) / 10,
     styles: world.players.map((p) => p.style),
     raids,

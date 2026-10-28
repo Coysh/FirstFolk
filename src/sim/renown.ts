@@ -2,13 +2,14 @@ import { BALANCE, TICK_HZ } from './balance';
 import { BUILDINGS, DISCOVERIES } from './defs';
 import type { World } from './world';
 import { hasOmen } from './omens';
+import { callingTier } from './callings';
 
 /**
  * Renown is the score both settlements race for. It comes from many places, so there are
  * many ways to win: holding landmarks and land (a steady income that can be taken from you),
  * discoveries, Masters, family deeds and great works (one-off sums).
  */
-export type RenownSource = 'landmarks' | 'land' | 'discoveries' | 'masters' | 'goals' | 'events' | 'deeds' | 'legends' | 'works' | 'trade' | 'contests' | 'raids' | 'defence';
+export type RenownSource = 'landmarks' | 'land' | 'discoveries' | 'masters' | 'goals' | 'events' | 'deeds' | 'legends' | 'works' | 'trade' | 'contests' | 'raids' | 'defence' | 'hearth';
 
 export function addRenown(world: World, owner: number, n: number, source: RenownSource, x = -1, y = -1): void {
   const p = world.players[owner];
@@ -63,7 +64,9 @@ export function updateRenown(world: World): void {
   for (const p of world.players) {
     p.maxDeficit = Math.max(p.maxDeficit, top - p.renown);
     const rate = renownRate(world, p.id);
-    const sources = [['landmarks', rate.landmarks], ['land', rate.land]] as const;
+    // A hearth town in good health earns renown for it: a fed, housed people is a prosperous one.
+    const hearth = p.hungry ? 0 : Math.floor(world.population(p.id) / 18) * callingTier(world, p.id, 'hearth');
+    const sources = [['landmarks', rate.landmarks], ['land', rate.land], ['hearth', hearth]] as const;
     sources.forEach(([source, perMin], k) => {
       p.renownFrac[k] += perMin * BALANCE.renownTick;
       const whole = Math.floor(p.renownFrac[k] / minute);

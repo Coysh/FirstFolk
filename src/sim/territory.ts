@@ -99,15 +99,34 @@ function settle(world: World, sources: InfluenceSource[], out: Int8Array, skipId
   const players = world.players.length;
   if (scratch.length !== players || scratch[0]?.length !== n) scratch = world.players.map(() => new Int32Array(n));
   for (const a of scratch) a.fill(0);
+  const barrier = world.barriers();
+  const size = world.size;
   for (const src of sources) {
     const inf = scratch[src.owner];
     if (!inf) continue;
     const rr = src.r * src.r + src.r;
-    for (let y = Math.max(0, src.y - src.r); y <= Math.min(world.size - 1, src.y + src.r); y++)
-      for (let x = Math.max(0, src.x - src.r); x <= Math.min(world.size - 1, src.x + src.r); x++) {
+    const y0 = Math.max(0, src.y - src.r);
+    const y1 = Math.min(size - 1, src.y + src.r);
+    const x0 = Math.max(0, src.x - src.r);
+    const x1 = Math.min(size - 1, src.x + src.r);
+    // Open ground all round (the common case): no need to look for water or mountains in the way.
+    let walled = false;
+    for (let y = y0; y <= y1 && !walled; y++) for (let x = x0; x <= x1; x++) if (barrier[y * size + x]) { walled = true; break; }
+    for (let y = y0; y <= y1; y++)
+      for (let x = x0; x <= x1; x++) {
         const d2 = (x - src.x) ** 2 + (y - src.y) ** 2;
         if (d2 > src.r * src.r) continue;
-        inf[y * world.size + x] += Math.floor((src.p * (rr - d2)) / rr);
+        let v = Math.floor((src.p * (rr - d2)) / rr);
+        if (walled && v > 0) {
+          // Count the water and mountain tiles on the straight line from the post to this tile.
+          const dx = x - src.x;
+          const dy = y - src.y;
+          const steps = Math.max(Math.abs(dx), Math.abs(dy));
+          let blocked = 0;
+          for (let k = 1; k < steps; k++) blocked += barrier[(src.y + Math.round((dy * k) / steps)) * size + src.x + Math.round((dx * k) / steps)];
+          if (blocked) v = Math.floor((v * Math.max(0, 100 - blocked * BALANCE.barrierPct)) / 100);
+        }
+        inf[y * size + x] += v;
       }
   }
   // Footprints and entrances always belong to their building's owner.

@@ -132,7 +132,11 @@ describe('house powers', () => {
     const w = newWorld();
     const k = seated(w, 'shield');
     const home = wagon(w);
-    const post = w.addBuilding('lookout', 0, home.x + 30, home.y + 30, true);
+    // Far from the hall (so its own defence doesn't count), on ground that can take a post.
+    const far = [[30, 30], [-30, 30], [30, -30], [-30, -30], [34, 0], [0, 34], [-34, 0], [0, -34]]
+      .map(([dx, dy]) => ({ x: home.x + dx, y: home.y + dy }))
+      .find((p) => w.inBounds(p.x, p.y) && w.inBounds(p.x + 2, p.y + 2) && [0, 1].every((o) => w.walkable(w.idx(p.x + o, p.y + o))))!;
+    const post = w.addBuilding('lookout', 0, far.x, far.y, true);
     w.territory[w.idx(post.x, post.y)] = 0;
     w.enqueue({ type: 'deed', owner: 0, seat: k, x: post.x, y: post.y });
     w.step();

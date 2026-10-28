@@ -7,6 +7,7 @@ import { Terrain } from './mapgen';
 import { onBuildingComplete } from './territory';
 import { berryRegrow, type Building, type ResourceNode, type Settler, type World } from './world';
 import { hasOmen } from './omens';
+import { callingTier } from './callings';
 
 export const cheb = (ax: number, ay: number, bx: number, by: number) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
@@ -271,6 +272,9 @@ function workTicks(world: World, s: Settler, base: number, skill: Skill): number
   // Deeds: a timber drive or a harvest home.
   if (skill === 'woodcraft' && player.buffs.timber > world.tick) t /= 3;
   if (skill === 'husbandry' && player.buffs.harvest > world.tick) t /= 2;
+  if (skill === 'husbandry') t = (t * 100) / (100 + 8 * callingTier(world, s.owner, 'hearth'));
+  // Masons work stone and timber a little faster.
+  if (skill !== 'husbandry') t = (t * 100) / (100 + 8 * callingTier(world, s.owner, 'masons'));
   return Math.max(1, Math.round(t));
 }
 
@@ -478,8 +482,21 @@ function thinkHaul(world: World, s: Settler, job: Extract<Settler['job'], { kind
   setIdle(s);
 }
 
+/** Can the crew at `from` reach this node on foot (fish are worked from a bank beside the shoal)? */
+function reachableNode(world: World, from: number, n: ResourceNode): boolean {
+  const i = world.idx(n.x, n.y);
+  if (world.walkableGround(i)) return world.sameRegion(from, i);
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!world.inBounds(n.x + dx, n.y + dy)) continue;
+    const j = world.idx(n.x + dx, n.y + dy);
+    if (world.walkableGround(j) && world.sameRegion(from, j)) return true;
+  }
+  return false;
+}
+
 function findNode(world: World, b: Building, kind: NodeKind, radius: number): ResourceNode | undefined {
   const e = world.entrance(b);
+  const from = world.entranceIdx(b);
   let best: ResourceNode | undefined;
   let bestD = Infinity;
   for (let y = e.y - radius; y <= e.y + radius; y++)
@@ -490,6 +507,8 @@ function findNode(world: World, b: Building, kind: NodeKind, radius: number): Re
       const n = world.nodes.get(id)!;
       if (n.kind !== kind || n.amount <= 0 || n.growth > 0 || n.stump > 0 || n.reservedBy !== 0) continue;
       const d = cheb(x, y, e.x, e.y);
+      if (d >= bestD && !(d === bestD && n.id < best!.id)) continue;
+      if (!reachableNode(world, from, n)) continue; // across the water: not for this crew
       if (d < bestD || (d === bestD && n.id < best!.id)) {
         bestD = d;
         best = n;

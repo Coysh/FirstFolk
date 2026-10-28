@@ -25,6 +25,8 @@ export class PathFinder {
     private size: number,
     private walkable: (idx: number) => boolean,
     private maxExpansions = 12000,
+    /** An exact shortcut: tiles in different connected regions can never be joined, so skip the search. */
+    private sameRegion?: (a: number, b: number) => boolean,
   ) {
     const n = size * size;
     this.g = new Int32Array(n);
@@ -37,6 +39,7 @@ export class PathFinder {
   find(start: number, goal: number): number[] | null {
     if (start === goal) return [];
     if (!this.walkable(goal)) return null;
+    if (this.sameRegion && !this.sameRegion(start, goal)) return null;
     const N = this.size;
     const run = ++this.run;
     const heap = this.heap;

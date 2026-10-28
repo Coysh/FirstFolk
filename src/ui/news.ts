@@ -1,3 +1,4 @@
+import { CALLINGS } from '../sim/callings';
 import { BUILDINGS, DISCOVERIES, RANK_NAMES } from '../sim/defs';
 import { DEEDS } from '../sim/deeds';
 import { HOUSES } from '../sim/houses';
@@ -69,6 +70,10 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
     }
     case 'rivalSighted':
       return { channel: 'toast', priority: 2, icon: ICONS.lookout, text: 'Rival border sighted', tone: 'warn' };
+    case 'calling':
+      // Only your own, and only when a town finds or deepens a calling (losing one is quiet).
+      if (e.owner !== me || !e.calling || !e.tier) return null;
+      return { channel: 'toast', priority: 2, icon: ICONS.renown, text: `${CALLINGS[e.calling].icon} ${CALLINGS[e.calling].titles[e.tier - 1]}`, sub: CALLINGS[e.calling].perks[e.tier - 1], tone: 'good', key: 'calling' };
     case 'rankUp':
       return e.owner === me
         ? { channel: 'banner', priority: 3, icon: ICONS.renown, text: `You are a ${RANK_NAMES[e.rank]}!`, sub: e.unlocks.length ? `New: ${e.unlocks.map((t) => BUILDINGS[t].name).join(', ')}` : 'Your border grows', tone: 'big' }

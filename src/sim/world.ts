@@ -15,6 +15,8 @@ import { NO_OWNER, onBuildingComplete, recomputeTerritory, updateExploration } f
 import { updateRenown, type RenownSource } from './renown';
 import type { DeedId } from './deeds';
 import { updateMarket } from './market';
+import { emptyCalling, updateCallings, callingTier, type CallingId } from './callings';
+import { updateBridges, type Bridge } from './bridges';
 import { updateHappenings } from './happenings';
 import { updateChallenges } from './challenges';
 import { FOUNDING_HOUSES, offerHouse, playerMod, seatHouse, updateHouses, type HouseId, type HouseOffer, type Mod, type Seat } from './houses';
@@ -150,6 +152,9 @@ export type SimEvent =
   | { type: 'rockMined'; x: number; y: number; depleted: boolean }
   | { type: 'saplingPlanted'; x: number; y: number }
   | { type: 'buildingPlaced'; owner: number; id: number; buildingType: BuildingType }
+  | { type: 'calling'; owner: number; calling: CallingId | ''; tier: number; was: CallingId | ''; wasTier: number }
+  | { type: 'bridgePlaced'; owner: number; id: number; x: number; y: number }
+  | { type: 'bridgeBuilt'; owner: number; id: number; x: number; y: number; len: number }
   | { type: 'buildingComplete'; owner: number; id: number; buildingType: BuildingType }
   | { type: 'familyApproaching'; owner: number; familyId: number; surname: string; size: number; skill: Skill }
   | { type: 'born'; owner: number; settlerId: number; name: string; surname: string }
@@ -223,7 +228,9 @@ export interface PlayerState {
   /** The score (see renown.ts), where it came from, and payout remainders. */
   renown: number;
   renownBy: Partial<Record<RenownSource, number>>;
-  renownFrac: [number, number];
+  renownFrac: [number, number, number];
+  /** What the town has become (see callings.ts): re-read every couple of seconds. */
+  calling: { id: CallingId | ''; tier: number };
   /** Landmarks taken from another settlement. */
   taken: number;
   /** Challenges won (see challenges.ts). */
@@ -346,6 +353,12 @@ export class World {
   territoryVersion = 0;
   fogVersion = 0;
   sites: Discovery[] = [];
+  /** Bridges (saved), and the deck map built from them: 1 = walkable plank, 2 = planned (see bridges.ts). */
+  bridges: Bridge[] = [];
+  deck: Uint8Array;
+  /** Caches for the bridge search (see bridges.ts): the shoreline, and each owner's reach from home. */
+  shoreCache: Int32Array | null = null;
+  bridgeReach: ({ version: number; seen: Uint8Array } | undefined)[] = [];
   /** The valley's running challenge (see challenges.ts), when the next is called, and the last one. */
   challenge: { def: string; endsAt: number; start: number[] } | null = null;
   nextChallengeAt = BALANCE.firstChallenge;
@@ -379,9 +392,10 @@ export class World {
     this.rng = new Rng(opts.seed);
     this.nodeAt = new Int32Array(this.size * this.size);
     this.buildingAt = new Int32Array(this.size * this.size);
+    this.deck = new Uint8Array(this.size * this.size);
     this.territory = new Int8Array(this.size * this.size).fill(NO_OWNER);
     this.explored = new Uint8Array(this.size * this.size);
-    this.pathfinder = new PathFinder(this.size, (i) => this.walkable(i));
+    this.pathfinder = new PathFinder(this.size, (i) => this.walkable(i), 12000, (a, b) => this.sameRegion(a, b));
 
     if (opts.blank) return;
     const seams = hasOmen(this, 'richSeams') ? 2 : 1;
@@ -399,8 +413,49 @@ export class World {
   inBounds(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < this.size && y < this.size;
   }
+  /** 1 where water or a mountain stands between lands (a finished bridge deck is not a barrier); see territory.ts. */
+  barrierMap: Uint8Array | null = null;
+  barriers(): Uint8Array {
+    if (this.barrierMap) return this.barrierMap;
+    const b = new Uint8Array(this.size * this.size);
+    for (let i = 0; i < b.length; i++) b[i] = !isWalkableTerrain(this.map.terrain[i]) && this.deck[i] !== 1 ? 1 : 0;
+    return (this.barrierMap = b);
+  }
+
+  /** Connected regions of walkable ground (buildings ignored), rebuilt when a bridge opens a new way. */
+  regionLabels: Int32Array | null = null;
+  private buildRegions(): Int32Array {
+    const labels = new Int32Array(this.size * this.size);
+    let next = 0;
+    const stack: number[] = [];
+    for (let s = 0; s < labels.length; s++) {
+      if (labels[s] || !this.walkableGround(s)) continue;
+      labels[s] = ++next;
+      stack.push(s);
+      while (stack.length) {
+        const i = stack.pop()!;
+        const x = i % this.size;
+        for (const j of [x + 1 < this.size ? i + 1 : -1, x > 0 ? i - 1 : -1, i + this.size, i - this.size]) {
+          if (j < 0 || j >= labels.length || labels[j] || !this.walkableGround(j)) continue;
+          labels[j] = next;
+          stack.push(j);
+        }
+      }
+    }
+    return (this.regionLabels = labels);
+  }
+  /** Can anyone walk from a to b at all? (Ground only: a building in the way can still block a path.) */
+  sameRegion(a: number, b: number): boolean {
+    const labels = this.regionLabels ?? this.buildRegions();
+    return !labels[a] || !labels[b] || labels[a] === labels[b];
+  }
+
+  /** Ground a person can stand on: dry land, or a finished bridge deck. */
+  walkableGround(i: number): boolean {
+    return isWalkableTerrain(this.map.terrain[i]) || this.deck[i] === 1;
+  }
   walkable(i: number): boolean {
-    return isWalkableTerrain(this.map.terrain[i]) && this.buildingAt[i] === 0;
+    return this.walkableGround(i) && this.buildingAt[i] === 0;
   }
   cornerHeight(x: number, y: number): number {
     return this.map.heights[y * (this.size + 1) + x];
@@ -539,7 +594,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0], taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, challengesWon: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, glut: emptyStock(), sold: 0, routes: {}, origin: originId ?? '', style: 'balanced', raidReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -628,7 +683,7 @@ export class World {
   /** Mouths to feed: everyone, with guards on a post counting extra (see BALANCE.guardAppetitePct). */
   eaters(owner: number): number {
     let n = 0;
-    for (const s of this.settlers.values()) if (s.owner === owner) n += s.job.kind === 'guard' ? 1 + BALANCE.guardAppetitePct / 100 : 1;
+    for (const s of this.settlers.values()) if (s.owner === owner) n += s.job.kind === 'guard' ? 1 + (BALANCE.guardAppetitePct * (3 - callingTier(this, owner, 'stronghold'))) / 300 : 1;
     return Math.round(n);
   }
 
@@ -658,6 +713,13 @@ export class World {
       for (const g of GOODS) if (def.cost[g]) out[g] = Math.ceil((def.cost[g]! * pct) / 100);
       return out;
     }
+    if (def.great) {
+      // Masons build the Great Works for less.
+      const pct = 100 - 15 * callingTier(this, owner, 'masons');
+      const out: Partial<Record<Good, number>> = {};
+      for (const g of GOODS) if (def.cost[g]) out[g] = Math.ceil((def.cost[g]! * pct) / 100);
+      return out;
+    }
     if (!def.frontier) return { ...def.cost };
     const pct = 100 + BALANCE.towerCostPct * this.frontierCount(owner);
     const out: Partial<Record<Good, number>> = {};
@@ -667,7 +729,8 @@ export class World {
 
   /** How many frontier buildings this settlement's rank lets it hold. */
   frontierCap(owner: number): number {
-    return BALANCE.frontierCap[Math.min(BALANCE.frontierCap.length - 1, this.players[owner]?.rank ?? 0)];
+    // A stronghold holds more posts: one at the second tier of the Wardens' calling, two at the third.
+    return BALANCE.frontierCap[Math.min(BALANCE.frontierCap.length - 1, this.players[owner]?.rank ?? 0)] + Math.max(0, callingTier(this, owner, 'stronghold') - 1);
   }
 
   /** Frontier buildings a player has, standing or under way: towers, outposts and stockades. */
@@ -726,6 +789,8 @@ export class World {
 
   step(): void {
     for (const ai of this.ais) ai.update(this);
+    updateBridges(this);
+    if (this.tick % 20 === 7) updateCallings(this);
     for (const cmd of this.pendingCommands) {
       this.commandLog.push({ tick: this.tick, cmd });
       applyCommand(this, cmd);

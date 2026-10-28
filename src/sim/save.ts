@@ -2,10 +2,11 @@ import { BUILDINGS, type NodeKind } from './defs';
 import type { OmenId } from './omens';
 import type { Difficulty } from './rules';
 import type { ScenarioState } from './scenario';
+import { rebuildDeck } from './bridges';
 import { World, type Building, type Discovery, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
 
 /** Bump when the shape of saved state changes; older saves are refused rather than misread. */
-export const SAVE_VERSION = 18;
+export const SAVE_VERSION = 19;
 
 const KINDS: NodeKind[] = ['tree', 'rock', 'bush', 'fish'];
 
@@ -38,6 +39,7 @@ export interface SaveData {
   lastChallenge: string;
   warbands: World['warbands'];
   nextReaversAt: number;
+  bridges: World['bridges'];
 }
 
 function rle(a: ArrayLike<number>): number[] {
@@ -85,6 +87,7 @@ export function serializeWorld(w: World): SaveData {
     nextChallengeAt: w.nextChallengeAt,
     warbands: clone(w.warbands),
     nextReaversAt: w.nextReaversAt,
+    bridges: clone(w.bridges),
     lastChallenge: w.lastChallenge,
   };
 }
@@ -119,6 +122,8 @@ export function deserializeWorld(d: SaveData): World {
   w.warbands = d.warbands;
   w.nextReaversAt = d.nextReaversAt;
   w.lastChallenge = d.lastChallenge;
+  w.bridges = d.bridges ?? [];
+  rebuildDeck(w);
   if (w.scenario.rival && w.players[1]) w.addRival();
   return w;
 }

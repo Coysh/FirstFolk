@@ -28,6 +28,8 @@ import buildings2
 importlib.reload(buildings2)
 import landmarks
 importlib.reload(landmarks)
+import callings
+importlib.reload(callings)
 import settler
 importlib.reload(settler)
 
@@ -40,7 +42,7 @@ os.makedirs(PREVIEW, exist_ok=True)
 
 scene = fresh_scene()
 bm = {**buildings.make_all(), **buildings2.make_all()}
-lm = landmarks.make_all()
+lm = {**landmarks.make_all(), **callings.make_all()}
 sm = settler.make_all()
 
 cb = collection(scene, 'export_buildings')
@@ -72,7 +74,8 @@ ROWS = {
     'g': ('b', ['henge', 'meadhall', 'granary']),
     'h': ('l', ['discovery_cart', 'discovery_ruins', 'discovery_wanderers', 'discovery_stones', 'discovery_starstone']),
     'i': ('l', ['discovery_barrow', 'discovery_hermit', 'discovery_hoard', 'discovery_spring', 'discovery_shrine']),
-    'j': ('l', ['discovery_grove', 'discovery_oakwood', 'discovery_outcrop']),
+    'j': ('l', ['discovery_grove', 'discovery_oakwood', 'discovery_outcrop', 'calling_trader']),
+    'k': ('l', ['calling_masons', 'calling_stronghold', 'calling_hearth']),
 }
 pool = {'b': bobjs, 'l': lobjs}
 for r, (row, (kind, names)) in enumerate(ROWS.items()):

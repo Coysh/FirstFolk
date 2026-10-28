@@ -1,3 +1,4 @@
+import { VALLEYS, VALLEY_IDS, valleyOf, type ValleyId } from '../sim/mapgen';
 import { useEffect, useState } from 'preact/hooks';
 import { audio } from '../audio/audio';
 import { DIFFICULTY_INFO, type Difficulty } from '../sim/rules';
@@ -208,17 +209,28 @@ function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void;
             </button>
           </div>
         )}
-        <div class="valley-chip" title={rollOmens(seed).map((o) => `${OMENS[o].name}: ${OMENS[o].blurb}`).join('\n')}>
+        <div class="valley-chip" title={`${VALLEYS[valleyOf(seed)].blurb}\n\n${rollOmens(seed).map((o) => `${OMENS[o].name}: ${OMENS[o].blurb}`).join('\n')}`}>
+          <span class="valley-ico">{VALLEYS[valleyOf(seed)].icon}</span>
+          <span class="valley-name">{VALLEYS[valleyOf(seed)].name}</span>
           {rollOmens(seed).map((o) => (
             <span key={o}>{OMENS[o].icon}</span>
           ))}
-          <span class="valley-name">Valley {seed}</span>
           {!daily && (
             <button onClick={() => setSeed(randomSeed())} title="Another valley" aria-label="Another valley">
               🎲
             </button>
           )}
         </div>
+        <p class="valley-blurb">{VALLEYS[valleyOf(seed)].blurb}</p>
+        {!daily && (
+          <div class="valley-pick" role="group" aria-label="Kind of valley">
+            {VALLEY_IDS.map((id) => (
+              <button key={id} class={valleyOf(seed) === id ? 'on' : ''} title={VALLEYS[id].name} aria-label={VALLEYS[id].name} aria-pressed={valleyOf(seed) === id} onClick={() => setSeed(seedOfValley(id, seed))}>
+                {VALLEYS[id].icon}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <button class="primary big ng-go" onClick={start}>
         {daily ? 'Begin today’s valley' : 'Begin'}
@@ -226,6 +238,12 @@ function NewGame({ shell, onClose, daily }: { shell: Shell; onClose: () => void;
       {saveSummary.value && <p class="ng-note">This replaces your saved game.</p>}
     </div>
   );
+}
+
+/** A seed that makes the wanted kind of valley, found by walking on from the current one (so a pick is repeatable). */
+function seedOfValley(id: ValleyId, from: number): number {
+  for (let k = 1; k < 400; k++) if (valleyOf(from + k * 7919) === id) return (from + k * 7919) % 1000000;
+  return from;
 }
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
@@ -281,6 +299,8 @@ export function HowTo({ onClose }: { onClose: () => void }) {
     { icon: '/assets/icons/stockade.png', title: 'Spears and shields', text: 'Wide or tall? A Stockade holds a little land hard and makes a landmark pay more. From 10:00 a Mustering Hall’s huscarls can raid (R) a rival post: the stronger side wins, and a burned post frees its land. Reavers strike the furthest post of whoever spreads widest.' },
     { icon: '/assets/icons/people.png', title: 'Choose your Great Houses', text: 'Your origin seats your first house; you choose a second at Hamlet and a third at Village (letters at the left). Each house gives a plain bonus and one power to call on (Z X C): Raise, Timber Drive, Harvest Home, Expedition, Festival, War-Horn or Shield Wall. Win, and your founding house can found your next valley.' },
     { icon: '/assets/icons/henge.png', title: 'Race for Great Works', text: 'From Village rank: the Stone Circle, Mead Hall and Great Granary. Only one of each in the valley, so finish first! Sell surplus on Market Day for renown.' },
+    { icon: '/assets/icons/fisher.png', title: 'Read the valley', text: 'Every valley is different, and rivers and ridges are real borders: a post can’t claim across water. Cross at a ford or a pass, or lay a Bridge (B) from Hamlet, and a post that holds a crossing fights harder.' },
+    { icon: '/assets/icons/storehouse.png', title: 'Your town finds its calling', text: 'What you build decides what your town becomes: storehouses and sales make Merchants, quarries and Great Works Masons, towers Wardens, fields and fed homes Hearthfolk. The leading calling grows a cluster beside your hall and grants perks. Tap the chip at the top to see them.' },
     { icon: '/assets/icons/berries.png', title: 'Seasons', text: 'Winters bite, so stockpile food: berries sleep and folk eat more, but Fishers keep working.' },
   ];
   return (

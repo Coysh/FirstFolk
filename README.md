@@ -12,6 +12,8 @@ npm run sim -- --seed 1 --minutes 46 [--games 16] [--think 160]   # headless pla
 npm run build        # typecheck + production build + secret scan of dist/
 node tools/screenshot.mjs --screen title|game --seed 3 --seconds 240 [--mobile]   # headless screenshot (needs the dev server); also --focus hut, --art classic (A/B), --perf
 node tools/showcase.mjs --set town|war|works|wild [--night 1] [--zoom 24]   # gallery of every model at gameplay zoom (needs the dev server)
+npx tsx tools/valleys.ts [--seeds 300] [--pick 1,2,3]   # contact sheet of the six valleys + generator stats (screenshots/valleys.png)
+node tools/bridge-shot.mjs / tools/calling-shot.mjs   # screenshots of bridge mode and each calling's cluster (needs the dev server)
 Blender -b -P tools/blender/build.py   # rebuild public/models/*.glb (or run build.py through the Blender MCP)
 npx tsx tools/assets/generate.ts [--force id…]   # regenerate art with the OpenAI Images API (needs OPENAI_API_KEY)
 ```

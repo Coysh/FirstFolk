@@ -4,6 +4,8 @@ import type { SimEvent, World } from '../sim/world';
 import type { Quality } from '../settings';
 import { loadArt } from './art';
 import { BuildingsView } from './buildings';
+import { BridgesView } from './bridges';
+import type { Span } from '../sim/bridges';
 import { CameraRig } from './camera';
 import { buildDecor } from './decor';
 import { Effects } from './effects';
@@ -57,6 +59,7 @@ export class GameRenderer {
   readonly rig: CameraRig;
   effects!: Effects;
   buildings!: BuildingsView;
+  bridges!: BridgesView;
   settlers!: SettlersView;
   private nature!: Nature;
   private water!: Water;
@@ -142,6 +145,8 @@ export class GameRenderer {
     const home = wagon ? { x: wagon.x + 1, y: wagon.y + 1 } : { x: world.size / 2, y: world.size / 2 };
     this.wildlife = new Wildlife(world.map, this.hf, home);
     this.sites = new SitesView(this.hf);
+    this.bridges = new BridgesView(this.hf, this.buildings.material, this.ghostMat.clone());
+    this.scene.add(this.bridges.group);
     this.scene.add(this.buildings.group, this.settlers.group, this.wildlife.group, this.sites.group);
     this.buildings.update(world, 0);
 
@@ -202,7 +207,13 @@ export class GameRenderer {
       if ((e.type === 'treeFelled' || e.type === 'rockMined' || e.type === 'saplingPlanted') && !seen(e.x, e.y)) continue;
       if (e.type === 'treeFelled') this.effects.fellTree(e.x, e.y);
       else if (e.type === 'rockMined' && e.depleted) this.effects.emit('stone', e.x + 0.5, this.hf.at(e.x + 0.5, e.y + 0.5) + 0.2, e.y + 0.5, 14);
-      else if (e.type === 'claimed') {
+      else if (e.type === 'calling' && e.tier > 0 && e.owner === 0) {
+        this.settlers.cheer(this.time, 4);
+      } else if (e.type === 'bridgeBuilt' && e.owner === 0) {
+        const y = this.hf.at(e.x + 0.5, e.y + 0.5);
+        this.effects.emit('sparkle', e.x + 0.5, y + 0.8, e.y + 0.5, 30);
+        this.effects.emit('dust', e.x + 0.5, y + 0.3, e.y + 0.5, 14);
+      } else if (e.type === 'claimed') {
         if (e.owner === 0) this.settlers.cheer(this.time, 3);
         const p = this.sites.position(this.world, e.siteId);
         if (p) {
@@ -279,6 +290,11 @@ export class GameRenderer {
       this.rangeRing.scale.setScalar(job.radius + 0.5);
       this.rangeRing.visible = true;
     }
+  }
+
+  /** The bridge being placed (null hides it). */
+  setBridgeGhost(span: Span | null, ok: boolean): void {
+    this.bridges.setGhost(span, ok);
   }
 
   setSelection(pos: THREE.Vector3 | null, radius = 0.4): void {
@@ -466,6 +482,7 @@ export class GameRenderer {
     this.water.update(this.time);
     this.nature.update(this.world, this.time);
     this.buildings.update(this.world, dt);
+    this.bridges.update(this.world);
     this.sites.update(this.world, this.time);
     this.settlers.update(this.world, alpha, this.time, dt);
     this.paths.update(dt);

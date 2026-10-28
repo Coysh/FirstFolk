@@ -1,6 +1,7 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, FOODS, SKILLS, outputGood, type BuildingType, type Good, type Skill } from './defs';
 import { playerMod } from './houses';
+import { callingTier } from './callings';
 import { craftXp, walkTo } from './settlers';
 import { hasOmen } from './omens';
 import { bestSite } from './ai/placement';
@@ -33,7 +34,7 @@ export function updatePopulation(world: World): void {
   for (const player of world.players) {
     // Hearth-keepers eat less: appetite is summed per settler in percent.
     let appetite = 0;
-    for (const s of world.settlers.values()) if (s.owner === player.id) appetite += s.job.kind === 'guard' ? 100 + BALANCE.guardAppetitePct : 100;
+    for (const s of world.settlers.values()) if (s.owner === player.id) appetite += s.job.kind === 'guard' ? 100 + Math.floor((BALANCE.guardAppetitePct * (3 - callingTier(world, player.id, 'stronghold'))) / 3) : 100;
     // Winter cold: everyone eats a quarter more.
     player.mealAccum += Math.floor((appetite * (world.winterBites(player.id) ? 100 + BALANCE.winterAppetitePct * (hasOmen(world, 'longWinters') ? 2 : 1) : 100)) / 10000);
     while (player.mealAccum >= world.rules.mealInterval) {
@@ -77,7 +78,7 @@ function checkBirths(world: World, player: PlayerState): void {
       const baby = world.addSettler(player.id, fam.id, world.randomName(), 0, e.x, e.y);
       world.emit({ type: 'born', owner: player.id, settlerId: baby.id, name: baby.name, surname: fam.surname });
     }
-    fam.birthCooldown = Math.round((BALANCE.birthInterval * (100 - playerMod(world, fam.owner, 'birth')) * (hasOmen(world, 'fertile') ? 70 : 100)) / 10000);
+    fam.birthCooldown = Math.round((BALANCE.birthInterval * (100 - playerMod(world, fam.owner, 'birth') - 10 * callingTier(world, fam.owner, 'hearth')) * (hasOmen(world, 'fertile') ? 70 : 100)) / 10000);
   }
 }
 

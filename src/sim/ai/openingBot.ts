@@ -1,3 +1,4 @@
+import { BRIDGE_RANK, bestBridge } from '../bridges';
 import { BUILDINGS, DISCOVERIES, FOODS, GOODS, GREAT_WORKS, type BuildingType, type Good, type NodeKind } from '../defs';
 import { deedCost, deedWait, outpostSpot } from '../deeds';
 import { HOUSES, HOUSE_TIMEOUT } from '../houses';
@@ -84,6 +85,7 @@ export class OpeningBot {
     if (this.useDeed(world, target)) return;
     if (this.raid(world)) return;
     if (this.trade(world)) return;
+    if (world.tick % (this.thinkEvery * 4) === 0 && this.bridge(world)) return;
     const hungry = world.larder(this.owner) < 12;
     const home: BuildingType = world.isUnlocked(this.owner, 'longhouse') && this.affordable(world, 'longhouse') ? 'longhouse' : 'hut';
     const tower: BuildingType = world.isUnlocked(this.owner, 'watchtower') && this.affordable(world, 'watchtower') ? 'watchtower' : 'lookout';
@@ -103,6 +105,8 @@ export class OpeningBot {
     // Ordered ideas; the first one that is wanted, affordable and has a valid site is done.
     const ideas: Idea[] = [
       [emptyHuts === 0 && pop >= world.housing(this.owner) - 2, home],
+      // Masons race for the Great Works from the moment they can.
+      [st.focus === 'masons' && !!work, work ?? 'hut'],
       // Like a player following the goals: the first Lookout as soon as there are homes.
       [count('lookout') === 0 && count('hut') >= 2, 'lookout', target ?? undefined],
       [world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0, 'sawpit'],
@@ -116,6 +120,13 @@ export class OpeningBot {
       [hungry && count('forager') < Math.ceil(pop / 6), 'forager'],
       ...(st.towersFirst ? [] : [push]),
       ...(st.raids === 2 ? [] : [muster]),
+      // A town working towards its calling builds what that calling is made of.
+      [st.focus === 'trader' && count('storehouse') < 1 + Math.floor(pop / 26), 'storehouse'],
+      [st.focus === 'masons' && count('quarry') < Math.ceil(pop / 6), 'quarry'],
+      [st.focus === 'masons' && world.isUnlocked(this.owner, 'sawpit') && count('sawpit') < 1 + Math.floor(count('woodcutter') / 2), 'sawpit'],
+      [st.focus === 'hearth' && count('forager') < Math.ceil(pop / 5), 'forager'],
+      [st.focus === 'hearth' && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 8), 'fisher'],
+      [st.focus === 'hearth' && emptyHuts === 0 && pop >= world.housing(this.owner) - 6, home],
       [starving('woodcutter') && count('forester') < count('woodcutter') / 2, 'forester'],
       [count('woodcutter') < Math.ceil(pop / 7) && world.stored(this.owner, 'logs') < 80, 'woodcutter'],
       [emptyHuts === 0, 'hut'],
@@ -160,14 +171,18 @@ export class OpeningBot {
   /** Sell a lot of whatever is piling up, if the market still pays. */
   private trade(world: World): boolean {
     if (!marketOpen(world, this.owner)) return false;
+    const st = STYLES[this.style];
+    // A trading town works the market hard (several lots a turn, even at a lean price); the rest trickle.
+    const trader = st.focus === 'trader';
+    let sold = 0;
     for (const g of GOODS) {
-      const keep = FOODS.includes(g) ? Math.max(60, world.population(this.owner)) : STYLES[this.style].sellKeep;
-      if (world.stored(this.owner, g) - FAIR_LOT >= keep && fairPrice(world, this.owner, g) * 10 >= FAIR_VALUE[g] * 6) {
+      const keep = FOODS.includes(g) ? Math.max(60, world.population(this.owner)) : st.sellKeep;
+      if (world.stored(this.owner, g) - FAIR_LOT >= keep && fairPrice(world, this.owner, g) * 10 >= FAIR_VALUE[g] * (trader ? 4 : 6)) {
         world.enqueue({ type: 'sell', owner: this.owner, good: g });
-        return true;
+        if (!trader || ++sold >= 3) return true;
       }
     }
-    return false;
+    return sold > 0;
   }
 
   /** A Great Work to begin: none under way, still unclaimed in the valley, the one we can best afford. */
@@ -250,6 +265,17 @@ export class OpeningBot {
   }
 
   /** Send the huscarls against the rival post that is worth most and that they can beat. */
+  /** Bridges what the river cuts off (a landmark across the water, a rich far bank) once the stores can spare it. */
+  private bridge(world: World): boolean {
+    if ((world.players[this.owner].rank ?? 0) < BRIDGE_RANK) return false;
+    if (world.bridges.some((b) => b.owner === this.owner && !b.done) || world.bridges.filter((b) => b.owner === this.owner).length >= 4) return false;
+    if (world.stored(this.owner, 'logs') < 40 || world.stored(this.owner, 'stone') < 12) return false;
+    const pick = bestBridge(world, this.owner);
+    if (!pick || pick.score < 80) return false;
+    world.enqueue({ type: 'bridge', owner: this.owner, ...pick.span });
+    return true;
+  }
+
   private raid(world: World): boolean {
     const st = this.mood(world);
     if (!st.raids) return false;

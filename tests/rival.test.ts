@@ -33,7 +33,7 @@ describe('the rival', () => {
 
   it('the rival has a personality that follows its origin, and keeps it through a save', () => {
     expect(styleOf('wayfarers')).toBe('expander');
-    expect(styleOf('hillclan')).toBe('builder');
+    expect(styleOf('hillclan')).toBe('mason');
     expect(styleOf('')).toBe('balanced');
     const w = new World({ seed: 4, origin: 'woodfolk' });
     expect(w.players[1].style).toBe(styleOf(w.players[1].origin));
