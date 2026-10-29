@@ -59,6 +59,7 @@ for (let g = 0; g < games; g++) {
     console.log('renown sources:', JSON.stringify(r.renownBy));
     console.log('voices/min (you:rival):', r.voicesByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
     console.log('chain/min (farm,bake,brew,mine,smith | bread,ale,tools):', r.chainByMinute.map((c) => `${c.slice(0, 5).join('')}|${c.slice(5).join(',')}`).join(' '));
+    console.log('army/min (slots,full strength,Q,A,D | posts/cap,hamlets):', r.armyByMinute.map((a) => `${a[0]},${a[1]},${a[2]}${a[3]}${a[4]}|${a[5]}/${a[6]},${a[7]}`).join(' '));
     console.log('home level/min (you:rival):', r.homeLevelByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
     console.log('prosperity/min (you:rival):', r.prosperityByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
     console.log('crown score/min (you minus rival):', r.scoreByMinute.join(' '));
@@ -111,6 +112,11 @@ if (games > 1) {
   console.log('by valley:', Object.entries(byValley).map(([v, rs]) => `${v} ×${rs.length} (P ${rs.filter((r) => r.winner === 0).length}:R ${rs.filter((r) => r.winner === 1).length}, bridges ${(rs.reduce((n, r) => n + r.bridges[0] + r.bridges[1], 0) / rs.length).toFixed(1)}/game, pop ${(rs.reduce((n, r) => n + (r.populationByMinute.at(-1) ?? 0), 0) / rs.length).toFixed(0)}, hungry ${(rs.reduce((n, r) => n + r.hungryPct, 0) / rs.length).toFixed(0)}%)`).join(' · '));
   const sources: Record<string, number> = {};
   for (const r of reports) for (const [k, v] of Object.entries(r.renownBy[0])) sources[k] = (sources[k] ?? 0) + (v ?? 0) / reports.length;
+  const last = (r: (typeof reports)[0]) => r.armyByMinute.at(-1) ?? [0, 0, 0, 0, 0, 0, 0, 0];
+  const mean = (f: (a: number[]) => number) => (reports.reduce((n, r) => n + f(last(r)), 0) / reports.length).toFixed(1);
+  console.log(`late game (end of each game, player): posts ${mean((a) => a[5])}/${mean((a) => a[6])} cap · hamlets ${mean((a) => a[7])} · games with a hamlet ${reports.filter((r) => last(r)[7] > 0).length}/${reports.length} · quarters ${mean((a) => a[2])} arms ${mean((a) => a[3])} drill ${mean((a) => a[4])} · full-muster strength ${mean((a) => a[1])}`);
+  const at = (m: number) => (reports.reduce((n, r) => n + (r.armyByMinute[m]?.[5] ?? 0), 0) / reports.length).toFixed(1);
+  console.log(`posts held at 20 / 25 / 30 min: ${at(20)} / ${at(25)} / ${at(30)}`);
   console.log('avg player renown by source:', Object.entries(sources).map(([k, v]) => `${k} ${Math.round(v)}`).join(' · '));
   if (useOrigins) {
     // Opener balance: how each origin fares, whichever side played it.

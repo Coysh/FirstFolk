@@ -1,3 +1,4 @@
+import { BALANCE } from './balance';
 import { BUILDINGS, GOODS, RANK_NAMES, type BuildingType, type Good } from './defs';
 import { sendCaravan } from './steadings';
 import { HEIGHT_STEP, isWalkableTerrain } from './mapgen';
@@ -8,6 +9,7 @@ import { TRADES } from './trades';
 import { performDeed } from './deeds';
 import { workOwner } from './works';
 import { hire, launchRaid, rally } from './warfare';
+import { upgradeArmy } from './army';
 import { placeBridge } from './bridges';
 import { sendScout } from './scouts';
 import type { Building, World } from './world';
@@ -24,6 +26,7 @@ export type Command =
   | { type: 'raid'; owner: number; targetId: number }
   | { type: 'rally'; owner: number }
   | { type: 'hire'; owner: number }
+  | { type: 'army'; owner: number; what: 'quarters' | 'arms' }
   | { type: 'scout'; owner: number; x: number; y: number }
   | { type: 'bridge'; owner: number; x: number; y: number; dir: 0 | 1; len: number };
 
@@ -53,7 +56,14 @@ export function canPlace(world: World, owner: number, type: BuildingType, x: num
   }
   if (type === 'musterhall' && world.countBuildings(owner, type, true)) return { ok: false, reason: 'You have a Mustering Hall already' };
   if (def.capped && world.frontierCount(owner) >= world.frontierCap(owner))
-    return { ok: false, reason: `Your folk can hold ${world.frontierCap(owner)} towers and stockades at this rank: rank up for more` };
+    return { ok: false, reason: `Your folk can hold ${world.frontierCap(owner)} towers and stockades: rank up, or found a Daughter Hamlet for ${BALANCE.hamlet.capPer} more` };
+  if (type === 'hamlet') {
+    if (world.hamletCount(owner, true) >= BALANCE.hamlet.max) return { ok: false, reason: `Your folk can found ${BALANCE.hamlet.max} hamlets` };
+    if (world.buildings.size && [...world.buildings.values()].some((b) => b.owner === owner && b.type === 'hamlet' && !b.done)) return { ok: false, reason: 'A hamlet is already being founded' };
+    for (const b of world.buildings.values())
+      if (b.owner === owner && (b.type === 'wagon' || b.type === 'hamlet') && Math.max(Math.abs(b.x - x), Math.abs(b.y - y)) < BALANCE.hamlet.space)
+        return { ok: false, reason: `Too close to your ${b.type === 'wagon' ? 'first camp' : 'other hamlet'}: a hamlet wants ${BALANCE.hamlet.space} tiles of room` };
+  }
   const size = def.size;
   const ex = x;
   const ey = y + size;
@@ -212,6 +222,9 @@ export function applyCommand(world: World, cmd: Command): void {
       return;
     case 'hire':
       hire(world, cmd.owner);
+      return;
+    case 'army':
+      upgradeArmy(world, cmd.owner, cmd.what);
       return;
     case 'scout':
       sendScout(world, cmd.owner, cmd.x, cmd.y);

@@ -24,6 +24,7 @@ FirstFolk is a fast, single-player browser settlement builder. It combines Settl
   - **New sinks:** Great Works and Market Day.
 
   See §0b.
+- **The Marches Pass (v0.30):** the army is a sum you can read and grow (Quarters, Arms, Drill, with the arithmetic on screen), and a Daughter Hamlet lets a settlement hold more posts without the cap simply rising. See §0k.
 - **The Three Roads Pass (v0.29), on top of the Living Valley:** a rebuilt interface (a Crown chip, one overlay sheet at a time, a Chronicle, an action rail, a build shelf in five groups) and a third road to the Crown, the Hearth (the richer town is a voice), with laden carts and Hired Spears so the economy can win. See §0j.
 - **The Living Valley (v0.24–v0.28, branch `dev/living-valley`), superseding some of the above:** four neutral steadings won by ox-cart caravans, a Crown filled by the *voices of the valley*, a grown-up economy (bread, ale, tools; cottages and hall-houses) with prosperity gating the ranks, winter ice and waylaid carts, Last Wants, Challenges and Market Day removed, and a harness that measures decisions and ablations. See §0i.
 
@@ -875,6 +876,59 @@ Median length 34.3 min, 3.0 lead changes, 34% comebacks. Voice-minutes a game on
 **Tried and not kept:** running the Hearth voice off a score without population (it would have changed the rank pacing the tests guard); more foragers for Hearthfolk (berries piled to 450, nothing else got built); farm scaling above homes in the bot (population stalled at the housing cap), then above the towers (the bot stuck at Hamlet for 30 minutes, which is why the chain's *first* steps are ahead of everything but its *growth* is behind the border). **Origins:** the Kinfolk (the Hearth house, +1 child) became much stronger once prosperity mattered (they won 42 of 42 in one run), so their births bonus fell from 25% to 15%, and the Wayfarers, who lost the most (9 of 84), got a bigger wagon (32% after).
 
 **Open:** the spread is 43–56%, with the territory style (Expander) the weakest and the two economy styles (Trader, Mason) the strongest, which is the right way round for this pass but a little past parity; Hearthfolk went from last at 27% to 46% once the bot built the chain it was named for. Kinfolk still win about four games in five (the Hearth house) and Wayfarers about a third. A human should judge whether the three roads read clearly on the first Valley sheet, whether the 🛒 badge on the Crown chip is enough of a prompt, and whether Hired Spears feels like a decision or a chore.
+
+---
+
+## 0k. The Marches Pass (v0.30): an army you can read, and room to grow
+
+**The diagnosis (a playtest after v0.29, which was "the most fun the game has been").** Two complaints at about 30 minutes: *"I reached the maximum of 12 watchtowers and could no longer expand meaningfully"*, and *"military strength was confusing: I was fighting with 60 against 90, and neither recruiting nor Surge seemed to help me win."* Reading the code showed both were true, and for plain reasons:
+
+| What the player saw | What was really going on |
+|---|---|
+| Recruiting does nothing | The Mustering Hall held **four** huscarls, and nothing could change that. A warband was `4 × (10 + House)`: 40, or 60 with the Spear. There was nothing to buy, so there was nothing to "recruit". |
+| "60 against 90" | Nothing said where 90 came from. It was a guard or two, a Stockade's aura, the hall's ward and, the big one, **the rival's own huscarls at home** (each defends any post within 12 tiles). None of that was visible. |
+| Surge did not help | Surge is +30% of the band, once: 60 becomes 78 against 90, which still loses, and the game never said how much more was needed. |
+| 12 towers and done | The cap was the whole late game's expansion rule. Cost escalation (25% a tower) made the 12th dear; the cap made the 13th impossible. |
+
+### An army that is a sum you can read (`army.ts`)
+A warband is its huscarls, and every huscarl is worth **10 (a spear) + the House's gift + 2 for each Arms level + 1 for each Drill level**. Then named multipliers (Wardens, the underdog's fury, the War-Horn). `armyParts` returns the lines and they sum to the number the game uses, so the HUD prints the real arithmetic. There are exactly three things to do, and each is on the Mustering Hall card (also in the Town sheet):
+
+| Lever | You do | You get | The economy is in it because |
+|---|---|---|---|
+| **Quarters** (2 levels) | spend planks, logs, bread | the hall holds 4, then 7, then 10 huscarls | huscarls are free hands that eat three times as much: more spears, more mouths |
+| **Arms** (3 levels) | spend tools (the smithy), then stone or ale | **+2 for every huscarl, and for every guard on every post** | this is where the smithy becomes steel; it hardens your whole border, not only the raiders |
+| **Drill** (4 levels) | keep the huscarls at home | +1 for every huscarl for each minute at home | a raid sends them out and the drill **starts again**: strike now with what you have, or wait to strike harder |
+
+A fully upgraded hall is worth about 2.5 times a huscarl's base and 2.5 times as many of them. Arms arm the garrisons too (the first version armed only the raiders and made a full hall worth 562: nothing could survive it), which keeps defence in step.
+
+**Nothing is a mystery any more.**
+- **Over your hall** a chip reads `10/10 huscarls · 315 strong · drill ●●○○`; the Raid button's badge is the strength it would march with.
+- **Choosing a raid** shows both sides line by line: yours (huscarls, House, Arms, Drill, multipliers) and theirs (guards with their arms and bonuses, the Stockade beside it, the hall's ward, *the huscarls at home*), and says what to do about a shortfall, naming the biggest part of their defence ("Short by 80. Their strongest part is 7 huscarls from the Mustering Hall: wait until their warband marches out").
+- **In a fight** the card says "Short by 12. Surge +18 · Hire spears +32: together that turns it", or "Ahead by 10", with a **Why these numbers?** toggle that opens the same two columns. `clashParts` lists what *you* could still add (Surge, Rally with the hands actually nearby, Hired Spears) and what each is worth.
+- The **defender's** warning during the march now says "it will burn unless you find 31 more (Rally, Hire spears, a Shield Wall)".
+
+### Room to grow: Daughter Hamlets
+The late game needed a way to expand that costs something, can be lost and depends on the map, rather than a bigger number in a table. The cap stays (it is what stopped tower spam), but you can now *buy* more of it by founding a **Daughter Hamlet** (from Village):
+
+- A second hall: claims radius 10, homes eight, **stores goods like a storehouse** (so a far-off hamlet shortens carriers' walks), has the hall's ward, and raises the post cap by **4**.
+- It must stand **16 tiles from your first camp and from every other hamlet**, inside your border, so *where* is a real choice: towards a landmark, a steading, the Kingstone, a river crossing, or good land. Only one is founded at a time; at most four.
+- It costs 30 logs, 20 planks, 20 stone, **8 ale and 6 tools**, and **60% more for each one already founded** (the ale is the founding feast and the tools equip the new folk, so the economy pays for it). It needs a **garrison** like any post, and the posts it lets you hold are the ones Reavers and raiders will come for.
+- The Town sheet shows **Reach: 9/16 posts · 1 hamlet · found another for +4**.
+- The post cost still rises 25% for every post held, so a hamlet buys room but not free spam.
+
+**Reavers scale with what they come for.** A host is now `20 + 15 for each five minutes after 12:00 + a eighth of the target's prosperity`, so a rich, wide town draws a real host late in the game rather than the 50-odd strength that a 12-huscarl army shrugged off.
+
+### The measurement
+New report lines: `army/min` (full-muster strength, Quarters/Arms/Drill, posts against the cap, hamlets) and a late-game summary (posts held at 20/25/30 minutes, hamlets, upgrades). The Battle Drones loop caught three things:
+1. The first Arms numbers (+3, only for raiders) gave 562-strong warbands; arming the garrisons too, +2 a level and a smaller hall (4/7/10) brought a fully upgraded hall to about 230 against defences of 150–250 with Rally and Hired Spears.
+2. Quarters were being bought with an empty larder (hunger rose from 6.5% to 10%): the bot now expands only when the larder can feed the new huscarls. (Part of the rise is noise: the same worst seed is 37–40% either way.)
+3. No bot founded a hamlet at first: they never reached the cap in a sim (posts held 9–11 of 12 at the end), and the bread in the first recipe was always eaten. The cost uses ale and tools, which pile up, and with a bot that waits for a fed town, 3 of 8 games found a hamlet (0.4 a game, 10 posts held against a cap of 14 at the end). Humans reach the cap sooner than the bots do, which is the point of the playtest that asked for it.
+
+**Matrix** (`--matrix --games 8 --minutes 46 --think 160 --origins`, 336 duels): v0.29 43–56%; this pass 44–59% (Balanced 51%, Expander 48%, Trader 55%, Mason 59%, Hearthfolk 46%, Raider 47%, Warden 44%), no dominance alarm. Expander, the tower-spam style (14 towers a game against 8–11), wins 48%: the cap's escalation and the hamlet's price keep spam from being the answer. Median length 32.9 min, 2.9 lead changes, 41% comebacks. Standard check (`--seed 1 --minutes 40 --games 8 --think 100`): the last ten minutes the busiest (7.7 actions a minute against 3.8), decisions a minute 2.6 / 3.7 / 4.3 / 4.8, hunger 10% (v0.29: 6.5%, same worst seed).
+
+**What to look at as a human:** whether the Hall card is the first thing you open before a raid; whether a hamlet feels like a place worth defending (the posts around it are the targets, the hamlet itself cannot be burned); whether Drill's "wait or strike" is felt; and whether four hamlets, the cap's new ceiling (about 28 posts), is too many.
+
+**Not done:** a Blender model for the hamlet (it is the founders' hall with a palisade strip and banner), a visual change to huscarls with Arms (the overhead chip and the Hall card carry it), and letting a raid burn a hamlet.
 
 ---
 
@@ -1820,3 +1874,9 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **Harness:** voice-minutes by road, prosperity, home level and the production chain per minute, `--ablate hire`.
 - **Bots:** the chain bug (no bot ever built a Bakehouse before this), wood first when logs are short, homes' needs read like the Town sheet.
 - **Tests:** `tests/roads.test.ts` (the Hearth voice and its save, laden carts, Hired Spears).
+
+### v0.30.0 The Marches Pass (2026-10-29, branch dev/living-valley)
+- **Army:** `army.ts` (Quarters, Arms, Drill; a strength that is a sum of named lines), `warfare.ts` (`defenceParts`, `clashParts`, Reavers scale with the target's prosperity), the `army` Command, the Mustering Hall card, the warband chip over the hall, the breakdown and advice on the raid preview and in a fight, `H`/`G` unchanged. `SAVE_VERSION` 24 (`player.army`, `warband.lines`).
+- **Expansion:** the Daughter Hamlet (second hall, +4 posts, 16 tiles of room, dearer each time), shown in the Town sheet as Reach.
+- **Bots:** buy Arms and Quarters (only when the larder can feed more huscarls), found hamlets near the cap.
+- **Harness:** `army/min`, the late-game summary, `tools/ui-states.mjs` raid and army states. **Tests:** `tests/marches.test.ts`.

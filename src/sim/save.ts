@@ -6,7 +6,7 @@ import { rebuildDeck } from './bridges';
 import { World, type Building, type Discovery, type Family, type PlayerState, type ResourceNode, type Settler, type WorldStats } from './world';
 
 /** Bump when the shape of saved state changes; older saves are refused rather than misread. */
-export const SAVE_VERSION = 23;
+export const SAVE_VERSION = 24;
 
 const KINDS: NodeKind[] = ['tree', 'rock', 'bush', 'fish'];
 

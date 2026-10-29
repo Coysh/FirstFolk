@@ -70,8 +70,37 @@ await shot('log', async () => {
 await shot('goals', async () => (await import('/src/ui/state.ts')).sheet.value = 'goals');
 await shot('select', () => {
   const g = window.firstfolk.shell.game;
-  const b = [...g.world.buildings.values()].find((x) => x.owner === 0 && x.done && x.type === 'lookout') ?? [...g.world.buildings.values()].find((x) => x.owner === 0 && x.done);
+  const b = [...g.world.buildings.values()].find((x) => x.owner === 0 && x.done && x.type === (window.__sel ?? 'lookout')) ?? [...g.world.buildings.values()].find((x) => x.owner === 0 && x.done && x.type === 'lookout') ?? [...g.world.buildings.values()].find((x) => x.owner === 0 && x.done);
   g.selection.value = { kind: 'building', id: b.id };
+});
+await shot('army', async () => {
+  window.__sel = 'musterhall';
+  const g = window.firstfolk.shell.game;
+  const b = [...g.world.buildings.values()].find((x) => x.owner === 0 && x.done && x.type === 'musterhall');
+  if (b) g.selection.value = { kind: 'building', id: b.id };
+});
+await shot('raid', async () => {
+  const g = window.firstfolk.shell.game;
+  const w = g.world;
+  const wd = await import('/src/sim/warfare.ts');
+  const ar = await import('/src/sim/army.ts');
+  const t = [...w.buildings.values()].find((b) => b.owner === 1 && wd.raidable(b)) ?? [...w.buildings.values()].find((b) => b.owner === 0 && wd.raidable(b));
+  const parts = ar.armyParts(w, 0, 6);
+  g.mode.value = { kind: 'raid' };
+  g.raidPreview.value = { targetId: t.id, name: 'Watchtower', problem: '', attack: parts.strength, defence: wd.defenceOf(w, t) + 40, attackLines: parts.lines, defenceLines: wd.defenceParts(w, t), lost: 40, sites: [] };
+});
+await page.evaluate(() => { window.firstfolk.shell.game.cancel(); });
+await shot('hamlet', async () => {
+  const g = window.firstfolk.shell.game;
+  const w = g.world;
+  const home = [...w.buildings.values()].find((b) => b.owner === 0 && b.type === 'wagon');
+  const { bestSite } = await import('/src/sim/ai/placement.ts');
+  const site = bestSite(w, 0, 'hamlet');
+  if (site) {
+    const h = w.addBuilding('hamlet', 0, site.x, site.y, true);
+    g.view.rig.lookAt(h.x + 1, h.y + 1, true);
+    g.selection.value = { kind: 'building', id: h.id };
+  } else console.log('no hamlet site');
 });
 await shot('story', () => {
   window.firstfolk.shell.game.story.value = { beat: 3 };

@@ -28,6 +28,12 @@ export function bestSite(world: World, owner: number, type: BuildingType, target
         score = n * 2 - dist * 0.4;
       } else if (job?.kind === 'plant') {
         score = countNodes(world, x, y + def.size, 'tree', 5) - dist * 0.4;
+      } else if (type === 'hamlet') {
+        // A new hall wants room from the others (about twenty tiles out), fresh land to claim and wood or berries to live on.
+        let near = Infinity;
+        for (const b of world.buildings.values()) if (b.owner === owner && (b.type === 'wagon' || b.type === 'hamlet')) near = Math.min(near, cheb(x, y, b.x, b.y));
+        if (near < 16) continue;
+        score = -Math.abs(near - 20) * 2 + newLand(world, owner, x + 1, y + 1, def.claim ?? 10) * 0.2 + countNodes(world, x + 1, y + 1, 'tree', 6) * 0.2 + countNodes(world, x + 1, y + 1, 'bush', 6) * 0.3;
       } else if (def.claim) {
         score = target ? -cheb(x, y, target.x, target.y) * 4 + newLand(world, owner, x + 1, y + 1, def.claim) * 0.02 : newLand(world, owner, x + 1, y + 1, def.claim) - dist * 0.5;
         // Short of stone or wood? Head for land with rocks or trees.

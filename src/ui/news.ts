@@ -1,3 +1,4 @@
+import { BALANCE } from '../sim/balance';
 import { CALLINGS } from '../sim/callings';
 import { BUILDINGS, DISCOVERIES, RANK_NAMES } from '../sim/defs';
 import { DEEDS } from '../sim/deeds';
@@ -41,7 +42,12 @@ const icon = (type: string) => `/assets/icons/${type === 'wagon' ? 'hut' : type}
 
 export function newsFor(world: World, e: SimEvent, me = 0): News | null {
   switch (e.type) {
+    case 'armyUpgraded':
+      return e.owner === me ? { channel: 'toast', priority: 2, icon: ICONS.shield, text: e.what === 'arms' ? `⚒ Arms ${e.level}/${BALANCE.army.armsMax}: every huscarl and guard is worth +${BALANCE.army.armsPer * e.level}` : `🏛 Quarters ${e.level}: the hall holds ${BALANCE.army.hallSlots + BALANCE.army.quartersAdd * e.level} huscarls`, tone: 'good', key: 'army' } : null;
+    case 'drillLevel':
+      return e.owner === me ? { channel: 'toast', priority: 1, icon: ICONS.shield, text: `🎯 Drill ${e.level}/${BALANCE.army.drillMax}: every huscarl at home is worth +${e.level}`, tone: 'info', key: 'drill' } : null;
     case 'buildingComplete':
+      if (e.buildingType === 'hamlet' && e.owner === me) return { channel: 'banner', priority: 3, icon: ICONS.hut, text: 'A Daughter Hamlet is founded!', sub: 'Your folk can hold four more towers. Guard it.', tone: 'big' };
       if (!BUILDINGS[e.buildingType].great) return null;
       return e.owner === me
         ? { channel: 'banner', priority: 3, icon: icon(e.buildingType), text: `${BUILDINGS[e.buildingType].name} is yours!`, sub: BUILDINGS[e.buildingType].great!.perk, tone: 'big' }

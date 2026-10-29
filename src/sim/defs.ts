@@ -11,7 +11,7 @@ export const FOOD_VALUE: Partial<Record<Good, number>> = { bread: 2 };
 
 export type NodeKind = 'tree' | 'rock' | 'bush' | 'fish';
 
-export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'stockade' | 'musterhall' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary' | 'farm' | 'bakehouse' | 'brewhouse' | 'mine' | 'smithy';
+export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'stockade' | 'musterhall' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary' | 'farm' | 'bakehouse' | 'brewhouse' | 'mine' | 'smithy' | 'hamlet';
 
 export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw' | 'spear';
 
@@ -236,6 +236,23 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     garrison: 4,
     reveal: 8,
   },
+  hamlet: {
+    type: 'hamlet',
+    name: 'Daughter Hamlet',
+    icon: '🏘️',
+    blurb: 'Found a second hall far from the first. It claims wide land, homes eight, stores goods like a storehouse and lets your folk hold four more towers. The founding feast takes ale and the new folk take tools. It needs guards, 16 tiles of room from your other halls, and each one costs more. Needs a Village.',
+    cost: { logs: 30, planks: 20, stone: 20, ale: 8, tools: 6 },
+    buildTicks: secs(24),
+    size: 2,
+    housing: 8,
+    storage: true,
+    buildable: true,
+    rank: 2,
+    claim: 10,
+    power: 90,
+    garrison: 2,
+    reveal: 14,
+  },
   stockade: {
     type: 'stockade',
     name: 'Stockade',
@@ -417,7 +434,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
 };
 
-export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'farm', 'bakehouse', 'storehouse', 'watchtower', 'stockade', 'brewhouse', 'mine', 'smithy', 'musterhall', 'longhouse', 'henge', 'meadhall', 'granary'];
+export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'farm', 'bakehouse', 'storehouse', 'watchtower', 'stockade', 'brewhouse', 'mine', 'smithy', 'musterhall', 'longhouse', 'henge', 'meadhall', 'granary', 'hamlet'];
 
 export const GREAT_WORKS: BuildingType[] = ['henge', 'meadhall', 'granary'];
 

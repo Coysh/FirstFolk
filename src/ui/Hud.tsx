@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { icon, PLAYER, type ClaimPreview, type Game } from '../game';
 import { audio } from '../audio/audio';
 import { ICON } from '../render/overlay';
@@ -25,12 +26,12 @@ import { SAGA } from '../sim/saga';
 import { ORIGINS } from '../sim/origins';
 import { workOwner } from '../sim/works';
 import { workSlots } from '../sim/settlers';
-import { defenceOf, hireProblem, hireStrength, huscarls, raidStrength } from '../sim/warfare';
+import { clashParts, defenceOf, hireProblem, hireStrength, type Warband } from '../sim/warfare';
 
 const plural_ = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
-import { BuildShelf, ChronicleSheet, GoalsSheet, Rail, Status, TopBar, TownSheet, ValleySheet, useWorldRefresh } from './chrome';
+import { ArmyCard, BuildShelf, ChronicleSheet, Lines, GoalsSheet, Rail, Status, TopBar, TownSheet, ValleySheet, useWorldRefresh } from './chrome';
 
 export function Hud({ game, shell }: { game: Game; shell: Shell }) {
   const spectating = game.spectating;
@@ -58,6 +59,39 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
       <Victory game={game} shell={shell} />
       {game.menuOpen.value && <PauseMenu game={game} shell={shell} />}
       {game.paused.value && !game.menuOpen.value && <div class="paused-tag">Paused</div>}
+    </div>
+  );
+}
+
+const whyOpen = signal(false);
+
+/** Why the numbers are what they are, and what could still turn the fight: the HUD never leaves a strength unexplained. */
+function ClashWhy({ game, band }: { game: Game; band: Warband }) {
+  const w = game.world;
+  const p = clashParts(w, band, PLAYER);
+  const short = p.theirs - p.mine;
+  const extra = p.options.reduce((s, o) => s + o.n, 0);
+  const list = p.options.map((o) => `${o.label} +${o.n}`).join(' · ');
+  const verdict = short > 0 ? `Short by ${short}. ${p.options.length ? `${list}: ${extra >= short ? 'together that turns it' : 'not enough on its own'}.` : 'Nothing left to add.'}` : short === 0 ? 'Level: a coin toss.' : `Ahead by ${-short}.`;
+  const attackingMe = band.owner === PLAYER;
+  return (
+    <div class="why">
+      <p class={`why-verdict ${short > 0 ? 'bad' : 'good'}`}>{verdict}</p>
+      <button class="why-toggle" onClick={() => (whyOpen.value = !whyOpen.value)} aria-expanded={whyOpen.value}>
+        {whyOpen.value ? '▾ Hide the numbers' : '▸ Why these numbers?'}
+      </button>
+      {whyOpen.value && (
+        <div class="why-grid">
+          <div>
+            <h5>Yours: {p.mine}</h5>
+            <Lines lines={attackingMe ? p.attack : p.defence} total={p.mine} tone="mine" />
+          </div>
+          <div>
+            <h5>Theirs: {p.theirs}</h5>
+            <Lines lines={attackingMe ? p.defence : p.attack} total={p.theirs} tone="theirs" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -116,6 +150,7 @@ function Threats({ game }: { game: Game }) {
                   {tug(band, false)}
                 </span>
               </button>
+              <ClashWhy game={game} band={band} />
               <span class="clash-btns">
                 <button class="rally" disabled={c.rallied || rest > 0} onClick={() => game.rally()} title="Call every free hand near the post to its defence (G)">
                   {c.rallied ? `📯 +${c.rally}` : rest > 0 ? `📯 ${Math.ceil(rest / TICK_HZ)}s` : '📯 Rally'}
@@ -131,7 +166,7 @@ function Threats({ game }: { game: Game }) {
             <span>
               <strong>{who}</strong> → your {BUILDINGS[t.type].name} in {secsLeft}s
               <span class="threat-odds">
-                {band.strength} against your {def}: {band.strength > def ? 'it will burn unless help comes' : band.strength === def ? 'a coin toss' : 'it should hold'}. Be ready to Rally (G)
+                {band.strength} against your {def}: {band.strength > def ? `it will burn unless you find ${band.strength - def + 1} more (Rally, Hire spears, a Shield Wall)` : band.strength === def ? 'a coin toss' : `it should hold by ${def - band.strength}`}. Be ready to Rally (G)
               </span>
             </span>
           </button>
@@ -146,6 +181,7 @@ function Threats({ game }: { game: Game }) {
               {tug(mine, true)}
             </span>
           </button>
+          <ClashWhy game={game} band={mine} />
           <span class="clash-btns">
             <button class="rally" disabled={mine.clash.surged} onClick={() => game.rally()} title="Throw everything in: +30% strength for this clash (G)">
               {mine.clash.surged ? `🔥 +${mine.clash.surge}` : '🔥 Surge'}
@@ -160,6 +196,17 @@ function Threats({ game }: { game: Game }) {
 }
 
 /** Choosing which rival post the huscarls strike. */
+/** What to do about a raid that would fail, read from what is actually defending the post. */
+function raidAdvice(pv: { attack: number; defence: number; defenceLines: { label: string; n: number }[] }): string {
+  const short = pv.defence - pv.attack;
+  const biggest = [...pv.defenceLines].sort((a, b) => b.n - a.n)[0];
+  const tips: string[] = [];
+  if (pv.defenceLines.some((l) => l.label.includes('huscarls from the Mustering Hall'))) tips.push('their huscarls are at home: wait until their warband marches out');
+  if (pv.defenceLines.some((l) => l.label.startsWith('Stockade'))) tips.push('a Stockade stands beside it: burn that one first');
+  tips.push('forge arms, add quarters, or let the drill build');
+  return `Short by ${short}. Their strongest part is "${biggest?.label ?? 'the garrison'}" (${biggest?.n ?? 0}). ${tips.map((t) => t[0].toUpperCase() + t.slice(1)).join('. ')}.`;
+}
+
 function RaidBar({ game }: { game: Game }) {
   const pv = game.raidPreview.value;
   const hint = !pv
@@ -169,12 +216,25 @@ function RaidBar({ game }: { game: Game }) {
       : `${pv.name}: your ${pv.attack} against its ${pv.defence} · ${pv.attack > pv.defence ? 'they should burn it' : 'they would be driven off'}${pv.attack > pv.defence && (pv.lost || pv.sites.length) ? ` · frees ${pv.lost} tiles${pv.sites.length ? ` and ${pv.sites.join(', ')}` : ''}` : ''}`;
   const tone = !pv ? 'ok' : pv.problem || pv.attack <= pv.defence ? 'bad' : pv.sites.length ? 'great' : 'ok';
   return (
-    <div class="placebar panel">
+    <div class="placebar panel raid">
       <span class="deed-icon big">⚔️</span>
       <div class="ptext">
         <strong>Raid</strong>
         <span class={tone}>{hint}</span>
       </div>
+      {pv && !pv.problem && (
+        <div class="why-grid">
+          <div>
+            <h5>Yours: {pv.attack}</h5>
+            <Lines lines={pv.attackLines} total={pv.attack} tone="mine" />
+          </div>
+          <div>
+            <h5>Theirs: {pv.defence}</h5>
+            <Lines lines={pv.defenceLines} total={pv.defence} tone="theirs" />
+          </div>
+          {pv.attack <= pv.defence && <p class="why-verdict bad">{raidAdvice(pv)}</p>}
+        </div>
+      )}
       <div class="pbtns">
         {game.touchPlacing.value && pv && (
           <button class="primary" disabled={!!pv.problem} onClick={() => game.confirmRaid()}>
@@ -544,7 +604,7 @@ function InfoPanel({ game }: { game: Game }) {
         {def.name}
         {trade && b.tier > 0 && <span class={`tier-badge t${b.tier}`}>{trade.titles[b.tier]}</span>}
       </h3>
-      <p class={`sub ${b.alert ? 'alert' : ''}`}>{b.done ? b.status || def.blurb : 'Construction site'}</p>
+      <p class={`sub ${b.alert ? 'alert' : ''}`}>{b.done ? (b.type === 'musterhall' && b.owner === PLAYER ? 'Your warband’s home: raid a rival post, or defend your own.' : b.status || def.blurb) : 'Construction site'}</p>
       {def.great && (
         <p class="great-perk">
           {b.done ? 'Perk' : 'When finished'}: {def.great.perk} {!b.done && `+${def.great.renown} renown, if your rival doesn’t finish theirs first.`}
@@ -586,10 +646,7 @@ function InfoPanel({ game }: { game: Game }) {
       )}
       {b.done && b.type === 'musterhall' && (
         <div class="worker">
-          <p>
-            <img class="inline-icon" src={ICON.shield} alt="" /> Huscarls: <strong>{huscarls(w, b)}/{def.garrison}</strong>
-            <span class="muted small"> · raid strength {raidStrength(w, b.owner, huscarls(w, b))}</span>
-          </p>
+          {b.owner === PLAYER && <ArmyCard game={game} />}
           <p class="muted small">At home they defend any post within {BALANCE.interceptRange} tiles. Out raiding, they leave those posts to their own guards.</p>
           {b.owner === PLAYER && (
             <button class="primary" onClick={() => game.startRaid()}>
@@ -597,6 +654,11 @@ function InfoPanel({ game }: { game: Game }) {
             </button>
           )}
         </div>
+      )}
+      {b.done && b.type === 'hamlet' && (
+        <p class="great-perk">
+          Your folk can hold {BALANCE.hamlet.capPer} more towers for it ({w.frontierCount(b.owner)}/{w.frontierCap(b.owner)} held). It stores goods like a storehouse, and its folk fill the hall: keep it guarded, because the posts around it are what the rival will burn.
+        </p>
       )}
       {b.done && def.garrison && b.type !== 'musterhall' && (
         <div class="worker">

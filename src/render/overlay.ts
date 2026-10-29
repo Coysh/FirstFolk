@@ -4,6 +4,8 @@ import { BUILDINGS, DISCOVERIES, type Good } from '../sim/defs';
 import { NO_OWNER } from '../sim/territory';
 import { watched } from '../sim/renown';
 import { BALANCE } from '../sim/balance';
+import { hallOf, huscarls } from '../sim/warfare';
+import { armyParts, hallSlots } from '../sim/army';
 import type { Building, World } from '../sim/world';
 import type { BuildingsView } from './buildings';
 import type { SitesView } from './sites';
@@ -61,6 +63,7 @@ export class Overlay {
   private pending = new Map<string, { pos: THREE.Vector3; good: Good; n: number; bonus: boolean; t: number }>();
   private pins = new Map<number, HTMLDivElement>();
   private warPins = new Map<number, HTMLDivElement>();
+  private armyPin: { el: HTMLDivElement; key: string } | null = null;
   private v = new THREE.Vector3();
   visible = true;
 
@@ -131,6 +134,34 @@ export class Overlay {
         bub.el.remove();
         this.bubbles.delete(id);
       }
+
+    // The army, over your Mustering Hall: huscarls at home, the strength they would march with, and the drill.
+    const hall = this.visible ? hallOf(world, 0) : undefined;
+    const hc = hall ? buildings.centre(hall.id) : undefined;
+    if (hall && hc) {
+      const a = world.players[0].army;
+      const n = huscarls(world, hall);
+      const slots = hallSlots(world, 0);
+      const strength = armyParts(world, 0, n).strength;
+      const key = `${n}|${slots}|${strength}|${a.drill}`;
+      if (!this.armyPin) {
+        const el = document.createElement('div');
+        el.className = 'pin army-pin';
+        this.root.appendChild(el);
+        this.armyPin = { el, key: '' };
+      }
+      if (this.armyPin.key !== key) {
+        this.armyPin.key = key;
+        this.armyPin.el.innerHTML = `<span class="pin-icon">⚔</span><span class="pin-name">${n}/${slots} huscarls</span><span class="pin-rate">${strength} strong · drill ${'●'.repeat(a.drill)}${'○'.repeat(BALANCE.army.drillMax - a.drill)}</span>`;
+        this.armyPin.el.title = 'Your warband: click the hall to see what it is made of and how to strengthen it.';
+      }
+      const sc = project(hc, 2.8);
+      this.armyPin.el.style.display = sc.on ? '' : 'none';
+      this.armyPin.el.style.transform = `translate(${sc.x}px, ${sc.y}px) translate(-50%, -100%) scale(${Math.max(0.75, scale)})`;
+    } else if (this.armyPin) {
+      this.armyPin.el.remove();
+      this.armyPin = null;
+    }
 
     // Discovery pins: seen but unclaimed sites, labelled so the player knows what's out there.
     if (sites) {
@@ -266,6 +297,7 @@ export class Overlay {
     this.bubbles.clear();
     this.pins.clear();
     this.warPins.clear();
+    this.armyPin = null;
     this.floaters = [];
     this.pending.clear();
   }

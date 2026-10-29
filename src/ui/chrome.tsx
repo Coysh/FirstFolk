@@ -23,7 +23,9 @@ import { CONTESTED, crownEta, crownPace, crownPct, crownSite, hearthStatus } fro
 import { starfallTick } from '../sim/happenings';
 import { OMENS } from '../sim/omens';
 import { workOwner } from '../sim/works';
-import { hallOf, huscarls, raidStrength } from '../sim/warfare';
+import { hallOf, huscarls } from '../sim/warfare';
+import { raidStrength } from '../sim/warfare';
+import { armyCost, armyParts, armyProblem, hallSlots, type ArmyUpgrade } from '../sim/army';
 import { BUILD_CATS, buildCat, catOf, sheet, toggleSheet } from './state';
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
@@ -553,6 +555,17 @@ export function TownSheet({ game }: { game: Game }) {
         </div>
       </div>
       <p class="vs-note">Prosperity is people, comfortable homes (bread, ale, tools), steadings at your side and Great Works. It raises your rank, and it is the Hearth voice.</p>
+      <div class="reach" title={`Towers, outposts and stockades you hold, against what your rank and your hamlets allow. ${BALANCE.hamlet.capPer} more for each Daughter Hamlet.`}>
+        <span>🗼 Reach</span>
+        <b>
+          {w.frontierCount(PLAYER)}/{w.frontierCap(PLAYER)}
+        </b>
+        <small>
+          posts · {w.hamletCount(PLAYER)} {w.hamletCount(PLAYER) === 1 ? 'hamlet' : 'hamlets'}
+          {p.rank >= 2 && w.hamletCount(PLAYER, true) < BALANCE.hamlet.max ? ` · found another for +${BALANCE.hamlet.capPer}` : p.rank < 2 ? ' · hamlets from Village' : ''}
+        </small>
+      </div>
+      <ArmyCard game={game} />
       {p.rank >= 1 && (
         <button class={`toggle-row ${p.autoHomes ? 'on' : ''}`} onClick={() => game.setAutoHomes(!p.autoHomes)} aria-pressed={p.autoHomes}>
           <span>🏠 Families build their own huts</span>
@@ -693,7 +706,7 @@ export function Rail({ game }: { game: Game }) {
           icon="⚔️"
           label="Raid"
           pct={raidRest ? 1 - raidRest / BALANCE.raidCooldown : band ? 0 : 1}
-          hotkey="R"
+          hotkey={String(raidStrength(w, PLAYER, n))}
           state={band ? (band.phase === 'march' ? 'march' : band.phase === 'clash' ? 'fight' : 'home') : early ? '10:00' : raidRest ? `${Math.ceil(raidRest / TICK_HZ)}s` : n ? undefined : '0'}
           tone="war"
           onClick={() => game.startRaid()}
@@ -753,9 +766,10 @@ export function BuildShelf({ game }: { game: Game }) {
         class={`card ${affordable || def.great ? '' : 'short'} ${unlocked && holder < 0 && !begun ? '' : 'locked'} ${def.great ? 'great' : ''}`}
         onClick={() => unlocked && holder < 0 && !begun && game.startPlacing(t)}
         aria-disabled={!unlocked || holder >= 0 || begun}
-        title={def.great ? `${def.name}: ${def.blurb} Perk: ${def.great.perk} +${def.great.renown} renown.` : unlocked ? `${def.name}${key ? ` (${key})` : ''}: ${def.blurb}${def.frontier ? ` Towers held: ${w.frontierCount(PLAYER)} of ${w.frontierCap(PLAYER)} (rank up for more).` : ''}` : `${def.name}: needs ${lock}`}
+        title={def.great ? `${def.name}: ${def.blurb} Perk: ${def.great.perk} +${def.great.renown} renown.` : unlocked ? `${def.name}${key ? ` (${key})` : ''}: ${def.blurb}${def.frontier ? ` Towers held: ${w.frontierCount(PLAYER)} of ${w.frontierCap(PLAYER)} (rank up, or found a Daughter Hamlet, for more).` : ''}` : `${def.name}: needs ${lock}`}
       >
         {key && <span class="hotkey">{key}</span>}
+        {t === 'hamlet' && unlocked && <span class="card-count" title="Daughter Hamlets founded, of the most your folk can found">{w.hamletCount(PLAYER, true)}/{BALANCE.hamlet.max}</span>}
         {def.frontier && unlocked && <span class={`card-count ${capped ? 'full' : ''}`} title="Towers and outposts you hold, of what your rank allows">{w.frontierCount(PLAYER)}/{w.frontierCap(PLAYER)}</span>}
         <img class="card-icon" src={icon(t)} alt="" />
         <span class="card-name">{def.name.replace(/^The /, '').replace(/^Mustering /, 'Muster ')}</span>
@@ -808,3 +822,105 @@ export function BuildShelf({ game }: { game: Game }) {
 
 /** Hotkey order follows the sim's own build menu, not the shelf's categories. */
 const BUILDINGS_ORDER = BUILD_MENU;
+
+// ---------------------------------------------------------------------------------------------
+// The army, as a sum: what a warband is made of, and the three things you can do about it.
+// ---------------------------------------------------------------------------------------------
+
+export function CostChips({ cost }: { cost: Record<string, number> }) {
+  return (
+    <>
+      {Object.entries(cost).map(([g, n]) => (
+        <span class="cost" key={g}>
+          <img src={ICON[g]} alt={GOOD_INFO[g as Good].name} />
+          {n}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** Your Mustering Hall's army: the strength line by line, and what to do to raise it. */
+export function ArmyCard({ game }: { game: Game }) {
+  useWorldRefresh(game);
+  const w = game.world;
+  const hall = hallOf(w, PLAYER);
+  if (!hall) return null;
+  const a = w.players[PLAYER].army;
+  const slots = hallSlots(w, PLAYER);
+  const home = huscarls(w, hall);
+  const out = w.warbands.some((b) => b.owner === PLAYER);
+  const now = armyParts(w, PLAYER, home);
+  const full = armyParts(w, PLAYER, slots).strength;
+  const upgrade = (what: ArmyUpgrade, name: string, effect: string) => {
+    const cost = armyCost(w, PLAYER, what);
+    const problem = armyProblem(w, PLAYER, what);
+    return (
+      <button class={`army-up ${problem ? '' : 'ready'}`} disabled={!!problem} onClick={() => game.upgradeArmy(what)} title={problem || `${name}: ${effect}`}>
+        <b>{name}</b>
+        <small>{cost ? effect : problem}</small>
+        {cost && (
+          <span class="army-cost">
+            <CostChips cost={cost} />
+          </span>
+        )}
+      </button>
+    );
+  };
+  return (
+    <div class="army-card">
+      <h4>
+        <span>⚔ Your army</span>
+        <small>
+          {home}/{slots} huscarls at home{out ? ' · a warband is out' : ''}
+        </small>
+      </h4>
+      <ul class="army-lines">
+        {now.lines.map((l) => (
+          <li key={l.label} class={l.how && l.n === 0 ? 'zero' : ''}>
+            <span>{l.label}</span>
+            <b>{l.n >= 0 && !l.label.includes('×') ? `+${l.n}` : l.n}</b>
+          </li>
+        ))}
+        <li class="total">
+          <span>Strength now</span>
+          <b>{now.strength}</b>
+        </li>
+        <li class="full">
+          <span>With all {slots} at home</span>
+          <b>{full}</b>
+        </li>
+      </ul>
+      <div class="drill" title="Each level is +1 for every huscarl, earned by a minute at home. A raid sends them out and the drill starts over.">
+        <span>Drill</span>
+        {Array.from({ length: BALANCE.army.drillMax }, (_, i) => (
+          <i key={i} class={i < a.drill ? 'on' : ''} />
+        ))}
+        <small>{out ? 'out raiding' : a.drill >= BALANCE.army.drillMax ? 'at its best' : 'a minute at home each level'}</small>
+      </div>
+      <div class="army-ups">
+        {upgrade('arms', `Arms ${a.arms}/${BALANCE.army.armsMax}`, `+${BALANCE.army.armsPer} for every huscarl and guard`)}
+        {upgrade('quarters', `Quarters ${a.quarters}/${BALANCE.army.quartersMax}`, `room for ${BALANCE.army.quartersAdd} more huscarls`)}
+      </div>
+      <p class="vs-note">Huscarls come from free hands and eat three times as much as anyone. Arms are forged from the smithy’s tools and arm every guard in the valley too: the economy is where the steel comes from.</p>
+    </div>
+  );
+}
+
+/** A list of lines ("3 guards × 10: 30") with a total: the same shape for both sides of a fight. */
+export function Lines({ lines, total, tone }: { lines: { label: string; n: number }[]; total: number; tone: 'mine' | 'theirs' }) {
+  return (
+    <ul class={`why-lines ${tone}`}>
+      {lines.map((l) => (
+        <li key={l.label}>
+          <span>{l.label}</span>
+          <b>{l.n}</b>
+        </li>
+      ))}
+      <li class="total">
+        <span>Total</span>
+        <b>{total}</b>
+      </li>
+    </ul>
+  );
+}

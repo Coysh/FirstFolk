@@ -8,6 +8,8 @@ import { hasOmen } from './omens';
 import { playerMod } from './houses';
 import { addRenown } from './renown';
 import { crownSite } from './crown';
+import { prosperity } from './prosperity';
+import { armyParts, huscarlPower, resetDrill, type ArmyLine } from './army';
 import { cheb, setIdle } from './settlers';
 import { NO_OWNER, recomputeTerritory } from './territory';
 import type { Building, World } from './world';
@@ -49,6 +51,8 @@ export interface Warband {
   /** Huscarls marching (their settler ids); reavers have none. */
   members: number[];
   strength: number;
+  /** What the strength is made of, line by line, as it was when they marched (see army.ts). */
+  lines?: ArmyLine[];
   /** Tiles to walk, and how far along it is (a step costs 1000). */
   path: number[];
   step: number;
@@ -80,14 +84,9 @@ export function huscarls(world: World, hall: Building | undefined): number {
   return n;
 }
 
-/** A warband's strength: its huscarls, plus the settlement's war bonus. */
+/** A warband's strength: its huscarls, what they are worth (spear, House, Arms, Drill) and the multipliers (see army.ts). */
 export function raidStrength(world: World, owner: number, n: number): number {
-  let s = Math.floor((n * (BALANCE.guardStrength + playerMod(world, owner, 'husc')) * (100 + 10 * callingTier(world, owner, 'stronghold'))) / 100);
-  // Fury of the underdog: a settlement far behind fights a quarter harder (a comeback lever).
-  const p = world.players[owner];
-  if (p && world.players.some((o) => o.id !== owner && o.renown - p.renown >= BALANCE.underdogGap)) s = Math.floor((s * (100 + BALANCE.underdogFury)) / 100);
-  // The War-Horn has sounded: half as strong again.
-  return p?.warhorn ? Math.floor((s * 3) / 2) : s;
+  return armyParts(world, owner, n).strength;
 }
 
 /** How hard a building is to take: its guards, nearby stockades, the hall's ward and huscarls close by. */
@@ -101,26 +100,46 @@ export function holdsCrossing(world: World, b: Building): boolean {
   return false;
 }
 
-export function defenceOf(world: World, b: Building): number {
-  const guard = (100 + playerMod(world, b.owner, 'guard') + 10 * callingTier(world, b.owner, 'stronghold') + BALANCE.homeGuardPct * (world.players[b.owner]?.homeLevel ?? 0)) + (holdsCrossing(world, b) ? BALANCE.bridgeWard[1] : 0);
-  let d = Math.floor((b.guarded * BALANCE.guardStrength * guard) / 100);
+export interface DefenceLine {
+  label: string;
+  n: number;
+}
+
+/** How hard a building is to take, line by line: the lines sum to `defenceOf`. */
+export function defenceParts(world: World, b: Building): DefenceLine[] {
+  const lines: DefenceLine[] = [];
+  const add = (label: string, n: number) => {
+    if (n <= 0) return;
+    const hit = lines.find((l) => l.label === label);
+    if (hit) hit.n += n;
+    else lines.push({ label, n });
+  };
+  const pct = 100 + playerMod(world, b.owner, 'guard') + 10 * callingTier(world, b.owner, 'stronghold') + BALANCE.homeGuardPct * (world.players[b.owner]?.homeLevel ?? 0) + (holdsCrossing(world, b) ? BALANCE.bridgeWard[1] : 0);
+  // Arms from the smithy's tools are for the garrisons as well as the huscarls.
+  const arms = BALANCE.army.armsPer * (world.players[b.owner]?.army?.arms ?? 0);
+  add(`${b.guarded} guard${b.guarded === 1 ? '' : 's'} × ${BALANCE.guardStrength}${arms ? `+${arms} arms` : ''}${pct !== 100 ? ` (+${pct - 100}%)` : ''}`, Math.floor((b.guarded * (BALANCE.guardStrength + arms) * pct) / 100));
   // The Kingstone shields the one folk who keeps it alone (not a contested stone).
   const crown = world.crown;
   const stone = crown && crown.keeper === b.owner ? crownSite(world) : undefined;
-  if (stone && cheb(b.x + 1, b.y + 1, stone.x, stone.y) <= BALANCE.watchRange) d += BALANCE.crownWard;
+  if (stone && cheb(b.x + 1, b.y + 1, stone.x, stone.y) <= BALANCE.watchRange) add('The Kingstone’s light', BALANCE.crownWard);
   const wall = world.players[b.owner]?.shieldWall;
-  if (wall && wall.until > world.tick && cheb(wall.x, wall.y, b.x, b.y) <= BALANCE.shieldWall[0]) d += BALANCE.shieldWall[1];
+  if (wall && wall.until > world.tick && cheb(wall.x, wall.y, b.x, b.y) <= BALANCE.shieldWall[0]) add('Shield Wall', BALANCE.shieldWall[1]);
   for (const o of world.buildings.values()) {
     if (o.owner !== b.owner || !o.done) continue;
     const def = BUILDINGS[o.type];
     const dist = cheb(o.x, o.y, b.x, b.y);
-    if (def.defence && dist <= def.defence[0]) d += def.defence[1];
-    if (o.type === 'wagon' && dist <= BALANCE.hallWard[0]) d += BALANCE.hallWard[1] + BALANCE.hallWard[2] * (world.players[b.owner]?.rank ?? 0);
+    if (def.defence && dist <= def.defence[0]) add(o === b ? `${def.name}’s own footing` : `${def.name} nearby`, def.defence[1]);
+    if ((o.type === 'wagon' || o.type === 'hamlet') && dist <= BALANCE.hallWard[0]) add(o.type === 'wagon' ? 'The hall’s ward' : 'The hamlet’s ward', BALANCE.hallWard[1] + BALANCE.hallWard[2] * (world.players[b.owner]?.rank ?? 0));
     // A Mustering Hall's huscarls turn out for any post close enough (unless they are away raiding).
-    if (o.type === 'musterhall' && o !== b && dist <= BALANCE.interceptRange) d += huscarls(world, o) * (BALANCE.guardStrength + playerMod(world, b.owner, 'husc'));
+    if (o.type === 'musterhall' && o !== b && dist <= BALANCE.interceptRange) {
+      const n = huscarls(world, o);
+      add(`${n} huscarls from the Mustering Hall`, n * huscarlPower(world, b.owner));
+    }
   }
-  return d;
+  return lines;
 }
+
+export const defenceOf = (world: World, b: Building): number => defenceParts(world, b).reduce((s, l) => s + l.n, 0);
 
 /** Why a raid on this building can't be launched ('' when it can). */
 export function raidProblem(world: World, owner: number, targetId: number): string {
@@ -156,8 +175,10 @@ export function launchRaid(world: World, owner: number, targetId: number): void 
       members.push(s.id);
     }
   const e = world.entrance(hall);
-  const band: Warband = { id: world.newId(), owner, members, strength: raidStrength(world, owner, members.length), path, step: 0, progress: 0, targetId, homeId: hall.id, phase: 'march', x: e.x, y: e.y };
+  const parts = armyParts(world, owner, members.length);
+  const band: Warband = { id: world.newId(), owner, members, strength: parts.strength, lines: parts.lines, path, step: 0, progress: 0, targetId, homeId: hall.id, phase: 'march', x: e.x, y: e.y };
   world.players[owner].warhorn = false;
+  resetDrill(world, owner);
   world.warbands.push(band);
   world.emit({ type: 'raidLaunched', owner, defender: target.owner, targetId, buildingType: target.type, x: target.x, y: target.y, strength: band.strength, eta: Math.ceil((path.length * 1000) / BALANCE.adultSpeed / 10) });
 }
@@ -274,6 +295,36 @@ export function hire(world: World, owner: number): boolean {
   return true;
 }
 
+/**
+ * Both sides of a fight, line by line, and what the viewer could still add (so no number is a mystery):
+ * `options` are the things `viewer` can still do right now, each with what it is worth.
+ */
+export function clashParts(world: World, band: Warband, viewer: number): { attack: DefenceLine[]; defence: DefenceLine[]; mine: number; theirs: number; options: { label: string; n: number; key: string }[] } {
+  const c = band.clash;
+  const target = world.buildings.get(band.targetId);
+  const attack: DefenceLine[] = [...(band.lines ?? [{ label: 'The warband', n: band.strength }])];
+  if (c?.surged && c.surge) attack.push({ label: 'Surge', n: c.surge });
+  if (c?.hiredAtk) attack.push({ label: 'Hired spears', n: c.hiredAtk });
+  const defence: DefenceLine[] = target ? defenceParts(world, target) : [];
+  if (c?.rallied && c.rally) defence.push({ label: `${c.militia} townsfolk rallied`, n: c.rally });
+  if (c?.hiredDef) defence.push({ label: 'Hired spears', n: c.hiredDef });
+  const sum = (l: DefenceLine[]) => l.reduce((s, x) => s + x.n, 0);
+  const viewerAttacks = band.owner === viewer;
+  const options: { label: string; n: number; key: string }[] = [];
+  const p = world.players[viewer];
+  if (target && p) {
+    if (viewerAttacks && !c?.surged) options.push({ label: 'Surge (G)', n: Math.floor((band.strength * BALANCE.surgePct) / 100), key: 'surge' });
+    if (!viewerAttacks && target.owner === viewer && !c?.rallied && world.tick >= p.rallyReady) {
+      let hands = 0;
+      for (const s of world.settlers.values()) if (s.owner === viewer && !s.child && s.job.kind !== 'guard' && cheb(s.x, s.y, target.x, target.y) <= BALANCE.rallyRadius) hands++;
+      hands = Math.min(hands, BALANCE.rallyMax + 2 * callingTier(world, viewer, 'hearth'));
+      options.push({ label: 'Rally (G)', n: BALANCE.rallyBase + BALANCE.rallyEach * hands, key: 'rally' });
+    }
+    if (c && !hireProblem(world, viewer)) options.push({ label: 'Hire spears (H)', n: hireStrength(world, viewer), key: 'hire' });
+  }
+  return viewerAttacks ? { attack, defence, mine: sum(attack), theirs: sum(defence), options } : { attack, defence, mine: sum(defence), theirs: sum(attack), options };
+}
+
 /** The clash is decided: a post burns or holds, renown is paid, and the warband turns for home. */
 function finishClash(world: World, band: Warband, won: boolean): void {
   const target = world.buildings.get(band.targetId);
@@ -336,9 +387,11 @@ function plunder(world: World, owner: number, x: number, y: number): void {
 export const reaversCome = (world: World) => world.players.length > 1 || hasOmen(world, 'reaverCoast');
 
 /** How strong the next band of reavers is. */
-export function reaverStrength(world: World): number {
+export function reaverStrength(world: World, victim = -1): number {
   const [base, step] = BALANCE.reaverStrength;
-  const n = base + step * Math.floor(Math.max(0, world.tick - BALANCE.reaversFrom) / (BALANCE.reaverGap[0] * 1.25));
+  // They come for what is worth taking: a richer town draws a bigger host (a tenth of its prosperity).
+  const lure = victim >= 0 ? Math.floor(prosperity(world, victim) / BALANCE.reaverLureDiv) : 0;
+  const n = base + lure + step * Math.floor(Math.max(0, world.tick - BALANCE.reaversFrom) / (BALANCE.reaverGap[0] * 1.25));
   return Math.round((n * (world.difficulty === 'relaxed' ? 70 : world.difficulty === 'hard' ? 120 : 100)) / 100 / 5) * 5;
 }
 
@@ -378,7 +431,7 @@ export function updateReavers(world: World): void {
   if (!path) return;
   const x = shore % world.size;
   const y = (shore - x) / world.size;
-  const band: Warband = { id: world.newId(), owner: NO_OWNER, members: [], strength: reaverStrength(world), path, step: 0, progress: 0, targetId: target.id, homeId: 0, phase: 'march', x, y };
+  const band: Warband = { id: world.newId(), owner: NO_OWNER, members: [], strength: reaverStrength(world, victim.id), lines: [{ label: 'The reavers’ host', n: reaverStrength(world, victim.id) }], path, step: 0, progress: 0, targetId: target.id, homeId: 0, phase: 'march', x, y };
   world.warbands.push(band);
   world.emit({ type: 'raidLaunched', owner: NO_OWNER, defender: victim.id, targetId: target.id, buildingType: target.type, x: target.x, y: target.y, strength: band.strength, eta: Math.ceil((path.length * 1000) / BALANCE.adultSpeed / 10) });
 }

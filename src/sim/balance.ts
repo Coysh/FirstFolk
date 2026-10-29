@@ -104,6 +104,30 @@ export const BALANCE = {
   rallyCooldown: secs(40),
   /** Everyone who answers a Rally drops their work for this long: the defence costs production. */
   rallyPause: secs(30),
+  /**
+   * The army, as a sum you can read (see army.ts). A huscarl is worth `guardStrength`, plus the House's gift, plus
+   * `armsPer` for each Arms level (forged from tools; the garrisons are armed too) and one for each level of Drill (a minute at home each, up to
+   * `drillMax`; a raid sends them out and the drill starts again). The Mustering Hall holds `hallSlots`, and each
+   * Quarters level adds `quartersAdd`. Costs are per level.
+   */
+  army: {
+    hallSlots: 4,
+    quartersAdd: 3,
+    quartersMax: 2,
+    quartersCost: [{ planks: 10, logs: 10, bread: 8 }, { planks: 16, stone: 12, bread: 14 }] as Record<string, number>[],
+    quartersRank: [1, 2],
+    armsPer: 2,
+    armsMax: 3,
+    armsCost: [{ tools: 6, planks: 4 }, { tools: 12, stone: 6 }, { tools: 18, ale: 8 }] as Record<string, number>[],
+    drillMax: 4,
+    drillEvery: secs(60),
+  },
+  /**
+   * Daughter Hamlets: past the posts a rank allows, a settlement grows by founding a second hall. Each one lets it hold
+   * `capPer` more towers, must stand `space` tiles from every other hall, costs `costPct` percent more for each one
+   * already founded, and has to be garrisoned like a post. Reavers and raids come for the posts around it.
+   */
+  hamlet: { capPer: 4, space: 16, costPct: 60, max: 4 },
   /** A well-provisioned town's guards fight this much (percent) harder for each home level (tools, bread and ale). */
   homeGuardPct: 6,
   /** A cart within this many tiles of an enemy manned post is waylaid, unless one of its own manned posts stands within `escortRange`. */
@@ -125,8 +149,10 @@ export const BALANCE = {
   reaverGap: [secs(240), secs(300)] as [number, number],
   reaverMinPosts: 4,
   /** Strength at 12:00, and how much more every 5 minutes after. */
-  reaverStrength: [20, 10] as [number, number],
+  reaverStrength: [20, 15] as [number, number],
   reaverRepel: 15,
+  /** A host also grows with what it is sent against: its target's prosperity divided by this. */
+  reaverLureDiv: 8,
   reaverLoot: 12,
   /** A landmark pays only with a manned post (or the hall) this close (see renown.ts). */
   watchRange: 9,

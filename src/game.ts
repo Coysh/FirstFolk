@@ -11,7 +11,8 @@ import { HOUSES, playerMod } from './sim/houses';
 import { NO_OWNER, previewInfluence, previewRemoval } from './sim/territory';
 import { CONTESTED } from './sim/crown';
 import { scoutProblem } from './sim/scouts';
-import { defenceOf, hallOf, hireProblem, huscarls, raidProblem, raidStrength } from './sim/warfare';
+import { defenceOf, defenceParts, hallOf, hireProblem, huscarls, raidProblem } from './sim/warfare';
+import { armyParts, armyProblem, type ArmyUpgrade } from './sim/army';
 import { ICON } from './render/overlay';
 import { serializeWorld } from './sim/save';
 import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
@@ -72,6 +73,9 @@ export interface RaidPreview {
   problem: string;
   attack: number;
   defence: number;
+  /** The same numbers, line by line (see army.ts and warfare.ts), so the HUD can say why. */
+  attackLines: { label: string; n: number }[];
+  defenceLines: { label: string; n: number }[];
   /** Tiles the rival would lose, and landmarks that would slip from their grasp. */
   lost: number;
   sites: string[];
@@ -795,6 +799,18 @@ export class Game {
     audio.stinger('warhorn');
   }
 
+  /** Buy a level of Quarters or Arms for the Mustering Hall (see army.ts). */
+  upgradeArmy(what: ArmyUpgrade): void {
+    const problem = armyProblem(this.world, PLAYER, what);
+    if (problem) {
+      audio.play('warn');
+      this.toast(ICON.shield, problem, 'warn');
+      return;
+    }
+    this.world.enqueue({ type: 'army', owner: PLAYER, what });
+    audio.stinger('landmark');
+  }
+
   /** Pay ale and tools for spears in the fight you are in (see warfare.ts). */
   hire(): void {
     const problem = hireProblem(this.world, PLAYER);
@@ -843,7 +859,8 @@ export class Game {
     }
     if (this.raidPreview.value?.targetId === b.id) return;
     const problem = raidProblem(this.world, PLAYER, b.id);
-    const attack = raidStrength(this.world, PLAYER, huscarls(this.world, hallOf(this.world, PLAYER)));
+    const parts = armyParts(this.world, PLAYER, huscarls(this.world, hallOf(this.world, PLAYER)));
+    const attack = parts.strength;
     const pv = problem ? null : previewRemoval(this.world, b.id, PLAYER);
     this.raidPreview.value = {
       targetId: b.id,
@@ -851,6 +868,8 @@ export class Game {
       problem,
       attack,
       defence: defenceOf(this.world, b),
+      attackLines: parts.lines,
+      defenceLines: defenceParts(this.world, b),
       lost: pv?.lost ?? 0,
       sites: pv?.sites.map((s) => `${DISCOVERIES[s.kind].icon} ${DISCOVERIES[s.kind].name}`) ?? [],
     };
@@ -994,7 +1013,7 @@ export class Game {
 
 
 /** Buildings with no painted icon yet get their emoji drawn as one. */
-const GLYPHS: Record<string, string> = { farm: '🌾', bakehouse: '🍞', brewhouse: '🍺', mine: '⛏️', smithy: '🔨' };
+const GLYPHS: Record<string, string> = { farm: '🌾', bakehouse: '🍞', brewhouse: '🍺', mine: '⛏️', smithy: '🔨', hamlet: '🏘️' };
 export function icon(type: BuildingType | string): string {
   const g = GLYPHS[type];
   if (g) return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="32" y="50" font-size="48" text-anchor="middle">${g}</text></svg>`)}`;

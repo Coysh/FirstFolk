@@ -279,6 +279,15 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       b.add(box(0.2, 0.22, 0.05), C.darkTimber, { pos: [0, 1.4, 0.41] });
       break;
     }
+    case 'hamlet': {
+      // A second hall: the founders' hall with a stone footing, a palisade strip and two banners.
+      hall(b, 2);
+      b.add(box(1.9, 0.1, 0.1), C.wood, { pos: [0, 0.12, 1.0] });
+      for (let i = 0; i < 6; i++) b.add(cone(0.05, 0.28, 4), C.darkTimber, { pos: [-0.9 + i * 0.36, 0.18, 1.0] });
+      b.add(cyl(0.03, 0.03, 1.9, 5), C.wood, { pos: [-0.95, 0.95, -0.55] });
+      b.add(box(0.03, 0.4, 0.3), opts.crest ?? 0xc0392b, { pos: [-0.95, 1.7, -0.4] });
+      break;
+    }
     case 'musterhall': {
       // A long timber hall where the huscarls drill: shields along the wall, a weapon rack,
       // a straw practice dummy and a war banner.

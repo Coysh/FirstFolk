@@ -16,6 +16,7 @@ import { STYLES, type BotStyle, type StyleDef } from './styles';
 import { crownSite } from '../crown';
 import { scoutProblem } from '../scouts';
 import { watched } from '../renown';
+import { armyCost, armyProblem } from '../army';
 import { defenceOf, hallOf, hireProblem, huscarls, raidProblem, raidStrength, raidable } from '../warfare';
 import { previewRemoval } from '../territory';
 
@@ -104,6 +105,7 @@ export class OpeningBot {
     const kingstone = crownSite(world);
     // Sending a cart builds nothing, so a town with two sites under way can still answer a steading.
     if (!this.ablate.has('caravan') && this.caravan(world)) return;
+    if (!this.ablate.has('army')) this.army(world);
     if (sites >= (kingstone && !watched(world, this.owner, kingstone.x, kingstone.y) ? 4 : 2)) return;
     const emptyHuts = [...world.buildings.values()].filter((b) => b.owner === this.owner && isHome(b.type) && b.familyId === 0).length;
     const count = (t: BuildingType) => world.countBuildings(this.owner, t, true);
@@ -179,6 +181,8 @@ export class OpeningBot {
       [world.isUnlocked(this.owner, 'sawpit') && count('sawpit') >= 1 && count('sawpit') < 1 + Math.floor(pop / 28) && world.stored(this.owner, 'planks') < 16 && world.stored(this.owner, 'logs') > 40, 'sawpit'],
       [world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0, 'watchtower', target ?? undefined],
       [world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0, 'storehouse'],
+      // Out of room for towers: found a hamlet (a second hall) rather than crowd the first.
+      [world.players[this.owner].rank >= 2 && world.frontierCount(this.owner) >= world.frontierCap(this.owner) - 2 && world.hamletCount(this.owner, true) < BALANCE.hamlet.max && pop >= 45 && !hungry, 'hamlet'],
       ...(st.towersFirst ? [push, keep] : [keep]),
       ...(st.raids === 2 ? [muster] : []),
       // The late game's race: always have one Great Work under way.
@@ -279,6 +283,22 @@ export class OpeningBot {
     if (!best) return false;
     world.enqueue({ type: 'caravan', owner: this.owner, siteId: best.site.id, good: best.good, n: best.n });
     return true;
+  }
+
+  /** Spend on the army: arms from the smithy's tools, then quarters, for the styles that keep a Mustering Hall. */
+  private army(world: World): void {
+    const st = STYLES[this.style];
+    if (!st.muster || !hallOf(world, this.owner)) return;
+    // Arms first (the economy turning into steel), then room for more huscarls; keep tools for the homes first.
+    for (const what of ['arms', 'quarters'] as const) {
+      if (armyProblem(world, this.owner, what)) continue;
+      const cost = armyCost(world, this.owner, what)!;
+      if ((cost.tools ?? 0) > 0 && world.stored(this.owner, 'tools') - cost.tools < 6) continue;
+      // More huscarls are more mouths (they eat three times as much): only when the larder can feed them.
+      if (what === 'quarters' && (world.players[this.owner].hungry || world.larder(this.owner) < world.eaters(this.owner) * 2)) continue;
+      world.enqueue({ type: 'army', owner: this.owner, what });
+      return;
+    }
   }
 
   /** A Great Work to begin: none under way, still unclaimed in the valley, the one we can best afford. */

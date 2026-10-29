@@ -6,6 +6,7 @@ import type { Difficulty } from './rules';
 import type { OriginId } from './origins';
 import { rollOmens } from './omens';
 import { prosperity } from './prosperity';
+import { raidStrength } from './warfare';
 import { plural } from './population';
 import { BUILDINGS } from './defs';
 import type { BotStyle } from './ai/styles';
@@ -65,6 +66,8 @@ export interface PlaytestReport {
   homeLevelByMinute: [number, number][];
   /** The player's production chain per minute: farms, bakehouses, brewhouses, mines, smithies, then bread, ale and tools in store. */
   chainByMinute: number[][];
+  /** The player's army per minute: huscarls at home or out, strength of a full warband, Quarters/Arms/Drill, towers held against the cap, hamlets. */
+  armyByMinute: number[][];
   /** Voice-minutes held by [player, rival] on each road: [trade (steadings), war (the Kingstone), hearth]. */
   roads: number[][][];
   acclaim: boolean;
@@ -139,6 +142,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const prosperityByMinute: [number, number][] = [];
   const homeLevelByMinute: [number, number][] = [];
   const chainByMinute: number[][] = [];
+  const armyByMinute: number[][] = [];
   const roads: number[][] = world.players.map(() => [0, 0, 0]);
   let allegianceFlips = 0;
   let byTime = false;
@@ -256,6 +260,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       renownByMinute.push([world.players[0].renown, world.players[1]?.renown ?? 0]);
       voicesByMinute.push([world.crown?.voices[0] ?? 0, world.crown?.voices[1] ?? 0]);
       chainByMinute.push([...(['farm', 'bakehouse', 'brewhouse', 'mine', 'smithy'] as const).map((t) => world.countBuildings(0, t, true)), world.stored(0, 'bread'), world.stored(0, 'ale'), world.stored(0, 'tools')]);
+      armyByMinute.push([(world.players[0].army.quarters * 4 + 4) , raidStrength(world, 0, 4 + 4 * world.players[0].army.quarters), world.players[0].army.quarters, world.players[0].army.arms, world.players[0].army.drill, world.frontierCount(0), world.frontierCap(0), world.hamletCount(0)]);
       homeLevelByMinute.push([world.players[0].homeLevel, world.players[1]?.homeLevel ?? 0]);
       prosperityByMinute.push([prosperity(world, 0), world.players[1] ? prosperity(world, 1) : 0]);
       if (world.crown) for (const pl of world.players) {
@@ -339,6 +344,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     prosperityByMinute,
     homeLevelByMinute,
     chainByMinute,
+    armyByMinute,
     roads: roads as unknown as number[][][],
     acclaim: acclaimed,
     omens: [...world.omens],

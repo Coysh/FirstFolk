@@ -15,6 +15,7 @@ import { NO_OWNER, onBuildingComplete, recomputeTerritory, updateExploration } f
 import { updateRenown, type RenownSource } from './renown';
 import type { DeedId } from './deeds';
 import { updateProsperity } from './prosperity';
+import { emptyArmy, updateArmy, type ArmyState } from './army';
 import { initSteadings, updateCaravans, updateSteadings, type Caravan, type SteadingState } from './steadings';
 import { emptyCalling, updateCallings, callingTier, type CallingId } from './callings';
 import { updateBridges, type Bridge } from './bridges';
@@ -30,7 +31,7 @@ import { isWinter, updateSeasons, type Season } from './seasons';
 import { updateValleyEvents } from './events';
 import { OpeningBot } from './ai/openingBot';
 import { styleOf, type BotStyle } from './ai/styles';
-import { updateReavers, updateWarbands, type Warband } from './warfare';
+import { hallOf, huscarls, updateReavers, updateWarbands, type Warband } from './warfare';
 
 export type Stock = Record<Good, number>;
 export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0, grain: 0, bread: 0, ale: 0, ore: 0, tools: 0 });
@@ -199,6 +200,8 @@ export type SimEvent =
   | { type: 'crownKeeper'; keeper: number; was: number; x: number; y: number }
   | { type: 'crownQuarter'; owner: number; quarter: number }
   | { type: 'hearthHeld'; owner: number; was: number }
+  | { type: 'armyUpgraded'; owner: number; what: 'quarters' | 'arms'; level: number; x: number; y: number }
+  | { type: 'drillLevel'; owner: number; level: number; x: number; y: number }
   | { type: 'wantPosted'; siteId: number; kind: 'goods' | 'guard'; good: Good; n: number }
   | { type: 'wantWon'; siteId: number; owner: number; kind: 'goods' | 'guard'; good: Good; n: number }
   | { type: 'wantExpired'; siteId: number; kind: 'goods' | 'guard' }
@@ -282,6 +285,8 @@ export interface PlayerState {
   style: BotStyle;
   /** Raids (see warfare.ts): when the huscarls can march again, raids won, raids driven off. */
   raidReady: number;
+  /** The army: Quarters, Arms and Drill (see army.ts). */
+  army: ArmyState;
   /** When this settlement can rally a besieged post again (see warfare.ts). */
   rallyReady: number;
   /** When this settlement's scout can go out again (see scouts.ts). */
@@ -660,7 +665,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', onceEvents: [], rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, caravanned: 0, breadCredit: 0, homeLevel: 0, homeLack: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, origin: originId ?? '', style: 'balanced', raidReady: 0, rallyReady: 0, scoutReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', onceEvents: [], rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, caravanned: 0, breadCredit: 0, homeLevel: 0, homeLack: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, origin: originId ?? '', style: 'balanced', raidReady: 0, army: emptyArmy(), rallyReady: 0, scoutReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -787,6 +792,13 @@ export class World {
       for (const g of GOODS) if (def.cost[g]) out[g] = Math.ceil((def.cost[g]! * pct) / 100);
       return out;
     }
+    if (type === 'hamlet') {
+      // Every hamlet already founded makes the next dearer: reach has a price.
+      const pct = 100 + BALANCE.hamlet.costPct * this.hamletCount(owner, true);
+      const out: Partial<Record<Good, number>> = {};
+      for (const g of GOODS) if (def.cost[g]) out[g] = Math.ceil((def.cost[g]! * pct) / 100);
+      return out;
+    }
     if (!def.frontier) return { ...def.cost };
     const pct = 100 + BALANCE.towerCostPct * this.frontierCount(owner);
     const out: Partial<Record<Good, number>> = {};
@@ -797,7 +809,14 @@ export class World {
   /** How many frontier buildings this settlement's rank lets it hold. */
   frontierCap(owner: number): number {
     // A stronghold holds more posts: one at the second tier of the Wardens' calling, two at the third.
-    return BALANCE.frontierCap[Math.min(BALANCE.frontierCap.length - 1, this.players[owner]?.rank ?? 0)] + Math.max(0, callingTier(this, owner, 'stronghold') - 1);
+    return BALANCE.frontierCap[Math.min(BALANCE.frontierCap.length - 1, this.players[owner]?.rank ?? 0)] + Math.max(0, callingTier(this, owner, 'stronghold') - 1) + BALANCE.hamlet.capPer * this.hamletCount(owner);
+  }
+
+  /** Daughter Hamlets founded (standing, not under way): each lets the settlement hold more posts. */
+  hamletCount(owner: number, withSites = false): number {
+    let n = 0;
+    for (const b of this.buildings.values()) if (b.owner === owner && b.type === 'hamlet' && (withSites || b.done)) n++;
+    return n;
   }
 
   /** Frontier buildings a player has, standing or under way: towers, outposts and stockades. */
@@ -860,6 +879,7 @@ export class World {
     if (this.tick % 20 === 7) updateCallings(this);
     if (this.tick % 20 === 9) updateSaga(this);
     if (this.tick % 100 === 35) updateProsperity(this);
+    if (this.tick % 10 === 3) updateArmy(this, (o) => !this.warbands.some((b) => b.owner === o) && huscarls(this, hallOf(this, o)) > 0);
     for (const cmd of this.pendingCommands) {
       this.commandLog.push({ tick: this.tick, cmd });
       applyCommand(this, cmd);

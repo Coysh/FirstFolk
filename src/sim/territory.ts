@@ -7,6 +7,7 @@ import { craftXp } from './settlers';
 import { TRADES } from './trades';
 import { playerMod } from './houses';
 import { guardCounts } from './settlers';
+import { slotsOf } from './army';
 import type { Building, Discovery, World } from './world';
 
 /**
@@ -256,7 +257,7 @@ export function updateGarrisons(world: World): void {
   const guards = guardCounts(world);
   const slow = world.tick % BALANCE.garrisonEase < 20;
   for (const b of world.buildings.values()) {
-    const slots = BUILDINGS[b.type].garrison;
+    const slots = slotsOf(world, b, BUILDINGS[b.type].garrison);
     if (!slots) continue;
     const n = Math.min(slots, guards.get(b.id) ?? 0);
     if (n > b.guarded) b.guarded = n;

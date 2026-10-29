@@ -8,6 +8,7 @@ import { onBuildingComplete } from './territory';
 import { berryRegrow, type Building, type ResourceNode, type Settler, type World } from './world';
 import { hasOmen } from './omens';
 import { callingTier } from './callings';
+import { slotsOf } from './army';
 
 export const cheb = (ax: number, ay: number, bx: number, by: number) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
@@ -144,9 +145,9 @@ export function assignJobs(world: World): void {
     let spare = idle.length - Math.max(0, porters - carrying);
     // The Mustering Hall's huscarls first (a deliberate investment), then the posts.
     const posts = [...world.buildings.values()].filter((b) => b.owner === player.id && b.done && BUILDINGS[b.type].garrison).sort((p, q) => (q.type === 'musterhall' ? 1 : 0) - (p.type === 'musterhall' ? 1 : 0));
-    for (let k = 0; k < 4; k++)
+    for (let k = 0; k < 12; k++)
       for (const b of posts) {
-        if ((guards.get(b.id) ?? 0) !== k || k >= BUILDINGS[b.type].garrison!) continue;
+        if ((guards.get(b.id) ?? 0) !== k || k >= slotsOf(world, b, BUILDINGS[b.type].garrison)) continue;
         const e = world.entrance(b);
         let s = spare > 0 ? nearest(world, idle, e.x, e.y) : undefined;
         if (s) {

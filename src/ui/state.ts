@@ -17,7 +17,7 @@ export const buildCat = signal<BuildCat>('gather');
 export const BUILD_CATS: { id: BuildCat; name: string; icon: string; types: BuildingType[] }[] = [
   { id: 'gather', name: 'Gather', icon: '🪓', types: ['woodcutter', 'forager', 'fisher', 'quarry', 'forester', 'mine'] },
   { id: 'make', name: 'Make', icon: '🍞', types: ['sawpit', 'farm', 'bakehouse', 'brewhouse', 'smithy', 'storehouse'] },
-  { id: 'home', name: 'Homes', icon: '🏠', types: ['hut', 'longhouse'] },
+  { id: 'home', name: 'Homes', icon: '🏠', types: ['hut', 'longhouse', 'hamlet'] },
   { id: 'border', name: 'Border', icon: '🛡️', types: ['lookout', 'watchtower', 'stockade', 'musterhall'] },
   { id: 'wonders', name: 'Wonders', icon: '🏛️', types: ['henge', 'meadhall', 'granary'] },
 ];
