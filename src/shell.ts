@@ -140,6 +140,12 @@ export class Shell {
     await this.launch(async () => new World({ seed, difficulty, scenario: rival ? 'landfall' : 'peaceful', origin, omens: rollOmens(seed), label, dynasty }), true);
   }
 
+  /** Watch a valley: two bot towns play each other while you look on (never saved over your own game). */
+  async watchGame(seed: number): Promise<void> {
+    const styles = ['balanced', 'expander', 'trader', 'raider', 'warden', 'mason', 'hearth'] as const;
+    await this.launch(async () => new World({ seed, scenario: 'landfall', omens: rollOmens(seed), label: 'watch', origin: undefined, spectate: styles[seed % styles.length] }), true);
+  }
+
   async continueGame(): Promise<void> {
     const data = readSave();
     if (!data) {

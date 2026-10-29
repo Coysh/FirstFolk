@@ -44,18 +44,19 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
   return (
     <div class="hud">
       <TopBar game={game} />
-      <Goals game={game} />
+      {!game.spectating && <Goals game={game} />}
       {/* The race and the news share one column, so they can never overlap. */}
       <div class="top-center">
         <RaceBar game={game} />
         <Toasts game={game} />
       </div>
       <Frontier game={game} />
-      <Ledger game={game} />
+      {!game.spectating && <Ledger game={game} />}
       <InfoPanel game={game} />
       <Threats game={game} />
-      {game.mode.value.kind === 'select' && <Council game={game} />}
-      {game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : game.mode.value.kind === 'scout' ? <ScoutBar game={game} /> : game.mode.value.kind === 'bridge' ? <BridgeBar game={game} /> : <BuildBar game={game} />}
+      {game.spectating && <div class="watch-chip">👁 Watching two towns play. Press Esc for the menu</div>}
+      {!game.spectating && game.mode.value.kind === 'select' && <Council game={game} />}
+      {game.spectating ? null : game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : game.mode.value.kind === 'scout' ? <ScoutBar game={game} /> : game.mode.value.kind === 'bridge' ? <BridgeBar game={game} /> : <BuildBar game={game} />}
       <StoryCard game={game} />
       <Banner game={game} />
       <Victory game={game} shell={shell} />
@@ -98,7 +99,7 @@ function TopBar({ game }: { game: Game }) {
   return (
     <header class="topbar">
       <div class="res">
-        {GOODS.filter((g) => (g !== 'planks' || showPlanks) && (g !== 'fish' || showFish) && (BASIC_GOODS.includes(g) || w.players[PLAYER].produced[g] > 0 || w.stored(PLAYER, g) > 0)).map((g) => (
+        {GOODS.filter((g) => (g !== 'planks' || showPlanks) && (g !== 'fish' || showFish) && (BASIC_GOODS.includes(g) || (g !== 'grain' && g !== 'ore' && (w.players[PLAYER].produced[g] > 0 || w.stored(PLAYER, g) > 0)))).map((g) => (
           <Res key={g} good={g} value={FOODS.includes(g) ? w.stored(PLAYER, g) + w.waiting(PLAYER, g) : w.stored(PLAYER, g)} waiting={FOODS.includes(g) ? w.waiting(PLAYER, g) : 0} warn={FOODS.includes(g) && (hungry || lowLarder)} />
         ))}
         <span class={`res-plaque ${pop >= housing ? 'full' : ''}`} title={`${pop} settlers (${children} children) · homes for ${housing}`}>
@@ -1384,6 +1385,9 @@ function Victory({ game, shell }: { game: Game; shell: Shell }) {
               )}
               <li>
                 {w.population(PLAYER)} folk · {me.deedsUsed} house powers called · {me.raidsWon} posts burned, {me.repelled} raids held
+              </li>
+              <li>
+                🏘 {steadingsOf(w).filter((x) => x.st!.ally === PLAYER).length} of {steadingsOf(w).length} steadings stood with you at the end · {me.caravanned} goods carried by cart · {homeLevelName(me.homeLevel)} · prosperity {prosperity(w, PLAYER)}
               </li>
               <li>
                 {me.taken} landmark{me.taken === 1 ? '' : 's'} taken from your rival · {steadingsOf(w).reduce((n, x) => n + x.st!.won[PLAYER], 0)} steading Wants won

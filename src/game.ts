@@ -284,8 +284,14 @@ export class Game {
     this.notify({ channel: 'toast', priority: 1, icon: '/assets/icons/scroll.png', text: rivalLine(moment, { house, ...vars }), tone: 'rival' });
   }
 
+  /** True while two bot towns play and the player looks on (Watch a valley). */
+  get spectating(): boolean {
+    return this.world.label === 'watch';
+  }
+
   save(manual: boolean): boolean {
     this.autosaveTimer = AUTOSAVE_SECONDS;
+    if (this.spectating) return false;
     const ok = writeSave(serializeWorld(this.world));
     if (ok) this.lastSaved.value = Date.now();
     if (manual) this.toast('/assets/icons/scroll.png', ok ? 'Game saved' : 'Could not save: browser storage is unavailable', ok ? 'good' : 'warn');
@@ -296,8 +302,22 @@ export class Game {
     return this.view.buildings.centre(buildingId);
   }
 
+  private lastFollow = 0;
+  /** The spectator's camera goes where the story is: clashes, a steading changing sides, a waylaid cart, the Kingstone. */
+  private follow(e: SimEvent): void {
+    if (this.world.tick - this.lastFollow < 200) return;
+    let at: { x: number; y: number } | null = null;
+    if (e.type === 'clashBegan' || e.type === 'caravanWaylaid') at = e;
+    else if (e.type === 'steadingAlly' || e.type === 'wantWon') at = this.world.sites.find((s) => s.id === e.siteId) ?? null;
+    else if (e.type === 'starfall' || e.type === 'crownKeeper') at = e;
+    if (!at) return;
+    this.lastFollow = this.world.tick;
+    this.lookAt(at.x, at.y);
+  }
+
   private handleEvents(events: SimEvent[]): void {
     for (const e of events) {
+      if (this.spectating) this.follow(e);
       // What the player is told is decided in one place (ui/news.ts); here only sounds, floaters,
       // the rival's voice and the music's tension.
       const n = newsFor(this.world, e, PLAYER);

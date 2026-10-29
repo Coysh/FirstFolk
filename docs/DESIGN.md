@@ -779,6 +779,13 @@ So the Market is a chore that looks like a decision, which is why S1 removes it,
 - **Tried and rejected:** a town militia (+1 defence per adult near a post, up to 24) did not move Raider (69%); slowing raids (150 s cooldown) did not either (65%) and cut the battles; giving fine goods double favour as gifts did not lift Hearthfolk. Giving the economy bots a Mustering Hall made no difference (they already built one once the Crown was in play). **Open: Raider 58–65%, Hearthfolk 27%, Mason 35–40%.** The economy styles still win steadings late (their first voice comes at about 17:00, against 9:00 for Balanced) because their stores are thin when the first small Wants are posted.
 - **Measured** (24 duels, seed 100+): median 30.4 min, 3.0 lead changes and 13 comebacks (the winner trailed by 100 or more), Crown lead changes 1.5, longest bored stretch under a minute, decisions a minute 2.2 / 2.4 / 3.8 / 3.9, the last ten minutes the busiest (7.8 actions a minute against 3.6 in the first ten). A 100-game Balanced mirror is **49 : 51** by side, median 30.6 min, 53% comebacks.
 
+### S4: clarity and feel (v0.27.0)
+- **Watch a valley** (title screen): two bot towns play each other (`WorldOptions.spectate`, label `'watch'`; the player's side gets a style from the seed). The HUD hides the build bar, goals, ledger and council; the camera follows the story (`Game.follow`: a clash, a steading changing sides, a waylaid cart, the Kingstone); it never overwrites your saved game. It doubles as a soak test: `node tools/watch-shot.mjs 5 900` plays 15 minutes and reports page errors.
+- **A lighter top bar:** grain and ore (intermediate goods) stay out of it; bread, ale and tools appear once made. The Market and the challenge strip are gone (S1), so the screen carries about 14 widgets at once, down from about 25.
+- **The end report** now says how the valley was won: steadings that stood with you, goods carried, home level and prosperity. The first-person "road you walked" line counts steadings won and carts sent as *Trade*.
+- **Icons:** the five new buildings and goods use their emoji as icons (`icon()` in `game.ts`, `ICON` in `overlay.ts`) until painted ones exist.
+- **Not done:** Blender models for the steading, the caravan and the five new buildings (all are code-built, and the art test excludes the steading), new audio stingers (existing ones are reused), and OpenAI-painted crests. They remain the first art tasks.
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -1708,3 +1715,6 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 
 ### v0.26.0 Contest and crescendo (2026-10-29, branch dev/living-valley)
 - Toll-post waylaying of carts (with escorts and a wagon train), winter ice for carts, scouts and raids, a Rally that costs production, a Crown that drains twice as fast for the side behind, Last Wants, Wagon Train and Open Hands replacing Timber Drive and Harvest Home, prosperity-strengthened guards. Raids still dominate the matrix; Hearthfolk is the weakest style (open). Tests: waylay, escort, Open Hands, the finale, winter ice.
+
+### v0.27.0 Clarity and feel (2026-10-29, branch dev/living-valley)
+- Watch a valley (AI vs AI spectator), a lighter top bar, a report that says how the valley was won, emoji icons for the new goods and buildings, `tools/watch-shot.mjs`, `tools/town-shot.mjs`, `tools/steading-shot.mjs`.

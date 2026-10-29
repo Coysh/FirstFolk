@@ -331,6 +331,8 @@ export interface WorldOptions {
   label?: string;
   /** The rival's personality (balance harness); by default it follows the rival's origin. */
   rivalStyle?: BotStyle;
+  /** "Watch a valley": both towns are played by bots (the player's side gets this style). */
+  spectate?: BotStyle;
 }
 
 export class World {
@@ -434,6 +436,10 @@ export class World {
     initSteadings(this, this.map.sites.map((s) => s.char));
     this.setupPlayer(0, this.map.starts[0], opts.origin, opts.dynasty);
     if (this.scenario.rival) this.addRival(opts.rivalStyle);
+    if (opts.spectate) {
+      this.players[0].style = opts.spectate;
+      this.ais.push(new OpeningBot(0, this.rules.rivalThink, 0, opts.spectate));
+    }
   }
 
   // ---- geometry helpers -------------------------------------------------

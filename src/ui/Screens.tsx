@@ -62,6 +62,10 @@ function Title({ shell }: { shell: Shell }) {
               {dailyBest.value?.date === todayKey() && ` · today’s best: ${dailyBest.value.won ? 'won' : 'lost'}, ${dailyBest.value.renown}★`}
             </span>
           </button>
+          <button class="plaque" onClick={() => void shell.watchGame(Math.floor(Math.random() * 1_000_000))}>
+            <span class="pl-title">Watch a valley</span>
+            <span class="pl-sub">Two rival towns, played by the machine</span>
+          </button>
           <button class="plaque" onClick={() => open('howto')}>
             <span class="pl-title">How to Play</span>
           </button>

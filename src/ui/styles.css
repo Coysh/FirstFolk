@@ -3205,3 +3205,4 @@ button.danger.armed {
 @media (max-width: 720px) {
   .race:not(.folk-open) .race-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
+.watch-chip { position: absolute; left: 50%; bottom: calc(18px + var(--safe-b)); transform: translateX(-50%); padding: 8px 16px; border-radius: 999px; background: rgba(40, 26, 14, 0.85); color: #fff4d2; font: 800 13px var(--body); border: 1.5px solid var(--wood-light); }
