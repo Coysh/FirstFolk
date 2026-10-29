@@ -191,13 +191,14 @@ export type SimEvent =
   | { type: 'renown'; owner: number; amount: number; source: RenownSource; x: number; y: number }
   | { type: 'deed'; owner: number; seat: number; house: HouseId; surname: string; deed: DeedId; x: number; y: number; text: string }
   | { type: 'clashBegan'; bandId: number; owner: number; defender: number; targetId: number; buildingType: BuildingType; x: number; y: number; attack: number; defence: number }
-  | { type: 'clashRally'; owner: number; bandId: number; targetId: number; kind: 'rally' | 'surge'; n: number; strength: number; x: number; y: number }
+  | { type: 'clashRally'; owner: number; bandId: number; targetId: number; kind: 'rally' | 'surge' | 'hire'; n: number; strength: number; x: number; y: number }
   | { type: 'sagaBeat'; beat: number }
   | { type: 'scoutSent'; owner: number; x: number; y: number }
   | { type: 'scoutSpotted'; owner: number; seer: number; x: number; y: number }
   | { type: 'scoutHome'; owner: number; found: number }
   | { type: 'crownKeeper'; keeper: number; was: number; x: number; y: number }
   | { type: 'crownQuarter'; owner: number; quarter: number }
+  | { type: 'hearthHeld'; owner: number; was: number }
   | { type: 'wantPosted'; siteId: number; kind: 'goods' | 'guard'; good: Good; n: number }
   | { type: 'wantWon'; siteId: number; owner: number; kind: 'goods' | 'guard'; good: Good; n: number }
   | { type: 'wantExpired'; siteId: number; kind: 'goods' | 'guard' }
@@ -205,7 +206,7 @@ export type SimEvent =
   | { type: 'steadingGift'; siteId: number; owner: number; good: Good; n: number }
   | { type: 'caravanSent'; owner: number; siteId: number; good: Good; n: number }
   | { type: 'caravanArrived'; owner: number; siteId: number; good: Good; n: number; won: boolean }
-  | { type: 'caravanHome'; owner: number }
+  | { type: 'caravanHome'; owner: number; good?: Good; n?: number }
   | { type: 'freeze'; on: boolean }
   | { type: 'caravanWaylaid'; owner: number; siteId: number; good: Good; n: number; x: number; y: number }
   | { type: 'homesLevel'; owner: number; level: number; was: number }
@@ -952,7 +953,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'wantPosted', 'wantWon', 'steadingAlly', 'caravanArrived', 'homesLevel', 'starfall', 'crownKeeper', 'crownQuarter', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'wantPosted', 'wantWon', 'steadingAlly', 'caravanArrived', 'homesLevel', 'starfall', 'crownKeeper', 'crownQuarter', 'hearthHeld', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);

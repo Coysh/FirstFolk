@@ -1,62 +1,58 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { icon, PLAYER, type ClaimPreview, type Game } from '../game';
 import { audio } from '../audio/audio';
 import { ICON } from '../render/overlay';
-import { CALLINGS, CALLING_IDS, CALLING_TIERS, callingScores, callingTitle } from '../sim/callings';
+import { CALLINGS, callingTitle } from '../sim/callings';
 import { VALLEYS } from '../sim/mapgen';
 import { ORIGIN_IDS } from '../sim/origins';
-import { BRIDGE_MAX, BRIDGE_RANK, bestBridge, bridgeCost } from '../sim/bridges';
-import { BASIC_GOODS, BUILDINGS, BUILD_MENU, DISCOVERIES, FOODS, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
-import { NO_OWNER, territoryBox } from '../sim/territory';
+import { bridgeCost } from '../sim/bridges';
+import { BUILDINGS, BUILD_MENU, GOODS, GOOD_INFO, type BuildingType, type Good } from '../sim/defs';
+import { NO_OWNER } from '../sim/territory';
 import { HOUSES, HOUSE_TIMEOUT } from '../sim/houses';
-import { BALANCE, TICK_HZ, secs } from '../sim/balance';
+import { BALANCE, TICK_HZ } from '../sim/balance';
 import { canAfford, eventDef } from '../sim/events';
-import { SEASON_NAMES, seasonOf, ticksToNextSeason } from '../sim/seasons';
 import type { World } from '../sim/world';
 import { CREST_COLORS, plural } from '../sim/population';
-import { TRADES, tierOf, tierProgress } from '../sim/trades';
-import { settings, toggleMute } from '../settings';
+import { TRADES, tierOf } from '../sim/trades';
 import type { Shell } from '../shell';
 import { describeSettler, formatTime } from './describe';
 import { HowTo, SettingsPanel } from './Screens';
-import { DEED_KEYS, HOTKEYS } from '../input/input';
-import { lockLabel } from '../sim/commands';
-import { DEEDS, activePowers, deedCooldown, deedProblem, deedWait } from '../sim/deeds';
-import { caravanMax, caravanProblem, routeThreat, steadingsOf, suggestLoad } from '../sim/steadings';
-import { STEADING_CHAR } from '../sim/steadingDefs';
+import { DEEDS } from '../sim/deeds';
+import { steadingsOf } from '../sim/steadings';
 import { homeLevelName, prosperity } from '../sim/prosperity';
-import { CONTESTED, crownEta, crownPace, crownPct, crownSite } from '../sim/crown';
-import { starfallTick } from '../sim/happenings';
+import { crownPct } from '../sim/crown';
 import { SAGA } from '../sim/saga';
-import { OMENS } from '../sim/omens';
 import { ORIGINS } from '../sim/origins';
 import { workOwner } from '../sim/works';
 import { workSlots } from '../sim/settlers';
-import { defenceOf, hallOf, huscarls, raidStrength } from '../sim/warfare';
+import { defenceOf, hireProblem, hireStrength, huscarls, raidStrength } from '../sim/warfare';
 
 const plural_ = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
-/** Subscribe a component to the periodic world refresh (signals skip prop-identical re-renders). */
-const useWorldRefresh = (game: Game) => void game.version.value;
+import { BuildShelf, ChronicleSheet, GoalsSheet, Rail, Status, TopBar, TownSheet, ValleySheet, useWorldRefresh } from './chrome';
 
 export function Hud({ game, shell }: { game: Game; shell: Shell }) {
+  const spectating = game.spectating;
+  const mode = game.mode.value;
   return (
-    <div class="hud">
+    <div class={`hud ${spectating ? 'spectating' : ''}`}>
       <TopBar game={game} />
-      {!game.spectating && <Goals game={game} />}
-      {/* The race and the news share one column, so they can never overlap. */}
-      <div class="top-center">
-        <RaceBar game={game} />
+      {!spectating && <Status game={game} />}
+      {/* Alerts and news share one column under the bar, so they can never overlap each other or the race. */}
+      <div class="notices">
+        <Threats game={game} />
+        <ValleySheet game={game} />
         <Toasts game={game} />
       </div>
-      <Frontier game={game} />
-      {!game.spectating && <Ledger game={game} />}
+      <TownSheet game={game} />
+      <GoalsSheet game={game} />
+      <ChronicleSheet game={game} />
+      {!spectating && <Ledger game={game} />}
       <InfoPanel game={game} />
-      <Threats game={game} />
-      {game.spectating && <div class="watch-chip">👁 Watching two towns play. Press Esc for the menu</div>}
-      {!game.spectating && game.mode.value.kind === 'select' && <Council game={game} />}
-      {game.spectating ? null : game.mode.value.kind === 'place' ? <PlaceBar game={game} type={game.mode.value.type} /> : game.mode.value.kind === 'deed' ? <DeedBar game={game} /> : game.mode.value.kind === 'raid' ? <RaidBar game={game} /> : game.mode.value.kind === 'scout' ? <ScoutBar game={game} /> : game.mode.value.kind === 'bridge' ? <BridgeBar game={game} /> : <BuildBar game={game} />}
+      {spectating && <div class="watch-chip">👁 Watching two towns play. Press Esc for the menu</div>}
+      {!spectating && mode.kind === 'select' && <Rail game={game} />}
+      {spectating ? null : mode.kind === 'place' ? <PlaceBar game={game} type={mode.type} /> : mode.kind === 'deed' ? <DeedBar game={game} /> : mode.kind === 'raid' ? <RaidBar game={game} /> : mode.kind === 'scout' ? <ScoutBar game={game} /> : mode.kind === 'bridge' ? <BridgeBar game={game} /> : <BuildShelf game={game} />}
       <StoryCard game={game} />
       <Banner game={game} />
       <Victory game={game} shell={shell} />
@@ -66,353 +62,16 @@ export function Hud({ game, shell }: { game: Game; shell: Shell }) {
   );
 }
 
-/** A resource plaque that bumps when its value rises. */
-function Res({ good, value, warn, waiting = 0 }: { good: Good; value: number; warn?: boolean; waiting?: number }) {
-  const prev = useRef(value);
-  const [bump, setBump] = useState(0);
-  useEffect(() => {
-    if (value > prev.current) setBump((b) => b + 1);
-    prev.current = value;
-  }, [value]);
-  return (
-    <span class={`res-plaque ${warn ? 'warn' : ''}`} title={waiting ? `${GOOD_INFO[good].name}: ${value - waiting} in stores, ${waiting} waiting at gatherers` : GOOD_INFO[good].name}>
-      <img src={ICON[good]} alt={GOOD_INFO[good].name} />
-      <b key={bump} class={bump ? 'bump' : ''}>
-        {value}
-      </b>
-    </span>
-  );
-}
-
-function TopBar({ game }: { game: Game }) {
-  useWorldRefresh(game);
+/** Hired Spears: ale and tools for strength in this fight, bigger the richer the homes. */
+function HireButton({ game, done }: { game: Game; done: boolean }) {
   const w = game.world;
-  const pop = w.population(PLAYER);
-  const housing = w.housing(PLAYER);
-  const hungry = w.players[PLAYER].hungry;
-  // Everyone eats about once every 85 s, guards three times as much: under one meal each is about 90 s of food.
-  const lowLarder = !hungry && w.larder(PLAYER) < w.eaters(PLAYER);
-  const children = [...w.settlers.values()].filter((s) => s.owner === PLAYER && s.child).length;
-  const idle = [...w.settlers.values()].filter((s) => s.owner === PLAYER && !s.child && s.job.kind === 'idle').length;
-  const showPlanks = w.players[PLAYER].produced.planks > 0 || w.isUnlocked(PLAYER, 'sawpit');
-  const showFish = w.players[PLAYER].produced.fish > 0 || w.isUnlocked(PLAYER, 'fisher');
+  const problem = hireProblem(w, PLAYER);
+  const cost = Object.entries(BALANCE.hireCost).map(([g, n]) => `${n} ${GOOD_INFO[g as Good].icon}`).join(' ');
   return (
-    <header class="topbar">
-      <div class="res">
-        {GOODS.filter((g) => (g !== 'planks' || showPlanks) && (g !== 'fish' || showFish) && (BASIC_GOODS.includes(g) || (g !== 'grain' && g !== 'ore' && (w.players[PLAYER].produced[g] > 0 || w.stored(PLAYER, g) > 0)))).map((g) => (
-          <Res key={g} good={g} value={FOODS.includes(g) ? w.stored(PLAYER, g) + w.waiting(PLAYER, g) : w.stored(PLAYER, g)} waiting={FOODS.includes(g) ? w.waiting(PLAYER, g) : 0} warn={FOODS.includes(g) && (hungry || lowLarder)} />
-        ))}
-        <span class={`res-plaque ${pop >= housing ? 'full' : ''}`} title={`${pop} settlers (${children} children) · homes for ${housing}`}>
-          <img src={ICON.people} alt="Population" />
-          <b>{pop}</b>
-          <small>/{housing}</small>
-        </span>
-        <Crafts w={w} />
-        {w.players[PLAYER].rank >= 1 && (
-          <button
-            class={`auto-homes ${w.players[PLAYER].autoHomes ? 'on' : ''}`}
-            onClick={() => game.setAutoHomes(!w.players[PLAYER].autoHomes)}
-            aria-pressed={w.players[PLAYER].autoHomes}
-            title={w.players[PLAYER].autoHomes ? 'Families build their own huts when every home is full. Click to stop.' : 'Let families build their own huts when every home is full'}
-          >
-            🏠 <span>Auto-homes</span>
-          </button>
-        )}
-        {hungry && <span class="hungry pulse">Hungry!</span>}
-        {lowLarder && <span class="hungry pulse soon" title="Food is running low: build a Forager or a Fisher before folk go hungry">Food low</span>}
-        {idle >= 3 && (
-          <span class="idle-chip" title={`${idle} adults have nothing to do. Build workplaces (or more homes for families to grow).`}>
-            💤 {idle} idle
-          </span>
-        )}
-      </div>
-      <div class="speed">
-        <SeasonChip game={game} />
-        <span class="clock">{formatTime(w.tick)}</span>
-        <div class="seg">
-          <button class={game.paused.value ? 'on' : ''} onClick={() => game.togglePause()} title="Pause (Space)" aria-label="Pause">
-            ❚❚
-          </button>
-          {[1, 2, 3, 5].map((s) => (
-            <button key={s} class={!game.paused.value && game.speed.value === s ? 'on' : ''} onClick={() => game.setSpeed(s)} aria-label={`Speed ${s}x`}>
-              {s}×
-            </button>
-          ))}
-        </div>
-        <button
-          class={`mute-btn ${settings.value.muted ? 'on' : ''}`}
-          onClick={() => toggleMute()}
-          aria-label={settings.value.muted ? 'Unmute sound' : 'Mute sound'}
-          aria-pressed={settings.value.muted}
-          title={`${settings.value.muted ? 'Unmute' : 'Mute'} (M)`}
-        >
-          {settings.value.muted ? '🔇' : '🔊'}
-        </button>
-        <button class="menu-btn" onClick={() => (game.menuOpen.value = true)} aria-label="Menu" title="Menu (Esc)">
-          ☰
-        </button>
-      </div>
-    </header>
-  );
-}
-
-const SEASON_ICONS = ['🌱', '☀️', '🍂', '❄️'];
-
-/** Season and settlement rank, with a countdown when winter approaches. */
-function SeasonChip({ game }: { game: Game }) {
-  const w = game.world;
-  const season = seasonOf(w.tick);
-  const left = Math.ceil(ticksToNextSeason(w.tick) / TICK_HZ);
-  const warn = season === 2 && left <= 40;
-  const rank = w.players[PLAYER].rank;
-  return (
-    <div class="season-chip">
-      <span class={`rank r${rank}`} title="Settlement rank: complete each chapter to rise">
-        {RANK_NAMES[rank]}
-      </span>
-      <CallingChip game={game} />
-      <span class={`season ${season === 3 ? 'winter' : ''} ${warn ? 'warn pulse' : ''}`} title={season === 3 ? 'Winter: berries sleep, folk eat more, building is slower' : `${SEASON_NAMES[season]}: ${left}s left`}>
-        {SEASON_ICONS[season]} {warn ? `Winter in ${left}s` : SEASON_NAMES[season]}
-      </span>
-    </div>
-  );
-}
-
-/** What the town has become: a chip that opens the four callings, how close each is, and what the current one grants. */
-function CallingChip({ game }: { game: Game }) {
-  useWorldRefresh(game);
-  const [open, setOpen] = useState(false);
-  const w = game.world;
-  const c = w.players[PLAYER].calling;
-  const title = callingTitle(c);
-  const scores = open ? callingScores(w, PLAYER) : null;
-  return (
-    <span class="calling-wrap">
-      <button class={`calling-chip ${c.id ? `on ${c.id}` : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} title={c.id ? `${title}: ${CALLINGS[c.id].perks[c.tier - 1]}` : 'Your town has no calling yet: it follows what you build'}>
-        {c.id ? (
-          <>
-            <span>{CALLINGS[c.id].icon}</span> {title} <span class="calling-stars">{'★'.repeat(c.tier)}</span>
-          </>
-        ) : (
-          <span class="muted">Calling?</span>
-        )}
-      </button>
-      {open && scores && (
-        <div class="calling-panel panel" role="dialog" aria-label="Your town's calling">
-          <p class="calling-intro">What your town becomes follows what you build and do. The leading calling grants its perks, and it shows beside your hall.</p>
-          {CALLING_IDS.map((id) => {
-            const d = CALLINGS[id];
-            const v = scores[id];
-            const mine = c.id === id;
-            const tier = mine ? c.tier : 0;
-            const next = CALLING_TIERS.find((t) => v < t) ?? CALLING_TIERS[2];
-            return (
-              <div class={`calling-row ${mine ? 'mine' : ''}`} key={id}>
-                <span class="calling-icon">{d.icon}</span>
-                <div class="calling-body">
-                  <strong>
-                    {tier ? d.titles[tier - 1] : d.name} <span class="calling-stars">{'★'.repeat(tier)}{'☆'.repeat(3 - tier)}</span>
-                  </strong>
-                  <div class="calling-bar">
-                    <div style={{ width: `${Math.min(100, (v / CALLING_TIERS[2]) * 100)}%`, background: `#${d.color.toString(16).padStart(6, '0')}` }} />
-                  </div>
-                  <small>{mine ? d.perks[tier - 1] : `${d.earned}. ${v < CALLING_TIERS[0] ? `${CALLING_TIERS[0] - v} more to begin` : `Next tier at ${next}`}`}</small>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </span>
-  );
-}
-
-function Goals({ game }: { game: Game }) {
-  const [open, setOpen] = useState(() => window.innerWidth > 720);
-  const list = game.objectives.value;
-  if (!list.length) return null;
-  const current = list.find((o) => !o.done);
-  const chapter = current?.chapter ?? list[list.length - 1].chapter;
-  const inChapter = list.filter((o) => o.chapter === chapter);
-  const doneCount = inChapter.filter((o) => o.done).length;
-  const hints = settings.value.hints;
-  return (
-    <section class={`goals scroll ${open ? '' : 'closed'}`}>
-      <button class="goals-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <img src={ICON.scroll} alt="" />
-        <span class="chap">
-          <small>Chapter</small>
-          {chapter}
-        </span>
-        <span class="count">
-          {doneCount}/{inChapter.length} <span class="caret">{open ? '▾' : '▸'}</span>
-        </span>
-      </button>
-      <div class="chapter-bar">
-        <div style={{ width: `${(doneCount / inChapter.length) * 100}%` }} />
-      </div>
-      {open ? (
-        <ul>
-          {inChapter.map((o) => (
-            <li key={o.id} class={o.done ? 'done' : o === current ? 'next' : ''}>
-              <span class="tick">{o.done ? '✔' : o === current ? '➤' : '•'}</span>
-              <span class="label">
-                {o.label}
-                {o === current && hints && o.hint && <em>{o.hint}</em>}
-              </span>
-              {!o.done && o.target > 1 && (
-                <span class="prog">
-                  {o.id.startsWith('trade') ? `${Math.round((o.current / o.target) * 100)}%` : `${Math.min(o.current, o.target)}/${o.target}`}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        current && <div class="goals-next">➤ {current.label}</div>
-      )}
-    </section>
-  );
-}
-
-/** The race at a glance: the Crown (the win), renown (rank, and the tie-break) and the clock. */
-function RaceBar({ game }: { game: Game }) {
-  useWorldRefresh(game);
-  // On a phone the steadings fold away behind a tap, so the race card stays a few lines tall.
-  const [folk, setFolk] = useState(false);
-  const w = game.world;
-  if (w.scenario.victory !== 'crown') return null;
-  const limit = w.scenario.timeLimit ?? 0;
-  const left = limit ? Math.max(0, limit - w.tick) : Infinity;
-  const c = w.crown;
-  const site = crownSite(w);
-  const fallIn = Math.max(0, starfallTick(w) - w.tick);
-  const opensIn = Math.max(0, BALANCE.crownOpens - w.tick);
-  const crownRow = (owner: number, label: string) => {
-    const pct = crownPct(w, owner);
-    const pace = crownPace(w, owner);
-    const eta = crownEta(w, owner);
-    const voices = c?.voices[owner] ?? 0;
-    return (
-      <div class={`race-row crown ${owner === PLAYER ? 'me' : 'them'} ${pace > 0 ? 'keeping' : ''}`} title={`${label}: the Crown is ${pct}% full and ${pace > 0 ? `filling, full in ${formatTime(eta * TICK_HZ)}` : pace < 0 ? 'draining' : 'still'}. ${voices} voice${voices === 1 ? '' : 's'} of the valley.`}>
-        <span class="race-name">{label}</span>
-        <div class="race-track">
-          <div style={{ width: `${pct}%` }} />
-        </div>
-        <span class="race-score">
-          {pct}
-          <small>%</small>
-        </span>
-        <span class="race-rate">{pace > 0 ? `+${pace}/s` : pace < 0 ? `${pace}/s` : ''}</span>
-        <span class="race-voices" title="Voices of the valley: steadings that stand with you, and the Kingstone (worth two)">
-          {'●'.repeat(voices)}
-          {voices === 0 ? '○' : ''}
-        </span>
-      </div>
-    );
-  };
-  const mine = c?.voices[PLAYER] ?? 0;
-  const theirs = c?.voices[1] ?? 0;
-  const status = !c || w.tick < BALANCE.crownOpens
-    ? `🏘 The Crown opens in ${formatTime(opensIn)}: win the favour of steadings with carts of what they want. Voices fill it.`
-    : mine > theirs
-      ? `👑 You hold more of the valley (${plural_(mine, 'voice')} to ${theirs}): your Crown is filling. ${site ? 'Guard it!' : ''}`
-      : mine < theirs
-        ? `🔥 The rival holds more of the valley (${plural_(theirs, 'voice')} to ${mine}): your Crown is draining. Win a steading, or take the Kingstone${site ? '' : ' when the star falls'}.`
-        : mine === 0
-          ? '⚖️ Nobody holds the valley yet. The first steading to stand with you starts the Crown filling.'
-          : `⚖️ Level at ${mine} voices each: the Crown is frozen. Win a Want, or take the Kingstone${site ? '' : ' when it falls'}.`;
-  const tone = mine > theirs ? 'mine' : mine < theirs ? 'theirs' : 'contested';
-  return (
-    <section class={`race ${folk ? 'folk-open' : ''}`} aria-label="The race for the Crown">
-      <div class="race-head">
-        <span>
-          <b>👑 The Crown</b>
-        </span>
-        <button class="race-toggle" onClick={() => setFolk(!folk)} aria-pressed={folk} title="Show the steadings">
-          🏘 {steadingsOf(w).filter((x) => x.st!.ally === PLAYER).length}/{steadingsOf(w).length}
-        </button>
-        {left <= secs(5 * 60) ? <span class="race-clock pulse">⏳ {formatTime(left)} left</span> : limit ? <span class="race-clock">ends {formatTime(limit)}</span> : null}
-      </div>
-      {w.omens.length > 0 && (
-        <div class="race-omens">
-          {w.omens.map((o) => (
-            <span key={o} title={`${OMENS[o].name}: ${OMENS[o].blurb}`}>
-              {OMENS[o].icon} {OMENS[o].name}
-            </span>
-          ))}
-        </div>
-      )}
-      {crownRow(PLAYER, 'You')}
-      {w.players[1] && crownRow(1, 'Rival')}
-      <button class={`race-status ${tone}`} onClick={() => (site ? game.lookAt(site.x, site.y) : undefined)} disabled={!site} title={site ? 'Look at the Kingstone' : undefined}>
-        {status}
-        {c && site && c.keeper !== NO_OWNER ? <small> The Kingstone: {c.keeper === PLAYER ? 'yours (2 voices)' : c.keeper === CONTESTED ? 'contested (nobody’s voice)' : 'the rival’s (2 voices)'}.</small> : null}
-      </button>
-      <div class="race-renown" title="Prosperity raises your rank: people, cottages and hall-houses (bread, ale and tools), friends among the steadings and Great Works. It can fall as well as rise.">
-        <span>🏡 Prosperity {prosperity(w, PLAYER)}</span>
-        <span class="faint">{homeLevelName(w.players[PLAYER].homeLevel)}</span>
-        {w.players[1] && (
-          <>
-            <span>· Rival {prosperity(w, 1)}</span>
-            <span class="faint">{homeLevelName(w.players[1].homeLevel)}</span>
-          </>
-        )}
-      </div>
-      <Steadings game={game} />
-      {fallIn > 0 && w.tick >= BALANCE.crownOpens && !site && <div class="race-renown faint">☄️ A star falls in {formatTime(fallIn)}: the Kingstone, worth two voices.</div>}
-    </section>
-  );
-}
-
-/** The folk of the valley: each steading's favour for both settlements, what it wants, and a cart to send. */
-function Steadings({ game }: { game: Game }) {
-  const w = game.world;
-  const rows = steadingsOf(w).filter((s) => s.revealed & 1);
-  if (!rows.length) return null;
-  const carts = w.caravans.filter((c) => c.owner === PLAYER).length;
-  return (
-    <div class="steadings" aria-label="The steadings of the valley">
-      {rows.map((s) => {
-        const st = s.st!;
-        const ch = STEADING_CHAR[st.char];
-        const want = st.want;
-        const load = suggestLoad(w, PLAYER, s);
-        const problem = load ? caravanProblem(w, PLAYER, s.id, load.good, Math.max(1, load.n)) : 'Nothing to send';
-        const left = want ? Math.max(0, want.endsAt - w.tick) : 0;
-        const askText = !want ? 'no Want right now' : want.kind === 'guard' ? `a manned post beside them: ${want.progress[PLAYER]}/${want.n}s` : `${want.progress[PLAYER]}/${want.n} ${want.good}`;
-        const who = st.ally === PLAYER ? 'mine' : st.ally >= 0 ? 'theirs' : 'open';
-        return (
-          <div class={`stead ${who}`} key={s.id}>
-            <button class="stead-name" onClick={() => game.lookAt(s.x, s.y)} title={`${st.name}: ${ch.blurb} Sends ${ch.giftN} ${ch.gift} a minute to whoever they stand with.`}>
-              {ch.icon} {st.name}
-            </button>
-            <div class="stead-favour" title={`Favour: you ${st.favour[PLAYER]}, rival ${st.favour[1] ?? 0}. At 50 with a lead of 20 they stand with you.`}>
-              <div class="f-me" style={{ width: `${st.favour[PLAYER] / 2}%` }} />
-              <div class="f-them" style={{ width: `${(st.favour[1] ?? 0) / 2}%` }} />
-              <i class="f-mark" />
-            </div>
-            <div class="stead-want">
-              <span class={want?.kind === 'guard' ? 'guard' : ''}>
-                {want ? '📣 ' : ''}
-                {askText}
-              </span>
-              {want && <small class={left < 300 ? 'pulse' : ''}>{formatTime(left)}</small>}
-              {want && (want.progress[1] ?? 0) > 0 && <small class="rival-progress">rival {want.kind === 'guard' ? `${want.progress[1]}s` : `${want.progress[1]}`}</small>}
-            </div>
-            <button
-              class="stead-send"
-              disabled={!!problem || !load || load.n < 1}
-              onClick={() => load && game.sendCaravan(s.id, load.good, load.n)}
-              title={problem || (routeThreat(w, PLAYER, s.id) ? '⚠ A rival post stands on this road: the cart would be waylaid. Man a post beside it first, or go another way' : load!.wanted ? `Send what they asked for: ${load!.n} ${load!.good}` : `Send a gift of ${load!.n} ${load!.good}: it earns a little favour`)}
-            >
-              🛒 {load && load.n > 0 ? `${load.n} ${load.good}` : 'Send'}
-              {carts ? <small>{carts}/{caravanMax(w, PLAYER)}</small> : null}
-            </button>
-          </div>
-        );
-      })}
-    </div>
+    <button class="rally hire" disabled={!!problem} onClick={() => game.hire()} title={done ? 'Spears already hired for this fight' : problem || `Hire spears (H): +${hireStrength(w, PLAYER)} strength for ${cost}`}>
+      {done ? `💰 +${hireStrength(w, PLAYER)}` : `💰 Hire`}
+      {!problem && <small>{cost}</small>}
+    </button>
   );
 }
 
@@ -457,10 +116,13 @@ function Threats({ game }: { game: Game }) {
                   {tug(band, false)}
                 </span>
               </button>
-              <button class="rally" disabled={c.rallied || rest > 0} onClick={() => game.rally()} title="Call every free hand near the post to its defence (G)">
-                {c.rallied ? `📯 Called: +${c.rally}` : rest > 0 ? `📯 ${Math.ceil(rest / TICK_HZ)}s` : '📯 Rally!'}
-                {!c.rallied && !rest && <span class="hotkey">G</span>}
-              </button>
+              <span class="clash-btns">
+                <button class="rally" disabled={c.rallied || rest > 0} onClick={() => game.rally()} title="Call every free hand near the post to its defence (G)">
+                  {c.rallied ? `📯 +${c.rally}` : rest > 0 ? `📯 ${Math.ceil(rest / TICK_HZ)}s` : '📯 Rally'}
+                  {!c.rallied && !rest && <span class="hotkey">G</span>}
+                </button>
+                <HireButton game={game} done={!!c.hiredDef} />
+              </span>
             </div>
           );
         return (
@@ -484,43 +146,16 @@ function Threats({ game }: { game: Game }) {
               {tug(mine, true)}
             </span>
           </button>
-          <button class="rally" disabled={mine.clash.surged} onClick={() => game.rally()} title="Throw everything in: +30% strength for this clash (G)">
-            {mine.clash.surged ? `🔥 Surged: +${mine.clash.surge}` : '🔥 Surge!'}
-            {!mine.clash.surged && <span class="hotkey">G</span>}
-          </button>
+          <span class="clash-btns">
+            <button class="rally" disabled={mine.clash.surged} onClick={() => game.rally()} title="Throw everything in: +30% strength for this clash (G)">
+              {mine.clash.surged ? `🔥 +${mine.clash.surge}` : '🔥 Surge'}
+              {!mine.clash.surged && <span class="hotkey">G</span>}
+            </button>
+            <HireButton game={game} done={!!mine.clash.hiredAtk} />
+          </span>
         </div>
       )}
     </section>
-  );
-}
-
-/** Your warband: ready to raid, marching, or resting. */
-function Warband({ game }: { game: Game }) {
-  const w = game.world;
-  const hall = hallOf(w, PLAYER);
-  if (!hall) return null;
-  const n = huscarls(w, hall);
-  const out = w.warbands.some((b) => b.owner === PLAYER);
-  const rest = Math.max(0, w.players[PLAYER].raidReady - w.tick);
-  const early = w.tick < BALANCE.raidsFrom;
-  const ready = !out && !rest && n > 0 && !early;
-  const pct = rest ? 1 - rest / BALANCE.raidCooldown : out ? 0 : 1;
-  const band = w.warbands.find((b) => b.owner === PLAYER);
-  const status = band ? (band.phase === 'march' ? `${band.strength} marching` : band.phase === 'clash' ? 'fighting' : 'coming home') : early ? 'from 10:00' : rest ? `${Math.ceil(rest / TICK_HZ)}s` : n ? `${n} × ${BALANCE.guardStrength}` : 'no huscarls';
-  return (
-    <button
-      class={`deed warband ${ready ? 'ready' : ''}`}
-      disabled={!ready}
-      onClick={() => game.startRaid()}
-      title={`Raid (R): send your ${n} huscarls (${raidStrength(w, PLAYER, n)} strong) to burn a rival tower, outpost or stockade. They win if they are stronger than its defence: its guards, stockades and huscarls nearby. A burned post frees its land, and any landmark it held may change hands. At home, your huscarls defend posts within ${BALANCE.interceptRange} tiles of the Mustering Hall.`}
-    >
-      <span class="deed-ring" style={{ background: `conic-gradient(var(--gold) ${pct * 360}deg, rgba(0,0,0,0.35) 0)` }}>
-        <span class="deed-icon">⚔️</span>
-      </span>
-      <span class="deed-name">Raid</span>
-      <span class="deed-fam">{band ? 'out raiding' : `${raidStrength(w, PLAYER, n)} strong`}</span>
-      {ready ? <span class="hotkey">R</span> : <span class="deed-wait">{status}</span>}
-    </button>
   );
 }
 
@@ -590,79 +225,6 @@ function ScoutBar({ game }: { game: Game }) {
         <button onClick={() => game.cancel()}>✕</button>
       </div>
     </div>
-  );
-}
-
-/** The scout: ready, out, or resting. */
-function ScoutCard({ game }: { game: Game }) {
-  const w = game.world;
-  const out = w.scouts.some((s) => s.owner === PLAYER);
-  const rest = Math.max(0, w.players[PLAYER].scoutReady - w.tick);
-  const ready = !out && !rest;
-  const pct = rest ? 1 - rest / BALANCE.scoutCooldown : out ? 0 : 1;
-  return (
-    <button class={`deed scoutcard ${ready ? 'ready' : ''}`} disabled={!ready} onClick={() => game.startScout()} title="Scout (T): send a runner across the fog. Landmarks come into view, and the rival's posts become things a raid can strike.">
-      <span class="deed-ring" style={{ background: `conic-gradient(var(--gold) ${pct * 360}deg, rgba(0,0,0,0.35) 0)` }}>
-        <span class="deed-icon">🔭</span>
-      </span>
-      <span class="deed-name">Scout</span>
-      <span class="deed-fam">{out ? 'out looking' : 'look beyond'}</span>
-      {ready ? <span class="hotkey">T</span> : <span class="deed-wait">{out ? '…' : `${Math.ceil(rest / TICK_HZ)}s`}</span>}
-    </button>
-  );
-}
-
-/**
- * The Great Houses: each seat shows its house, the power it lends and what that power does in
- * a few words, with a cooldown ring that tells the truth and a chip for any effect still running.
- */
-function Council({ game }: { game: Game }) {
-  useWorldRefresh(game);
-  const w = game.world;
-  const p = w.players[PLAYER];
-  if (!p.seats.length && !hallOf(w, PLAYER)) return null;
-  const running = activePowers(w, PLAYER);
-  return (
-    <section class="council" aria-label="Great Houses">
-      <span class="council-label">Great Houses</span>
-      {p.seats.map((seat, i) => {
-        const h = HOUSES[seat.house];
-        const d = DEEDS[h.power];
-        const wait = deedWait(w, seat);
-        const problem = deedProblem(w, PLAYER, i);
-        const ready = !problem;
-        const full = deedCooldown(w, PLAYER, h.power);
-        const pct = wait ? 1 - wait / Math.max(1, full) : 1;
-        const run = running.find((r) => r.id === h.power);
-        return (
-          <button
-            key={seat.house}
-            class={`deed house ${ready ? 'ready' : ''}`}
-            style={{ borderTopColor: hex(h.color) }}
-            onClick={() => game.useDeed(i)}
-            title={`${d.name} (${DEED_KEYS[i].toUpperCase()}): ${d.blurb}${problem ? `\nNow: ${problem}.` : ''}\n${h.icon} ${h.name}: ${h.passive}`}
-          >
-            <span class="deed-ring" style={{ background: `conic-gradient(var(--gold) ${pct * 360}deg, rgba(0,0,0,0.35) 0)` }}>
-              <span class="deed-icon">{d.icon}</span>
-            </span>
-            <span class="deed-name">{d.name}</span>
-            {run && run.left > 0 ? (
-              <span class="deed-wait running">{Math.ceil(run.left / TICK_HZ)}s</span>
-            ) : run ? (
-              <span class="deed-wait running">ready to raid</span>
-            ) : wait > 0 ? (
-              <span class="deed-wait">{Math.ceil(wait / TICK_HZ)}s</span>
-            ) : problem ? (
-              <span class="deed-wait">✕</span>
-            ) : (
-              <span class="hotkey">{DEED_KEYS[i].toUpperCase()}</span>
-            )}
-          </button>
-        );
-      })}
-      <ScoutCard game={game} />
-      <Warband game={game} />
-    </section>
   );
 }
 
@@ -868,116 +430,6 @@ function HouseLetter({ game }: { game: Game }) {
   );
 }
 
-/** The "where next?" list: unclaimed discoveries and landmarks you don't hold, nearest first. */
-function Frontier({ game }: { game: Game }) {
-  useWorldRefresh(game);
-  const w = game.world;
-  const open = w.sites.filter((s) => !s.st && s.revealed & 1 && (s.claimedBy === NO_OWNER || (DISCOVERIES[s.kind].renown && s.heldBy !== PLAYER)));
-  const mine = w.sites.filter((s) => s.heldBy === PLAYER).length;
-  if (!open.length && !mine) return null;
-  const box = territoryBox(w, PLAYER);
-  const gap = (x: number, y: number) => {
-    let best = Infinity;
-    for (let ty = box.y0; ty <= box.y1; ty += 1)
-      for (let tx = box.x0; tx <= box.x1; tx += 1) if (w.territory[w.idx(tx, ty)] === PLAYER) best = Math.max(0, Math.min(best, Math.max(Math.abs(tx - x), Math.abs(ty - y))));
-    return best;
-  };
-  const rows = open.map((s) => ({ s, d: gap(s.x, s.y) })).sort((a, b) => a.d - b.d).slice(0, 4);
-  return (
-    <section class="frontier panel" aria-label="Out in the wild">
-      <h3>
-        Out in the wild {mine > 0 && <small class="held">· you hold {mine} landmark{mine > 1 ? 's' : ''}</small>}
-      </h3>
-      {rows.map(({ s, d }) => {
-        const def = DISCOVERIES[s.kind];
-        return (
-          <button key={s.id} class={`frontier-row ${s.heldBy > 0 ? 'theirs' : ''}`} onClick={() => game.focusSite(s.id)} title={def.blurb}>
-            <span class="fr-icon">{def.icon}</span>
-            <span class="fr-name">
-              {def.name}
-              {def.renown ? <small> +{def.renown}★/m{s.heldBy > 0 ? ' · rival’s' : ''}</small> : null}
-            </span>
-            <span class="fr-dist">{d} tiles out</span>
-          </button>
-        );
-      })}
-    </section>
-  );
-}
-
-function costChips(type: BuildingType, cost = BUILDINGS[type].cost) {
-  return Object.entries(cost).map(([g, n]) => (
-    <span class="cost" key={g}>
-      <img src={ICON[g]} alt={GOOD_INFO[g as Good].name} />
-      {n}
-    </span>
-  ));
-}
-
-function BuildBar({ game }: { game: Game }) {
-  useWorldRefresh(game);
-  const w = game.world;
-  const bridgeOpen = w.players[PLAYER].rank >= BRIDGE_RANK;
-  // The bridge worth building, re-checked every five seconds of game time (the search walks the map).
-  const hint = useMemo(() => (bridgeOpen ? bestBridge(w, PLAYER) : null), [bridgeOpen, Math.floor(w.tick / 50)]);
-  const hinted = hint && hint.score >= 60 ? hint : null;
-  return (
-    <nav class="buildbar shelf" aria-label="Build">
-      {BUILD_MENU.map((t, i) => {
-        const def = BUILDINGS[t];
-        const unlocked = w.isUnlocked(PLAYER, t);
-        // Great Works appear once the settlement can raise them, marked with who has them.
-        if (def.great && !unlocked) return null;
-        const holder = def.great ? workOwner(w, t) : -1;
-        const begun = def.great && w.countBuildings(PLAYER, t, true) > 0;
-        const affordable = w.canAffordBuilding(PLAYER, t);
-        const lock = unlocked ? '' : lockLabel(w, PLAYER, t);
-        const reqText = `Needs ${lock}`;
-        // Towers: how many the settlement holds against what its rank allows.
-        const capped = def.frontier && w.frontierCount(PLAYER) >= w.frontierCap(PLAYER);
-        return (
-          <button
-            key={t}
-            class={`card ${affordable || def.great ? '' : 'short'} ${unlocked && holder < 0 && !begun ? '' : 'locked'} ${def.great ? 'great' : ''}`}
-            onClick={() => unlocked && holder < 0 && !begun && game.startPlacing(t)}
-            aria-disabled={!unlocked || holder >= 0 || begun}
-            title={def.great ? `${def.name}: ${def.blurb} Perk: ${def.great.perk} +${def.great.renown} renown.` : unlocked ? `${def.name} (${HOTKEYS[i]}): ${def.blurb}${def.frontier ? ` Towers held: ${w.frontierCount(PLAYER)} of ${w.frontierCap(PLAYER)} (rank up for more).` : ''}` : `${def.name}: ${reqText}`}
-          >
-            {HOTKEYS[i] && <span class="hotkey">{HOTKEYS[i]}</span>}
-            {def.frontier && unlocked && <span class={`card-count ${capped ? 'full' : ''}`} title="Towers and outposts you hold, of what your rank allows">{w.frontierCount(PLAYER)}/{w.frontierCap(PLAYER)}</span>}
-            <img class="card-icon" src={icon(t)} alt="" />
-            <span class="card-name">{def.name.replace(/^The /, '').replace(/^Mustering /, 'Muster ')}</span>
-            <span class="card-cost">
-              {holder === PLAYER ? <span class="lock">✓ Yours</span> : holder >= 0 ? <span class="lock">✗ Rival’s</span> : begun ? <span class="lock">Under way</span> : unlocked ? costChips(t, w.buildCost(PLAYER, t)) : <span class="lock">🔒 {lock}</span>}
-            </span>
-          </button>
-        );
-      })}
-      <button
-        class={`card bridge ${bridgeOpen ? '' : 'locked'} ${hinted ? 'hinted' : ''}`}
-        onClick={() => bridgeOpen && game.startBridging(hinted?.span)}
-        aria-disabled={!bridgeOpen}
-        title={bridgeOpen ? `Bridge (B): plank over water of up to ${BRIDGE_MAX} tiles, for ${BALANCE.bridgeCost.logs} logs and ${BALANCE.bridgeCost.stone} stone a tile.${hinted ? ' A bridge nearby would open new ground.' : ''}` : 'Bridge: needs Hamlet rank'}
-      >
-        <span class="hotkey">B</span>
-        {hinted && <span class="card-count hint" title="A bridge nearby would open new ground">★</span>}
-        <span class="card-icon glyph">🌉</span>
-        <span class="card-name">Bridge</span>
-        <span class="card-cost">
-          {bridgeOpen ? (
-            <>
-              <span class="cost"><img src={ICON.logs} alt="Logs" />{BALANCE.bridgeCost.logs}</span>
-              <span class="cost"><img src={ICON.stone} alt="Stone" />{BALANCE.bridgeCost.stone}</span>
-            </>
-          ) : (
-            <span class="lock">🔒 Hamlet</span>
-          )}
-        </span>
-      </button>
-    </nav>
-  );
-}
-
 /** Aim a bridge: the span under the pointer, what it costs, and whether it can go up. */
 function BridgeBar({ game }: { game: Game }) {
   useWorldRefresh(game);
@@ -1052,27 +504,6 @@ function PlaceBar({ game, type }: { game: Game; type: BuildingType }) {
 function claimText(c: ClaimPreview): string {
   if (!c.gained) return 'Wins no new land here: try nearer the edge, or the rival’s side';
   return `+${c.gained} land${c.fromRival ? ` (${c.fromRival} from your rival)` : ''}${c.sites.length ? ` · takes ${c.sites.join(', ')}!` : ''}`;
-}
-
-/** The town's three crafts: an icon each, stars for the tier, and a fill towards the next. */
-function Crafts({ w }: { w: World }) {
-  const crafts = w.players[PLAYER].crafts;
-  return (
-    <span class="crafts">
-      {SKILLS.map((k) => {
-        const xp = crafts[k];
-        const t = tierOf(xp);
-        return (
-          <span class={`craft t${t}`} key={k} title={`${TRADES[k].name}: ${['novice', 'skilled', 'masterly'][t]}${t < 2 ? ` (${Math.round(tierProgress(xp) * 100)}% to ${['skilled', 'masterly'][t]}: ${TRADES[k].perks[t + 1]})` : ''}. All work in this craft fills it.`}>
-            <span class="craft-icon" style={{ background: `conic-gradient(var(--gold) ${tierProgress(xp) * 360}deg, rgba(0,0,0,0.3) 0)` }}>
-              <span>{TRADES[k].icon}</span>
-            </span>
-            <span class="craft-stars">{'★'.repeat(t)}{'☆'.repeat(2 - t)}</span>
-          </span>
-        );
-      })}
-    </span>
-  );
 }
 
 function InfoPanel({ game }: { game: Game }) {
@@ -1306,13 +737,11 @@ function Awards({ w, won }: { w: World; won: boolean }) {
   );
 }
 
-/** The roads to renown, in plain words: what a game's renown says about how it was won, and one to try next. */
-const PATHS: { id: string; name: string; sources: string[]; tip: string }[] = [
-  { id: 'realm', name: 'the Realm', sources: ['landmarks', 'land', 'discoveries'], tip: 'Push the border, hold landmarks, and guard them.' },
-  { id: 'trade', name: 'Trade', sources: ['caravans'], tip: 'Build storehouses, run a surplus, and send carts to the steadings: Merchants earn 25% more favour a tier.' },
-  { id: 'craft', name: 'Craft', sources: ['works', 'masters', 'legends'], tip: 'Quarries, sawpits and the Great Works: Masons raise them for less and are paid more.' },
-  { id: 'hearth', name: 'the Hearth', sources: ['hearth', 'events'], tip: 'Fields, fish and full cradles: a big, well-fed town earns renown every minute.' },
-  { id: 'war', name: 'War', sources: ['raids', 'defence'], tip: 'A Mustering Hall, raids on rival posts, and a Stockade at every landmark.' },
+/** The three roads to the Crown, in plain words: how the valley was held at the end, and one to try next. */
+const ROADS: { id: string; name: string; icon: string; tip: string }[] = [
+  { id: 'trade', name: 'Trade', icon: '🛒', tip: 'Run a surplus, keep a few posts along the road to escort your carts, and answer the steadings’ Wants before the rival does. Merchants earn more favour and faster carts a tier.' },
+  { id: 'war', name: 'War', icon: '⚔', tip: 'A Mustering Hall, a manned post beside the Kingstone and a Stockade to tend it. Hired spears turn a close fight.' },
+  { id: 'hearth', name: 'the Hearth', icon: '🏡', tip: 'Farms, a bakehouse, a brewhouse and a smithy: bread, ale and tools make cottages and hall-houses, and the richer town is a voice.' },
 ];
 
 function Victory({ game, shell }: { game: Game; shell: Shell }) {
@@ -1336,9 +765,14 @@ function Victory({ game, shell }: { game: Game; shell: Shell }) {
         </p>
         <Awards w={w} won={won} />
         {(() => {
-          // How the renown was earned, as roads: the biggest, and one the town has barely walked.
-          const by = { ...me.renownBy, caravans: Math.round(me.caravanned * 1.5) + steadingsOf(w).reduce((n, x) => n + x.st!.won[PLAYER] * 60, 0) } as Record<string, number>;
-          const totals = PATHS.map((p) => ({ ...p, n: p.sources.reduce((n, k) => n + (by[k] ?? 0), 0) })).sort((a, b) => b.n - a.n);
+          // How the valley was held, as roads: the one that carried the Crown, and one the town has barely walked.
+          const c = w.crown;
+          const held = [
+            steadingsOf(w).filter((x) => x.st!.ally === PLAYER).length,
+            c?.keeper === PLAYER ? BALANCE.kingstoneVoices : 0,
+            c?.hearth === PLAYER ? 1 : 0,
+          ];
+          const totals = ROADS.map((r, i) => ({ ...r, n: held[i] })).sort((x, y) => y.n - x.n);
           const top = totals[0];
           const next = totals[totals.length - 1];
           const title = callingTitle(me.calling);
@@ -1354,8 +788,9 @@ function Victory({ game, shell }: { game: Game; shell: Shell }) {
                   Played in <b>{VALLEYS[w.map.valley].icon} {VALLEYS[w.map.valley].name}</b>.{' '}
                 </>
               )}
-              Most of your renown came by <b>{top.name}</b> ({Math.round((top.n / Math.max(1, me.renown)) * 100)}%).
-              {next && next.id !== top.id ? <> Next time, try <b>{next.name}</b>: {next.tip}</> : null}
+              At the end you held <b>{plural_(held[0] + held[1] + held[2], 'voice')}</b>: {held[0]} {held[0] === 1 ? 'steading' : 'steadings'}{held[1] ? ', the Kingstone' : ''}{held[2] ? ', the Hearth' : ''}.
+              {top.n > 0 ? <> Your strongest road was <b>{top.icon} {top.name}</b>.</> : null}
+              {next && next.id !== top.id ? <> Next time, try <b>{next.icon} {next.name}</b>: {next.tip}</> : null}
             </p>
           );
         })()}

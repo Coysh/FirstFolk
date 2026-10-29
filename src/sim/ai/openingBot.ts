@@ -10,12 +10,13 @@ import { NO_OWNER } from '../territory';
 import { BALANCE } from '../balance';
 import { canAfford, eventDef } from '../events';
 import { isHome } from '../population';
+import { homeNeeds } from '../prosperity';
 import { bestSite } from './placement';
 import { STYLES, type BotStyle, type StyleDef } from './styles';
 import { crownSite } from '../crown';
 import { scoutProblem } from '../scouts';
 import { watched } from '../renown';
-import { defenceOf, hallOf, huscarls, raidProblem, raidStrength, raidable } from '../warfare';
+import { defenceOf, hallOf, hireProblem, huscarls, raidProblem, raidStrength, raidable } from '../warfare';
 import { previewRemoval } from '../territory';
 
 type Idea = [boolean, BuildingType, { x: number; y: number }?, NodeKind?];
@@ -70,6 +71,19 @@ export class OpeningBot {
     }
     this.scout(world);
     // A clash at one of our posts, or by our own warband: rally or surge once it turns against us.
+    // Wealth buys spears: once a fight is close, hire what the stores can pay for.
+    if (!this.ablate.has('hire')) {
+      for (const band of world.warbands) {
+        const c = band.clash;
+        if (band.phase !== 'clash' || !c || c.t < 15) continue;
+        const mine = band.owner === this.owner;
+        const defending = !mine && world.buildings.get(band.targetId)?.owner === this.owner;
+        if ((mine ? c.line < 650 : c.line > 350) && (mine || defending) && !hireProblem(world, this.owner)) {
+          world.enqueue({ type: 'hire', owner: this.owner });
+          break;
+        }
+      }
+    }
     for (const band of this.ablate.has('rally') ? [] : world.warbands) {
       const c = band.clash;
       if (band.phase !== 'clash' || !c) continue;
@@ -112,6 +126,8 @@ export class OpeningBot {
     const tower: BuildingType = world.isUnlocked(this.owner, 'watchtower') && this.affordable(world, 'watchtower') ? 'watchtower' : 'lookout';
     const towerSites = [...world.buildings.values()].filter((b) => b.owner === this.owner && BUILDINGS[b.type].claim && !b.done).length;
     const work = this.nextWork(world);
+    const needs = homeNeeds(world, this.owner);
+    const short = (g: Good) => needs.goods.some((x) => x.good === g && x.have < x.need);
     const idle = [...world.settlers.values()].filter((s) => s.owner === this.owner && !s.child && s.job.kind === 'idle').length;
     const idleJob: BuildingType = (['woodcutter', 'quarry', 'fisher', 'forager'] as BuildingType[])[(world.tick / this.thinkEvery) % 4 | 0];
     const want: NodeKind | undefined = hungry ? 'bush' : starving('quarry') ? 'rock' : starving('woodcutter') ? 'tree' : undefined;
@@ -137,6 +153,21 @@ export class OpeningBot {
 
     // Ordered ideas; the first one that is wanted, affordable and has a valid site is done.
     const ideas: Idea[] = [
+      // Wood is what everything else is built from: a town short of logs fells more before it does anything else.
+      [count('woodcutter') < Math.ceil(pop / 8) && world.stored(this.owner, 'logs') < 25 && pop >= 12, 'woodcutter'],
+      // A town that eats bread grows: a farm, its bakehouse, a second farm for ale, then tools for the finest homes.
+      // The chain comes in dependency order, so a growing town can never starve its bakehouse of attention.
+      [count('lookout') >= 1 && count('farm') === 0 && pop >= 14, 'farm'],
+      [count('farm') >= 1 && count('bakehouse') === 0, 'bakehouse'],
+      [count('bakehouse') >= 1 && count('farm') < 2 && pop >= 24, 'farm'],
+      [count('brewhouse') === 0 && count('bakehouse') >= 1 && count('farm') >= 2 && pop >= 26, 'brewhouse'],
+      [count('mine') === 0 && count('brewhouse') >= 1 && pop >= 34, 'mine'],
+      [count('smithy') === 0 && count('mine') >= 1, 'smithy'],
+      // Then what the homes ask for, read off the Town sheet: whichever of bread, ale and tools is short gets its workshop.
+      [count('smithy') >= 1 && (short('bread') || short('ale')) && world.stored(this.owner, 'grain') < 15 && count('farm') < Math.ceil(pop / 12), 'farm'],
+      [count('smithy') >= 1 && short('bread') && count('bakehouse') < Math.ceil(pop / 22), 'bakehouse'],
+      [count('smithy') >= 1 && short('ale') && count('brewhouse') < Math.ceil(pop / 30), 'brewhouse'],
+      [count('smithy') >= 1 && short('tools') && count('smithy') < Math.ceil(pop / 50), 'smithy'],
       [emptyHuts === 0 && pop >= world.housing(this.owner) - 2, home],
       ...crownIdeas,
       // Masons race for the Great Works from the moment they can.
@@ -148,12 +179,6 @@ export class OpeningBot {
       [world.isUnlocked(this.owner, 'sawpit') && count('sawpit') >= 1 && count('sawpit') < 1 + Math.floor(pop / 28) && world.stored(this.owner, 'planks') < 16 && world.stored(this.owner, 'logs') > 40, 'sawpit'],
       [world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0, 'watchtower', target ?? undefined],
       [world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0, 'storehouse'],
-      // A town that eats bread grows: a farm, a bakehouse, then ale, and tools for the finest homes.
-      [count('lookout') >= 1 && count('farm') < Math.max(1, Math.ceil(pop / (st.focus === 'hearth' ? 12 : 18))) && (count('farm') === 0 ? pop >= 14 : hungry || pop >= 30), 'farm'],
-      [count('bakehouse') < Math.ceil(count('farm') / 2) || (count('bakehouse') === 0 && count('farm') >= 1), 'bakehouse'],
-      [count('brewhouse') === 0 && count('bakehouse') >= 1 && count('farm') >= 2 && pop >= 30, 'brewhouse'],
-      [count('mine') === 0 && count('brewhouse') >= 1 && pop >= 40, 'mine'],
-      [count('smithy') === 0 && count('mine') >= 1, 'smithy'],
       ...(st.towersFirst ? [push, keep] : [keep]),
       ...(st.raids === 2 ? [muster] : []),
       // The late game's race: always have one Great Work under way.
@@ -162,13 +187,19 @@ export class OpeningBot {
       [hungry && count('forager') < Math.ceil(pop / 6), 'forager'],
       ...(st.towersFirst ? [] : [push]),
       ...(st.raids === 2 ? [] : [muster]),
+      // Then the fields grow with the town, and a bakehouse for every two of them.
+      [count('farm') >= 2 && count('farm') < Math.max(2, Math.ceil(pop / (st.focus === 'hearth' ? 9 : 18))) && (hungry || pop >= 30) && world.stored(this.owner, 'grain') < 60, 'farm'],
+      [count('farm') >= 2 && count('bakehouse') < Math.ceil(count('farm') / 2) && world.stored(this.owner, 'bread') < 30, 'bakehouse'],
+      // A town that has made bread and ale a habit keeps up with its homes: more brewhouses and smithies as it grows.
+      [count('smithy') >= 1 && count('brewhouse') < Math.ceil(pop / (st.focus === 'hearth' ? 28 : 45)), 'brewhouse'],
+      [count('smithy') >= 1 && count('mine') < Math.ceil(pop / (st.focus === 'hearth' ? 45 : 70)) && count('smithy') < Math.ceil(pop / (st.focus === 'hearth' ? 45 : 70)), 'mine'],
+      [count('mine') >= 2 && count('smithy') < count('mine'), 'smithy'],
       // A town working towards its calling builds what that calling is made of.
       [st.focus === 'trader' && count('storehouse') < 1 + Math.floor(pop / 26), 'storehouse'],
       [st.focus === 'masons' && count('quarry') < Math.ceil(pop / 6), 'quarry'],
       [st.focus === 'masons' && world.isUnlocked(this.owner, 'sawpit') && count('sawpit') < 1 + Math.floor(count('woodcutter') / 2), 'sawpit'],
-      [st.focus === 'hearth' && count('forager') < Math.ceil(pop / 5), 'forager'],
-      [st.focus === 'hearth' && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 8), 'fisher'],
-      [st.focus === 'hearth' && emptyHuts === 0 && pop >= world.housing(this.owner) - 6, home],
+      [st.focus === 'hearth' && count('forager') < Math.ceil(pop / 7) && world.stored(this.owner, 'berries') < 120, 'forager'],
+      [st.focus === 'hearth' && world.isUnlocked(this.owner, 'fisher') && count('fisher') < Math.ceil(pop / 11) && world.stored(this.owner, 'fish') < 120, 'fisher'],
       [starving('woodcutter') && count('forester') < count('woodcutter') / 2, 'forester'],
       [count('woodcutter') < Math.ceil(pop / 7) && world.stored(this.owner, 'logs') < 80, 'woodcutter'],
       [emptyHuts === 0, 'hut'],

@@ -1,5 +1,6 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, GOODS, costTotal } from './defs';
+import { BUILDINGS, GOODS, costTotal, type Good } from './defs';
+import { pay } from './events';
 import { isWalkableTerrain } from './mapgen';
 import { spanTiles } from './bridges';
 import { callingTier } from './callings';
@@ -33,6 +34,9 @@ export interface Clash {
   militia: number;
   rallied: boolean;
   surged: boolean;
+  /** Strength bought with goods (Hired Spears), per side: 0 until they are hired. */
+  hiredAtk: number;
+  hiredDef: number;
   /** Both sides' strength at the last step, for the display. */
   attack: number;
   defence: number;
@@ -186,7 +190,7 @@ function beginClash(world: World, band: Warband): void {
   if (!target) return finishClash(world, band, false);
   const defence = defenceOf(world, target);
   band.phase = 'clash';
-  band.clash = { t: 0, line: 500, rally: 0, surge: 0, militia: 0, rallied: false, surged: false, attack: band.strength, defence };
+  band.clash = { t: 0, line: 500, rally: 0, surge: 0, militia: 0, rallied: false, surged: false, hiredAtk: 0, hiredDef: 0, attack: band.strength, defence };
   world.emit({ type: 'clashBegan', bandId: band.id, owner: band.owner, defender: target.owner, targetId: target.id, buildingType: target.type, x: target.x, y: target.y, attack: band.strength, defence });
 }
 
@@ -200,8 +204,8 @@ function updateClash(world: World, band: Warband): void {
   const target = world.buildings.get(band.targetId);
   if (!target) return finishClash(world, band, false);
   if (++c.t % BALANCE.clashStep) return;
-  c.attack = band.strength + c.surge;
-  c.defence = defenceOf(world, target) + c.rally;
+  c.attack = band.strength + c.surge + (c.hiredAtk ?? 0);
+  c.defence = defenceOf(world, target) + c.rally + (c.hiredDef ?? 0);
   const ratio = Math.trunc(((c.attack - c.defence) * 100) / Math.max(1, c.attack + c.defence));
   c.line = Math.max(0, Math.min(1000, c.line + Math.trunc((ratio * BALANCE.clashPush) / 100) + world.rng.int(17) - 8));
   if (c.line < 1000 && c.line > 0 && c.t < BALANCE.clashTicks) return;
@@ -240,6 +244,34 @@ export function rally(world: World, owner: number): boolean {
     return true;
   }
   return false;
+}
+
+/** What Hired Spears are worth to a settlement right now: a base, and more for every level its homes have grown. */
+export const hireStrength = (world: World, owner: number) => BALANCE.hireBase + BALANCE.hirePerLevel * (world.players[owner]?.homeLevel ?? 0);
+
+/** Why this settlement cannot hire spears now ('' when it can): one clash it stands in, goods in store, once per side. */
+export function hireProblem(world: World, owner: number): string {
+  const band = world.warbands.find((b) => b.phase === 'clash' && b.clash && (b.owner === owner || world.buildings.get(b.targetId)?.owner === owner));
+  if (!band) return 'No fight to hire spears for';
+  const attacking = band.owner === owner;
+  if (attacking ? band.clash!.hiredAtk : band.clash!.hiredDef) return 'Spears already hired for this fight';
+  for (const [g, n] of Object.entries(BALANCE.hireCost)) if (world.stored(owner, g as Good) < n) return `Needs ${n} ${g} in store`;
+  return '';
+}
+
+/** Pay for spears: strength for this clash, bought with ale and tools. Returns false when it cannot be done (nothing is spent). */
+export function hire(world: World, owner: number): boolean {
+  if (hireProblem(world, owner)) return false;
+  const band = world.warbands.find((b) => b.phase === 'clash' && b.clash && (b.owner === owner || world.buildings.get(b.targetId)?.owner === owner))!;
+  const target = world.buildings.get(band.targetId);
+  if (!target) return false;
+  const attacking = band.owner === owner;
+  const n = hireStrength(world, owner);
+  pay(world, owner, BALANCE.hireCost);
+  if (attacking) band.clash!.hiredAtk = n;
+  else band.clash!.hiredDef = n;
+  world.emit({ type: 'clashRally', owner, bandId: band.id, targetId: target.id, kind: 'hire', n: 0, strength: n, x: target.x, y: target.y });
+  return true;
 }
 
 /** The clash is decided: a post burns or holds, renown is paid, and the warband turns for home. */

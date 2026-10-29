@@ -5,6 +5,7 @@ import { GOODS } from './defs';
 import type { Difficulty } from './rules';
 import type { OriginId } from './origins';
 import { rollOmens } from './omens';
+import { prosperity } from './prosperity';
 import { plural } from './population';
 import { BUILDINGS } from './defs';
 import type { BotStyle } from './ai/styles';
@@ -58,6 +59,14 @@ export interface PlaytestReport {
   caravans: number[];
   /** The player's and rival's voices in the valley, per minute. */
   voicesByMinute: [number, number][];
+  /** Prosperity per minute for [player, rival]. */
+  prosperityByMinute: [number, number][];
+  /** Home level (0 huts, 1 cottages, 2 hall-houses) per minute for [player, rival]. */
+  homeLevelByMinute: [number, number][];
+  /** The player's production chain per minute: farms, bakehouses, brewhouses, mines, smithies, then bread, ale and tools in store. */
+  chainByMinute: number[][];
+  /** Voice-minutes held by [player, rival] on each road: [trade (steadings), war (the Kingstone), hearth]. */
+  roads: number[][][];
   acclaim: boolean;
   origins: string[];
   omens: string[];
@@ -127,6 +136,10 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const wantsWon: number[] = [0, 0];
   const caravans: number[] = [0, 0];
   const voicesByMinute: [number, number][] = [];
+  const prosperityByMinute: [number, number][] = [];
+  const homeLevelByMinute: [number, number][] = [];
+  const chainByMinute: number[][] = [];
+  const roads: number[][] = world.players.map(() => [0, 0, 0]);
   let allegianceFlips = 0;
   let byTime = false;
   let acclaimed = false;
@@ -145,7 +158,7 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
   const scoreByMinute: number[] = [];
   let logged = 0;
   const isDecision = (c: { type: string; building?: string }) =>
-    ['caravan', 'raid', 'scout', 'bridge', 'deed', 'chooseEvent', 'chooseHouse', 'rally'].includes(c.type) || (c.type === 'place' && ['stockade', 'musterhall', 'watchtower', 'lookout', 'outpost', 'henge', 'meadhall', 'granary'].includes(c.building ?? ''));
+    ['caravan', 'raid', 'scout', 'bridge', 'deed', 'chooseEvent', 'chooseHouse', 'rally', 'hire'].includes(c.type) || (c.type === 'place' && ['stockade', 'musterhall', 'watchtower', 'lookout', 'outpost', 'henge', 'meadhall', 'granary'].includes(c.building ?? ''));
   const isAction = (e: SimEvent) =>
     (e.type === 'clashBegan' && (e.owner === 0 || e.defender === 0)) || e.type === 'crownKeeper' || e.type === 'crownQuarter' || e.type === 'sagaBeat' || e.type === 'starfall' || e.type === 'wantPosted' || e.type === 'wantWon' || e.type === 'steadingAlly' || e.type === 'razed' ||
     (e.type === 'raidLaunched' && (e.owner === 0 || e.defender === 0)) || (e.type === 'holdingChanged' && (e.owner === 0 || e.from === 0)) || (e.type === 'scoutSpotted' && (e.owner === 0 || e.seer === 0)) ||
@@ -242,6 +255,14 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
       populationByMinute.push(world.population(0));
       renownByMinute.push([world.players[0].renown, world.players[1]?.renown ?? 0]);
       voicesByMinute.push([world.crown?.voices[0] ?? 0, world.crown?.voices[1] ?? 0]);
+      chainByMinute.push([...(['farm', 'bakehouse', 'brewhouse', 'mine', 'smithy'] as const).map((t) => world.countBuildings(0, t, true)), world.stored(0, 'bread'), world.stored(0, 'ale'), world.stored(0, 'tools')]);
+      homeLevelByMinute.push([world.players[0].homeLevel, world.players[1]?.homeLevel ?? 0]);
+      prosperityByMinute.push([prosperity(world, 0), world.players[1] ? prosperity(world, 1) : 0]);
+      if (world.crown) for (const pl of world.players) {
+        roads[pl.id][0] += world.sites.filter((s) => s.st && s.st.ally === pl.id).length;
+        roads[pl.id][1] += world.crown.keeper === pl.id ? 2 : 0;
+        roads[pl.id][2] += world.crown.hearth === pl.id ? 1 : 0;
+      }
       scoreByMinute.push(world.crown ? Math.round(world.crown.progress[0] - (world.crown.progress[1] ?? 0)) : 0);
       if ([10, 20, 30].includes(world.tick / (60 * TICK_HZ))) stockAt.push(GOODS.reduce((n, g) => n + world.stored(0, g), 0));
       let land = 0;
@@ -315,6 +336,10 @@ export function playtest(seed: number, minutes: number, opts: PlaytestOptions = 
     allegianceFlips,
     caravans,
     voicesByMinute,
+    prosperityByMinute,
+    homeLevelByMinute,
+    chainByMinute,
+    roads: roads as unknown as number[][][],
     acclaim: acclaimed,
     omens: [...world.omens],
     stockAt,

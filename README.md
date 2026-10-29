@@ -8,7 +8,7 @@ A fast, single-player, low-poly 3D settlement builder for the browser. It has Se
 npm install
 npm run dev          # http://localhost:5173 (title screen → New Game / Continue)
 npm test             # Vitest: sim determinism, mapgen, pathing, placement, gameplay loop, pacing
-npm run sim -- --seed 1 --minutes 46 [--games 16] [--think 160] [--ablate scout,deed,raid,bridge,rally,caravan]   # headless playtests (decisions a minute, Crown lead changes, settledness; --ablate skips a decision type); --think 160 is a fair AI-vs-AI duel (length, lead changes, comebacks, landmark flips, renown sources)
+npm run sim -- --seed 1 --minutes 46 [--games 16] [--think 160] [--ablate scout,deed,raid,bridge,rally,caravan,hire]   # headless playtests (decisions a minute, Crown lead changes, settledness; --ablate skips a decision type); --think 160 is a fair AI-vs-AI duel (length, lead changes, comebacks, landmark flips, renown sources)
 npm run build        # typecheck + production build + secret scan of dist/
 node tools/screenshot.mjs --screen title|game --seed 3 --seconds 240 [--mobile]   # headless screenshot (needs the dev server); also --focus hut, --art classic (A/B), --perf
 node tools/showcase.mjs --set town|war|works|wild [--night 1] [--zoom 24]   # gallery of every model at gameplay zoom (needs the dev server)

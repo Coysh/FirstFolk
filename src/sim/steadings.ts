@@ -57,6 +57,8 @@ export interface Caravan {
   phase: 'out' | 'home';
   x: number;
   y: number;
+  /** What the cart carries home: the steading's own good, in thanks (see `arrive`). */
+  back?: { good: Good; n: number };
 }
 
 /** The finale: a Crown is nearly full, or the clock is nearly out. Every steading then asks for something big. */
@@ -271,6 +273,10 @@ function arrive(world: World, c: Caravan): void {
       endWant(world, s, c.owner);
     }
   } else addFavour(world, s, c.owner, FINE_GOODS.includes(c.good) ? Math.min(BALANCE.giftFavour * 2, c.n) : Math.min(BALANCE.giftFavour, Math.floor(c.n / 2)));
+  // Trade pays both ways: the cart comes home laden with the steading's own goods, more when the Want was won.
+  const ch = STEADING_CHAR[st.char];
+  const back = Math.floor((Math.min(BALANCE.tradeBackMax, Math.ceil((c.n * BALANCE.tradeBackPct) / 100)) * (won ? 2 : 1) * (2 + callingTier(world, c.owner, 'trader'))) / 2);
+  if (back > 0) c.back = { good: ch.gift, n: back };
   world.emit({ type: 'caravanArrived', owner: c.owner, siteId: c.siteId, good: c.good, n: c.n, won });
 }
 
@@ -289,7 +295,7 @@ function mannedPost(world: World, x: number, y: number, range: number, test: (ow
  */
 function waylay(world: World): void {
   for (const c of [...world.caravans]) {
-    if (c.phase !== 'out' || world.players[c.owner].buffs.timber > world.tick) continue;
+    if (c.phase !== 'out' || world.players[c.owner].buffs.timber > world.tick || callingTier(world, c.owner, 'trader') >= 3) continue;
     if (!mannedPost(world, c.x, c.y, BALANCE.tollRange, (o) => o !== c.owner && o >= 0)) continue;
     if (mannedPost(world, c.x, c.y, BALANCE.escortRange, (o) => o === c.owner)) continue;
     world.caravans.splice(world.caravans.indexOf(c), 1);
@@ -328,7 +334,8 @@ export function updateCaravans(world: World): void {
   if (!world.caravans.length) return;
   if (world.tick % 10 === 0) waylay(world);
   for (const c of [...world.caravans]) {
-    c.progress += world.players[c.owner].buffs.timber > world.tick ? Math.floor((BALANCE.caravanSpeed * 3) / 2) : BALANCE.caravanSpeed;
+    const pace = Math.floor((BALANCE.caravanSpeed * (100 + BALANCE.merchantSpeedPct * callingTier(world, c.owner, 'trader'))) / 100);
+    c.progress += world.players[c.owner].buffs.timber > world.tick ? Math.floor((pace * 3) / 2) : pace;
     while (c.progress >= 1000 && c.step < c.path.length) {
       c.progress -= 1000;
       const i = c.path[c.step++];
@@ -342,10 +349,16 @@ export function updateCaravans(world: World): void {
       c.path = [...c.path.slice(0, -1)].reverse();
       c.step = 0;
       c.progress = 0;
-      if (!c.path.length) world.caravans.splice(world.caravans.indexOf(c), 1);
+      if (!c.path.length) {
+        world.caravans.splice(world.caravans.indexOf(c), 1);
+        const store = c.back ? nearestStore(world, c.owner, c.x, c.y) : undefined;
+        if (c.back && store) store.stock[c.back.good] += c.back.n;
+      }
     } else {
       world.caravans.splice(world.caravans.indexOf(c), 1);
-      world.emit({ type: 'caravanHome', owner: c.owner });
+      const store = c.back ? nearestStore(world, c.owner, c.x, c.y) : undefined;
+      if (c.back && store) store.stock[c.back.good] += c.back.n;
+      world.emit({ type: 'caravanHome', owner: c.owner, ...(c.back && store ? { good: c.back.good, n: c.back.n } : {}) });
     }
   }
 }

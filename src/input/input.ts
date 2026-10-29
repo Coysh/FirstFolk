@@ -3,6 +3,7 @@ import { hallOf } from '../sim/warfare';
 import { BUILD_MENU } from '../sim/defs';
 import type { Game } from '../game';
 import { toggleMute } from '../settings';
+import { sheet, toggleSheet } from '../ui/state';
 
 /** Build hotkeys in shelf order. */
 export const HOTKEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'];
@@ -126,6 +127,8 @@ export class Input {
     if (info.type === 'mouse' && info.button !== 0) return;
     if (performance.now() - info.startTime > 600) return;
     const p = this.local(e);
+    // A tap on the map puts away whatever sheet is open: the map is always the way out.
+    if (sheet.value) sheet.value = null;
     this.game.tap(p.x, p.y, info.type !== 'mouse', e.shiftKey);
   };
 
@@ -154,7 +157,8 @@ export class Input {
     else if (k === '+' || k === '=') rig.zoom(0.8);
     else if (k === '-' || k === '_') rig.zoom(1.25);
     else if (k === 'escape') {
-      if (this.game.mode.value.kind !== 'select' || this.game.selection.value || this.game.steadingOpen.value !== null) {
+      if (sheet.value) sheet.value = null;
+      else if (this.game.mode.value.kind !== 'select' || this.game.selection.value || this.game.steadingOpen.value !== null) {
         this.game.steadingOpen.value = null;
         this.game.cancel();
       }
@@ -172,6 +176,8 @@ export class Input {
     else if (k === 'm') toggleMute();
     else if (k === 'r' && hallOf(this.game.world, 0)) this.game.startRaid();
     else if (k === 'g') this.game.rally();
+    else if (k === 'h') this.game.hire();
+    else if (k === 'k') toggleSheet('valley');
     else if (k === 't') this.game.startScout();
     else if (DEED_KEYS.includes(k)) {
       if (this.game.world.players[0].seats[DEED_KEYS.indexOf(k)]) this.game.useDeed(DEED_KEYS.indexOf(k));

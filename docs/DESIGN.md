@@ -24,6 +24,7 @@ FirstFolk is a fast, single-player browser settlement builder. It combines Settl
   - **New sinks:** Great Works and Market Day.
 
   See §0b.
+- **The Three Roads Pass (v0.29), on top of the Living Valley:** a rebuilt interface (a Crown chip, one overlay sheet at a time, a Chronicle, an action rail, a build shelf in five groups) and a third road to the Crown, the Hearth (the richer town is a voice), with laden carts and Hired Spears so the economy can win. See §0j.
 - **The Living Valley (v0.24–v0.28, branch `dev/living-valley`), superseding some of the above:** four neutral steadings won by ox-cart caravans, a Crown filled by the *voices of the valley*, a grown-up economy (bread, ale, tools; cottages and hall-houses) with prosperity gating the ranks, winter ice and waylaid carts, Last Wants, Challenges and Market Day removed, and a harness that measures decisions and ablations. See §0i.
 
 ---
@@ -812,6 +813,70 @@ So the Market is a chore that looks like a decision, which is why S1 removes it,
 **Failed experiments, kept so they are not tried again:** a town militia; slower raids; economy styles with a Mustering Hall (already built); double favour for fine goods as a fix for Hearthfolk (it was the bug); the Crown at 1,800 (games ran 45 minutes with the bug).
 
 **What a human should look at** (the sims cannot say whether it is fun): the first five minutes now carry a goal (a steading's smoke is visible at 0:00 and the first Want arrives at 2:30); whether sending carts feels like a decision or a chore (the 🛒 button picks the goods for you); whether the Crown card is readable; whether winter's ice (raids that cross anywhere) is exciting or unfair; Wagon Train and Open Hands as house powers; and the end of a game. Hearthfolk-style play (bread, homes, no spears) is the weakest road.
+
+## 0j. The Three Roads Pass (v0.29, branch `dev/living-valley`): a quieter screen, and an economy that can win
+
+**The diagnosis (a playtest after v0.28).** Two complaints. *The screen is a wall*: a permanent Crown card taller than a quarter of the screen, a Chapter scroll, an "Out in the wild" list, a Great Houses bar, crafts, a calling chip, a ledger, toasts and a top bar all competed for the same pixels (eight surfaces on the first desktop screenshot, and on a phone they overlapped). And *the economy only fed the Crown*: bread, ale, tools and carts were inputs to steadings and nothing more, so the economy styles sat at 33–51% in the matrix while the generalist and the Raider dominated.
+
+### The interface: one glance, one sheet, one column of news
+The rule is that the screen shows what you hold, what you race for and what needs you, and everything else is one tap away. The chrome is now one layer (`src/ui/chrome.tsx`, `hud.css`; the old per-component CSS was pruned from 3,209 to about 2,400 lines).
+
+| Where | What | Replaces |
+|---|---|---|
+| Top left | **Town chip** (rank, prosperity toward the next rank, calling icon) and slim glass **resource chips**; the population chip comes first | the 40 px wooden plaques, the calling chip, the crafts chips, the auto-homes button |
+| Top centre | **The Crown chip**: two thin bars (you, rival), a pace arrow, voice dots, a 🛒 badge when a steading wants something you hold, a clock when it is nearly over. It is a button | the permanent race card |
+| Top right | season and clock, pause and speed (one cycling button on a phone), the **Chronicle** 📜 with an unread count, the menu | the mute button (M still works; it lives in Settings) |
+| Under the bar, left | **alerts only when true** (Hungry, Food low, N idle, Homes full) and the **goal in one line** with its progress | the Chapter scroll (it opens from the goal line) |
+| Centre column | raid warnings, then at most two small toasts. Quiet news (priority 1) never takes the screen: it goes to the Chronicle | toasts at three different offsets |
+| Right edge | the **action rail**: round buttons for house powers (Z X C V), Scout (T) and Raid (R), with cooldown rings and a label on hover | the Great Houses bar of labelled cards |
+| Bottom | **the build shelf in five groups** (Gather, Make, Homes, Border, Wonders), one row of cards; a dot on a group that has something new you can afford | one scrolling row of 21 cards |
+| Bottom left | the selection card, and the saga's story card (compact; the first paragraph and the goal) | the middle-of-the-screen story card |
+
+**Sheets.** Four overlays (**Valley**, **Town**, **Chronicle**, **Goals**) share one signal (`state.ts`): opening one closes the others, a tap on the map or Esc closes it, and each opens under the thing that opened it (on a phone, full width under the bar). The **Valley** sheet (K, or tap the Crown) is the race: both Crowns, one sentence on what is happening ("You hold more of the valley (2 voices to 1): your Crown is filling"), then the three roads, each with its voices and the way to act on it (below). The **Town** sheet is the economy's dashboard: folk, homes level with *what the homes are asking for* (🍞 3/5 · 🍺 1/3, from `homeNeeds`), prosperity toward the next rank, friends, crafts and the calling. The Landmarks list ("Out in the wild") lives inside the Valley sheet, folded.
+
+**News, by intent.** Banners are for the handful of moments that shape a game; toasts for what needs a decision now; everything else is *recorded* (`Game.chronicle`, the last 40) and shown by the 📜 button. So a quiet screen never means a lost message.
+
+**Phones.** Three short rows (town + clock, resources scrolling sideways, the Crown), the shelf as a tab row over one row of cards, the rail above it, and every sheet full width. The first mobile screenshot of v0.28 had five panels overlapping; v0.29's has none. `tools/ui-states.mjs [--mobile]` captures every state (base, valley, town, chronicle, goals, selection, story, placing) in one run.
+
+### The economy: three roads to a voice
+The Crown fills for whoever holds more *voices*. There are now three ways to hold one, and each has an active verb:
+
+| Road | Voices | How you play it | How the other side answers |
+|---|---|---|---|
+| 🛒 **Trade** | one per steading that stands with you (four in a valley) | send carts of what the Wants ask for; keep a post beside the road to escort them | a manned post beside your road waylays carts; a post beside your steading wins its guard Wants |
+| ⚔ **War** | the Kingstone, two to whoever keeps it alone | a manned post beside it, a Stockade to tend it, raids to burn theirs | contest it with a post of your own (nobody keeps a contested stone) |
+| 🏡 **Hearth** (new) | one for the richer town: prosperity at least 60 and 20% above the rival's; once held, only 5% to keep | grow bread, ale and tools so homes level up; workshops count; Hearthfolk need a smaller lead | out-grow them, or strip a steading from their side (friends count for prosperity) |
+
+- **Why a third road.** Before, the only economic output that mattered was goods in a cart, capped at four steadings. Now the *shape of the town* is a contested voice: `hearthHolder` (`crown.ts`) compares prosperity every second, with hysteresis so it does not flicker, and announces it. Prosperity also counts finished workshops (+3 each) so the chain is worth building, and a Hearthfolk town counts 8% richer a calling tier.
+- **Trade pays both ways.** A cart that comes home brings back half its load as the steading's own good (a quarter more per Merchants tier; double when it won the Want), so a cart is an investment, not a sacrifice. Merchants also get faster carts (+20% a tier) and, at the top tier, carts no post can waylay: the Free Port.
+- **Wealth buys spears.** *Hired Spears* (H, or the 💰 button in a clash): pay 5 ale and 2 tools for +20 strength plus 12 per level of your homes, once per side per fight. It is the economy's answer to a raid, it works for attackers too, and it is the reason a prosperous town is hard to burn. (`warfare.ts` `hire`, the `hire` Command.)
+- **Raids** wait 100 s between launches (they were 90 s), because economy towns now defend by paying, not only by standing.
+
+### The measurement, and the bug that was bigger than any rule
+Following Battle Drones (implement, simulate, look, refine), the first thing to build was the instrument: the report now carries **voice-minutes by road** (trade / war / hearth), **prosperity, home level and the production chain per minute**, and the matrix prints the roads per style. `tools/debug-bot.ts` prints a bot's stores and buildings each minute.
+
+**The finding.** The first matrix after adding the Hearth voice made Hearthfolk *worse* (27%) and showed home level **0 for every bot for the whole game**. Tracing it with `tools/debug-bot.ts`: no bot had ever built a Bakehouse. Its idea sat behind "more farms" in a priority list that always found another farm to want, and logs were so scarce (one woodcutter) that the first farm came at minute 15. So since v0.25 the grown-up economy (bread, ale, tools, cottages, hall-houses, prosperity) had never been exercised by a sim: every balance number for the economy styles was measured with the economy switched off. The same lesson as v0.28, one layer down: **check that the bots can do the new thing before tuning the numbers.** The bot now fells wood first when logs run short, builds the chain in dependency order (farm, bakehouse, second farm, brewhouse, mine, smithy), and then reads what the homes ask for (`homeNeeds`, the same numbers the Town sheet shows) and builds whichever workshop is short.
+
+**Matrix** (`npm run sim -- --matrix --games 8 --minutes 46 --think 160 --origins`, 8 seeds, both sides, 336 duels a run):
+
+| Style | v0.28 | + Hearth, carts, spears (chain still broken) | + chain fixed, perks, workshops (final) |
+|---|---|---|---|
+| Balanced | 66% | 60% | 52% |
+| Raider | 61% | 69% | 47% |
+| Warden | 58% | 51% | 50% |
+| Trader | 51% | 54% | 56% |
+| Mason | 39% | 47% | 56% |
+| Expander | 42% | 42% | 43% |
+| Hearthfolk | 33% | 27% | 46% |
+| Dominance alarms | balanced, raider | raider | none |
+
+Median length 34.3 min, 3.0 lead changes, 34% comebacks. Voice-minutes a game on the trade road went from "every style holds about the same 40" to Trader 46, Hearthfolk 43 and Mason 41 against Raider 36 (the war styles hold the Kingstone for 9 and 5 minutes against the economy styles' 4); the Hearth is held for about 11 minutes by every style, so it is a race all of them join rather than a niche. Standard gameplay check (`--seed 1 --minutes 30 --games 8`): median 25.8 min, the last ten minutes the busiest (7.2 actions a minute against 3.8 in the first ten), decisions a minute 2.6 / 3.6 / 4.3 / 4.4, no bored stretch, idle 1.2%, hungry 6.6% (v0.28: 5.1%).
+
+**Tried and not kept:** running the Hearth voice off a score without population (it would have changed the rank pacing the tests guard); more foragers for Hearthfolk (berries piled to 450, nothing else got built); farm scaling above homes in the bot (population stalled at the housing cap), then above the towers (the bot stuck at Hamlet for 30 minutes, which is why the chain's *first* steps are ahead of everything but its *growth* is behind the border). **Origins:** the Kinfolk (the Hearth house, +1 child) became much stronger once prosperity mattered (they won 42 of 42 in one run), so their births bonus fell from 25% to 15%, and the Wayfarers, who lost the most (9 of 84), got a bigger wagon (32% after).
+
+**Open:** the spread is 43–56%, with the territory style (Expander) the weakest and the two economy styles (Trader, Mason) the strongest, which is the right way round for this pass but a little past parity; Hearthfolk went from last at 27% to 46% once the bot built the chain it was named for. Kinfolk still win about four games in five (the Hearth house) and Wayfarers about a third. A human should judge whether the three roads read clearly on the first Valley sheet, whether the 🛒 badge on the Crown chip is enough of a prompt, and whether Hired Spears feels like a decision or a chore.
+
+---
 
 ## 1. Design guardrails
 
@@ -1748,3 +1813,10 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 
 ### v0.28.0 Iterate (2026-10-29, branch dev/living-valley)
 - Fixed the bot bug that kept carts off the road until a Mustering Hall existed; the Crown is 1,500; gifts are stronger; bots send carts while two sites are under way. Final measurements and the failed experiments are in §0i. 176 tests pass.
+
+### v0.29.0 The Three Roads Pass (2026-10-29, branch dev/living-valley)
+- **Interface:** a Crown chip instead of a permanent race card, one overlay sheet at a time (Valley K, Town, Chronicle, Goals), alerts only when true, the goal in one line, an action rail for powers, scout and raid, a build shelf in five groups, a Chronicle that keeps the quiet news, a compact story card, and a phone layout of three short rows. CSS pruned from 3,209 to about 2,400 lines. New: `ui/chrome.tsx`, `ui/state.ts`, `ui/hud.css`, `tools/ui-states.mjs`, `tools/debug-bot.ts`.
+- **Economy:** the Hearth voice (the richer town is a voice), laden carts, Merchants' faster and unwaylayable carts, Hearthfolk's smaller lead and prosperity bonus, prosperity counting workshops, Hired Spears (H), raids at 100 s. `SAVE_VERSION` 23 (`crown.hearth`, `caravan.back`, `clash.hiredAtk/hiredDef`).
+- **Harness:** voice-minutes by road, prosperity, home level and the production chain per minute, `--ablate hire`.
+- **Bots:** the chain bug (no bot ever built a Bakehouse before this), wood first when logs are short, homes' needs read like the Town sheet.
+- **Tests:** `tests/roads.test.ts` (the Hearth voice and its save, laden carts, Hired Spears).

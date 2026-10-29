@@ -3,6 +3,7 @@ import { BUILDINGS } from './defs';
 import { pay } from './events';
 import type { Good } from './defs';
 import { isHome } from './population';
+import { callingTier } from './callings';
 import type { World } from './world';
 
 /**
@@ -27,9 +28,26 @@ export function prosperity(world: World, owner: number): number {
   const p = world.players[owner];
   if (!p) return 0;
   let works = 0;
-  for (const b of world.buildings.values()) if (b.owner === owner && b.done && BUILDINGS[b.type].great) works++;
+  let workshops = 0;
+  for (const b of world.buildings.values()) {
+    if (b.owner !== owner || !b.done) continue;
+    if (BUILDINGS[b.type].great) works++;
+    // Fields, ovens, brewhouses, mines and smithies: a town that makes things is a richer town.
+    else if (BUILDINGS[b.type].job?.kind === 'process') workshops++;
+  }
   const friends = world.sites.filter((s) => s.st && s.st.ally === owner).length;
-  return world.population(owner) + homesOf(world, owner) * p.homeLevel * 2 + friends * 12 + works * 25;
+  const base = world.population(owner) + homesOf(world, owner) * p.homeLevel * 2 + friends * 12 + works * 25 + workshops * BALANCE.workshopProsperity;
+  // Hearthfolk are the richer for it: a tenth more a tier.
+  return Math.floor((base * (100 + BALANCE.hearthProsperityPct * callingTier(world, owner, 'hearth'))) / 100);
+}
+
+/** What stands between a town's homes and the next level: the goods on the tables against the goods asked for. */
+export function homeNeeds(world: World, owner: number): { level: number; homes: number; goods: { good: Good; have: number; need: number }[] } {
+  const p = world.players[owner];
+  const homes = homesOf(world, owner);
+  const need = { bread: Math.max(3, Math.ceil(homes / 3)), ale: Math.max(2, Math.ceil(homes / 5)), tools: Math.max(2, Math.ceil(homes / 6)) };
+  const goods = (['bread', 'ale', 'tools'] as const).filter((g) => g !== 'tools' || (p?.homeLevel ?? 0) >= 1).map((good) => ({ good, have: have(world, owner, good), need: need[good] }));
+  return { level: p?.homeLevel ?? 0, homes, goods };
 }
 
 /** Every ten seconds: level the homes up or down, and take the upkeep. */

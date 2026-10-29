@@ -7,7 +7,7 @@ import { resolveEvent } from './events';
 import { TRADES } from './trades';
 import { performDeed } from './deeds';
 import { workOwner } from './works';
-import { launchRaid, rally } from './warfare';
+import { hire, launchRaid, rally } from './warfare';
 import { placeBridge } from './bridges';
 import { sendScout } from './scouts';
 import type { Building, World } from './world';
@@ -23,6 +23,7 @@ export type Command =
   | { type: 'setAutoHomes'; owner: number; on: boolean }
   | { type: 'raid'; owner: number; targetId: number }
   | { type: 'rally'; owner: number }
+  | { type: 'hire'; owner: number }
   | { type: 'scout'; owner: number; x: number; y: number }
   | { type: 'bridge'; owner: number; x: number; y: number; dir: 0 | 1; len: number };
 
@@ -208,6 +209,9 @@ export function applyCommand(world: World, cmd: Command): void {
       return;
     case 'rally':
       rally(world, cmd.owner);
+      return;
+    case 'hire':
+      hire(world, cmd.owner);
       return;
     case 'scout':
       sendScout(world, cmd.owner, cmd.x, cmd.y);

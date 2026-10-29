@@ -107,8 +107,12 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
       return null;
     }
     case 'clashRally':
-      if (e.owner === me) return { channel: 'toast', priority: 2, icon: ICONS.shield, text: e.kind === 'rally' ? `📯 ${e.n || 'No'} townsfolk answer the call: +${e.strength}` : `🔥 Surge! +${e.strength} strength`, tone: 'good' };
-      return { channel: 'toast', priority: 2, icon: ICONS.shield, text: e.kind === 'rally' ? '📯 The rival rallies their folk!' : '🔥 The raiders surge!', tone: 'warn' };
+      if (e.owner === me) return { channel: 'toast', priority: 2, icon: ICONS.shield, text: e.kind === 'rally' ? `📯 ${e.n || 'No'} townsfolk answer the call: +${e.strength}` : e.kind === 'hire' ? `💰 Spears hired: +${e.strength} strength` : `🔥 Surge! +${e.strength} strength`, tone: 'good' };
+      return { channel: 'toast', priority: 2, icon: ICONS.shield, text: e.kind === 'rally' ? '📯 The rival rallies their folk!' : e.kind === 'hire' ? '💰 The rival pays for spears!' : '🔥 The raiders surge!', tone: 'warn' };
+    case 'hearthHeld':
+      if (e.owner === me) return { channel: 'toast', priority: 2, icon: ICONS.renown, text: '🏡 Your town is the richer: the Hearth is yours', sub: 'One more voice for your Crown', tone: 'good', key: 'hearth' };
+      if (e.owner >= 0) return { channel: 'toast', priority: 2, icon: ICONS.renown, text: '🏡 The rival’s town is now the richer: they hold the Hearth', sub: 'Out-grow them: bread, ale and tools', tone: 'warn', key: 'hearth' };
+      return e.was === me ? { channel: 'toast', priority: 2, icon: ICONS.renown, text: '🏡 You have lost the Hearth', tone: 'warn', key: 'hearth' } : null;
     case 'raidResolved': {
       const name = BUILDINGS[e.buildingType].name;
       if (e.owner === me) return e.won ? { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🔥 Burned their ${name}: +${e.renown}★`, tone: 'big' } : { channel: 'toast', priority: 3, icon: ICONS.shield, text: `Driven off at their ${name} (${e.attack} vs ${e.defence})`, tone: 'warn' };

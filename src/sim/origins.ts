@@ -64,7 +64,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     lead: 'Claim far and wide',
     blurb: 'Restless explorers: the House of the Horn (towers reach 3 further, folk see 4 further, Expeditions plant outposts beyond the border).',
     house: 'horn',
-    stock: { logs: 16, berries: 10 },
+    stock: { logs: 22, berries: 12, stone: 4 },
   },
   dynasty: {
     id: 'dynasty',
@@ -80,7 +80,7 @@ export const ORIGINS: Record<OriginId, OriginDef> = {
     name: 'Kinfolk',
     icon: '❤️',
     lead: 'A bigger family',
-    blurb: 'A big, warm-hearted clan: another child, and the House of the Hearth (a third more births, Festivals that pull the border their way).',
+    blurb: 'A big, warm-hearted clan: another child, and the House of the Hearth (a sixth more births, Festivals that pull the border their way).',
     house: 'hearth',
     stock: { berries: 10 },
     children: 1,

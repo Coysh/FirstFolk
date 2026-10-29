@@ -81,7 +81,7 @@ export const BALANCE = {
   raidsFrom: secs(10 * 60),
   raidSpoils: [15, 40] as [number, number],
   repelRenown: 12,
-  raidCooldown: secs(90),
+  raidCooldown: secs(100),
   /**
    * A clash lasts up to `clashTicks`; the line (0..1000) moves every `clashStep` ticks by the gap in
    * strength (percent) times `clashPush`. A rally adds `rallyBase` + `rallyEach` per townsperson near
@@ -169,6 +169,32 @@ export const BALANCE = {
   crownDiffCap: 2,
   /** The Kingstone is worth this many voices to whoever keeps it alone; a steading is worth one. */
   kingstoneVoices: 2,
+  /**
+   * The Hearth is the third road to the Crown: the richer town (prosperity) is a voice. It needs at least
+   * `hearthMin` and a lead of `hearthLead` percent over the best rival to be won, and only `hearthKeep`
+   * percent to be kept, so the voice does not flicker.
+   */
+  hearthMin: 60,
+  hearthLead: 20,
+  hearthKeep: 5,
+  /** A Hearthfolk town needs this many points less of a lead to hold the Hearth, per calling tier. */
+  hearthLeadTier: 6,
+  /** Hearthfolk towns count this much (percent) more prosperous for each calling tier. */
+  hearthProsperityPct: 8,
+  /** Every finished workshop (farm, bakehouse, brewhouse, mine, smithy, sawpit) adds this to prosperity. */
+  workshopProsperity: 3,
+  /** Merchants' carts are this much (percent) faster for each tier, and at the top tier no post can waylay them. */
+  merchantSpeedPct: 20,
+  /**
+   * Hired Spears: a defender (or an attacker) in a clash can pay `hireCost` for `hireBase` plus `hirePerLevel`
+   * for each level of home strength, once per side per clash. Wealth buys what a Rally cannot.
+   */
+  hireCost: { ale: 5, tools: 2 } as Record<string, number>,
+  hireBase: 20,
+  hirePerLevel: 12,
+  /** A cart that comes home brings back a share (percent) of its load as the steading's own good, at most `tradeBackMax`; twice that when it won the Want. */
+  tradeBackPct: 50,
+  tradeBackMax: 14,
   /** The Kingstone's light shields whoever keeps it alone: their posts beside it fight this much harder. */
   crownWard: 40,
   /**

@@ -5,6 +5,8 @@
  *     [--focus hut]         centre the camera on the first building of that type (and list what exists)
  *     [--yaw 0.6]           camera yaw, radians
  *     [--perf]              print draw calls, triangles and mean frame time
+ *     [--open valley]       open a sheet (valley|town|log|goals) before the shot
+ *     [--cat make]          open a build category
  * In game mode it starts a New Game, fast-forwards the simulation with the scripted bot,
  * then lets the renderer settle before capturing.
  */
@@ -22,6 +24,8 @@ const url = opt('url', 'http://localhost:5173') + (art ? `/?art=${art}` : '');
 const focus = opt('focus', '');
 const yaw = opt('yaw', '');
 const perf = args.includes('--perf');
+const openSheet = opt('open', '');
+const cat = opt('cat', '');
 const screen = opt('screen', 'game');
 const seed = Number(opt('seed', '3'));
 const seconds = Number(opt('seconds', '0'));
@@ -76,6 +80,14 @@ if (screen === 'title') {
     }, focus);
     console.log('buildings:', found.have.join(', '), found.found ? '' : `(no ${focus}!)`);
     await page.waitForTimeout(1500);
+  }
+  if (openSheet || cat) {
+    await page.evaluate(async ([s, c]) => {
+      const st = await import('/src/ui/state.ts');
+      if (s) st.sheet.value = s;
+      if (c) st.buildCat.value = c;
+    }, [openSheet, cat]);
+    await page.waitForTimeout(800);
   }
   if (perf) {
     const r = await page.evaluate(async () => {

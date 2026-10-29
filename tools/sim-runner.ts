@@ -58,6 +58,9 @@ for (let g = 0; g < games; g++) {
     console.log('renown/min (you:rival):', r.renownByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
     console.log('renown sources:', JSON.stringify(r.renownBy));
     console.log('voices/min (you:rival):', r.voicesByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
+    console.log('chain/min (farm,bake,brew,mine,smith | bread,ale,tools):', r.chainByMinute.map((c) => `${c.slice(0, 5).join('')}|${c.slice(5).join(',')}`).join(' '));
+    console.log('home level/min (you:rival):', r.homeLevelByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
+    console.log('prosperity/min (you:rival):', r.prosperityByMinute.map(([a, b]) => `${a}:${b}`).join(' '));
     console.log('crown score/min (you minus rival):', r.scoreByMinute.join(' '));
   }
   if (!quiet || games === 1)

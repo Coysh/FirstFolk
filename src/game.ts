@@ -11,7 +11,7 @@ import { HOUSES, playerMod } from './sim/houses';
 import { NO_OWNER, previewInfluence, previewRemoval } from './sim/territory';
 import { CONTESTED } from './sim/crown';
 import { scoutProblem } from './sim/scouts';
-import { defenceOf, hallOf, huscarls, raidProblem, raidStrength } from './sim/warfare';
+import { defenceOf, hallOf, hireProblem, huscarls, raidProblem, raidStrength } from './sim/warfare';
 import { ICON } from './render/overlay';
 import { serializeWorld } from './sim/save';
 import { objectiveStatus, type ObjectiveStatus } from './sim/scenario';
@@ -35,6 +35,15 @@ export interface Toast {
   icon: string;
   text: string;
   tone: 'info' | 'good' | 'warn' | 'big' | 'rival';
+}
+
+export interface ChronicleItem {
+  id: number;
+  /** World tick it was told. */
+  at: number;
+  icon: string;
+  text: string;
+  tone: Toast['tone'];
 }
 
 
@@ -113,6 +122,10 @@ export class Game {
   /** The steading whose card is open in the Valley panel, if any. */
   readonly steadingOpen = signal<number | null>(null);
   readonly banner = signal<{ title: string; sub: string } | null>(null);
+  /** The Chronicle: everything the valley told you, newest last, so a quiet screen never means a lost message. */
+  readonly chronicle = signal<ChronicleItem[]>([]);
+  /** News since the Chronicle was last opened. */
+  readonly unread = signal(0);
   /** True when the last placement interaction came from touch (shows a confirm button). */
   readonly touchPlacing = signal(false);
   readonly lastSaved = signal<number | null>(null);
@@ -496,16 +509,28 @@ export class Game {
   private toastQueue: News[] = [];
   private bannerUntil = 0;
   notify(n: News): void {
+    this.record(n);
     if (n.channel === 'banner') {
       if (this.bannerQueue.length < 3) this.bannerQueue.push(n);
     } else {
       if (n.key) this.toastQueue = this.toastQueue.filter((q) => q.key !== n.key);
-      if (n.priority === 1 && (this.toasts.value.length >= 1 || this.toastQueue.length)) return;
+      // Quiet news (priority 1) never takes the screen: it waits in the Chronicle.
+      if (n.priority === 1) return;
       this.toastQueue.push(n);
       this.toastQueue.sort((a, b) => b.priority - a.priority);
       this.toastQueue.length = Math.min(this.toastQueue.length, 3);
     }
     this.pumpNews();
+  }
+
+  private logId = 0;
+  private record(n: News): void {
+    const items = this.chronicle.value;
+    const last = items[items.length - 1];
+    const text = n.sub ? `${n.text} · ${n.sub}` : n.text;
+    if (last && last.text === text) return;
+    this.chronicle.value = [...items, { id: ++this.logId, at: this.world.tick, icon: n.icon, text, tone: n.tone }].slice(-40);
+    if (n.priority >= 2) this.unread.value = Math.min(99, this.unread.value + 1);
   }
 
   private pumpNews(): void {
@@ -767,6 +792,18 @@ export class Game {
       return;
     }
     w.enqueue({ type: 'rally', owner: PLAYER });
+    audio.stinger('warhorn');
+  }
+
+  /** Pay ale and tools for spears in the fight you are in (see warfare.ts). */
+  hire(): void {
+    const problem = hireProblem(this.world, PLAYER);
+    if (problem) {
+      audio.play('warn');
+      this.toast(ICON.shield, problem, 'warn');
+      return;
+    }
+    this.world.enqueue({ type: 'hire', owner: PLAYER });
     audio.stinger('warhorn');
   }
 

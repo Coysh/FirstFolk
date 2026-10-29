@@ -307,16 +307,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 export function HowTo({ onClose }: { onClose: () => void }) {
   const steps = [
-    { icon: '/assets/icons/renown.png', title: 'Win the Crown', text: 'The valley has four steadings, and a Kingstone that falls at about 14:00. Each steading that stands with you is a voice of the valley, and the Kingstone is worth two to whoever keeps it alone. From 9:00 the Crown fills for whoever holds more voices, and drains the other. Fill it first and your folk rule. Renown raises your rank and breaks a tie at 45:00.' },
+    { icon: '/assets/icons/renown.png', title: 'Win the Crown: three roads', text: 'From 9:00 the Crown fills for whoever holds more voices of the valley, and drains the other. There are three roads to a voice. 🛒 Trade: each steading that stands with you is one. ⚔ War: the Kingstone, which falls at about 14:00, is worth two to whoever keeps it alone. 🏡 Hearth: the richer town is one, so bread, ale and tools pay too. Tap the Crown at the top (or press K) to see them all.' },
     { icon: '/assets/icons/storehouse.png', title: 'Win the steadings', text: 'Every steading posts a Want: so many planks, or a manned post beside it. The first to deliver wins a big swing of favour; at 50 favour and a lead of 20 they stand with you, push your border and send a gift every minute. Press 🛒 on a steading to send a cart with what they ask for. Carts take time on the road: guard it, because favour fades.' },
-    { icon: '/assets/icons/lookout.png', title: 'Scout, fight, rally', text: 'Press T and tap the map to send a scout across the fog: it lifts the fog, shows landmarks and the rival’s posts, and the rival’s scouts will do the same to you. When raiders reach one of your posts, the fight takes a few seconds: press G to Rally every free hand nearby to its defence. In your own raids, G is a Surge.' },
-    { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Free homes and spare food grow your town. All work fills your crafts (top bar): each new star upgrades every workplace of that craft.' },
+    { icon: '/assets/icons/lookout.png', title: 'Scout, fight, rally', text: 'Press T and tap the map to send a scout across the fog: it lifts the fog, shows landmarks and the rival’s posts, and the rival’s scouts will do the same to you. When raiders reach one of your posts, the fight takes a few seconds: press G to Rally every free hand nearby to its defence, and H to hire spears with ale and tools: the richer your homes, the more they add. In your own raids, G is a Surge.' },
+    { icon: '/assets/icons/woodcutter.png', title: 'Gather and grow', text: 'Woodcutters by trees, Foragers by bushes, Quarries by rocks. Free homes and spare food grow your town. All work fills your crafts (tap your town at the top left): each new star upgrades every workplace of that craft. Buildings are on the shelf below, in five groups.' },
     { icon: '/assets/icons/lookout.png', title: 'Push your border', text: 'Lookouts and Watchtowers push your border, but every banner needs a spear: posts need guards (free adults) to push at full strength, and a landmark pays renown only while a manned post watches it. Guards eat three times as much as anyone, so a town of towers needs a big larder. Your rank limits how many posts you can hold.' },
     { icon: '/assets/icons/stockade.png', title: 'Spears and shields', text: 'Wide or tall? A Stockade holds a little land hard and makes a landmark pay more. From 10:00 a Mustering Hall’s huscarls can raid (R) a rival post: the stronger side wins, and a burned post frees its land. Reavers strike the furthest post of whoever spreads widest.' },
-    { icon: '/assets/icons/people.png', title: 'Choose your Great Houses', text: 'Your origin seats your first house; you choose a second at Hamlet and a third at Village (letters at the left). Each house gives a plain bonus and one power to call on (Z X C): Raise, Wagon Train, Open Hands, Expedition, Festival, War-Horn or Shield Wall. Win, and your founding house can found your next valley.' },
+    { icon: '/assets/icons/people.png', title: 'Choose your Great Houses', text: 'Your origin seats your first house; you choose a second at Hamlet and a third at Village (letters at the top right). Each house gives a plain bonus and one power to call on (Z X C, or the round buttons at the right): Raise, Wagon Train, Open Hands, Expedition, Festival, War-Horn or Shield Wall. Win, and your founding house can found your next valley.' },
     { icon: '/assets/icons/henge.png', title: 'Race for Great Works', text: 'From Village rank: the Stone Circle, Mead Hall and Great Granary. Only one of each in the valley, so finish first!' },
     { icon: '/assets/icons/fisher.png', title: 'Read the valley', text: 'Every valley is different, and rivers and ridges are real borders: a post can’t claim across water. Cross at a ford or a pass, or lay a Bridge (B) from Hamlet, and a post that holds a crossing fights harder.' },
-    { icon: '/assets/icons/storehouse.png', title: 'Your town finds its calling', text: 'What you build decides what your town becomes: storehouses and carts to steadings make Merchants, quarries and Great Works Masons, towers Wardens, fields and fed homes Hearthfolk. The leading calling grows a cluster beside your hall and grants perks. Tap the chip at the top to see them.' },
+    { icon: '/assets/icons/storehouse.png', title: 'Your town finds its calling', text: 'What you build decides what your town becomes: storehouses and carts to steadings make Merchants, quarries and Great Works Masons, towers Wardens, fields and fed homes Hearthfolk. The leading calling grows a cluster beside your hall and grants perks. Tap your town at the top left to see them.' },
     { icon: '/assets/icons/berries.png', title: 'Seasons', text: 'Winters bite, so stockpile food: berries sleep and folk eat more, but Fishers keep working.' },
   ];
   return (
@@ -365,9 +365,14 @@ export function HowTo({ onClose }: { onClose: () => void }) {
             <td>Tap a Great House</td>
           </tr>
           <tr>
+            <td>Valley · Chronicle</td>
+            <td>K · the 📜 button</td>
+            <td>Tap the Crown · 📜</td>
+          </tr>
+          <tr>
             <td>Mute</td>
-            <td>M, or the 🔊 button</td>
-            <td>🔊 button</td>
+            <td>M</td>
+            <td>Settings</td>
           </tr>
           <tr>
             <td>Pause / menu</td>

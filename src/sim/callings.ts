@@ -35,7 +35,7 @@ export const CALLINGS: Record<CallingId, CallingDef> = {
     titles: ['Market Town', 'Trading Town', 'Free Port'],
     color: 0x2e86c1,
     earned: 'Storehouses, the Great Granary and goods carried to steadings',
-    perks: ['Steadings give you 25% more favour', 'Favour +50%, and a third cart on the road', 'Favour +75%, and a third cart on the road'],
+    perks: ['Favour +25%, carts 20% faster', 'Favour +50%, carts 40% faster, a third cart, richer returns', 'Favour +75%, carts 60% faster, and no post can waylay them'],
   },
   masons: {
     id: 'masons',
@@ -62,7 +62,7 @@ export const CALLINGS: Record<CallingId, CallingDef> = {
     titles: ['Farmstead', 'Hearth Town', 'Harvest Hall'],
     color: 0x3f8a4a,
     earned: 'Foragers, fishers, homes and a well-fed town',
-    perks: ['Gatherers 8% faster, births 10% sooner, a little renown for a fed town; two more hands answer a Rally', '16% faster, 20% sooner, more renown; four more hands answer a Rally', '24% faster, 30% sooner, the most renown; six more hands answer a Rally'],
+    perks: ['Gatherers 8% faster, births 10% sooner, prosperity +8%; two more hands answer a Rally; the Hearth needs only a 14% lead', '16% faster, 20% sooner, prosperity +16%; four more hands answer a Rally; an 8% lead', '24% faster, 30% sooner, prosperity +24%; six more hands answer a Rally; a 2% lead'],
   },
 };
 

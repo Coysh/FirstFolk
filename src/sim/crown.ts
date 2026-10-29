@@ -1,6 +1,8 @@
 import { BALANCE, TICK_HZ } from './balance';
 import { NO_OWNER } from './territory';
 import { watched } from './renown';
+import { prosperity } from './prosperity';
+import { callingTier } from './callings';
 import type { World } from './world';
 
 /**
@@ -25,12 +27,14 @@ export interface Crown {
   quarter: number[];
   /** Voices each player holds (recomputed each second; read by the HUD and the bots). */
   voices: number[];
+  /** Who holds the Hearth (the richer town), or NO_OWNER. */
+  hearth: number;
 }
 
 export const CONTESTED = -2;
 
 export function newCrown(siteId: number, players: number): Crown {
-  return { siteId, progress: new Array(players).fill(0), keeper: NO_OWNER, quarter: new Array(players).fill(0), voices: new Array(players).fill(0) };
+  return { siteId, progress: new Array(players).fill(0), keeper: NO_OWNER, quarter: new Array(players).fill(0), voices: new Array(players).fill(0), hearth: NO_OWNER };
 }
 
 export function crownSite(world: World) {
@@ -49,12 +53,28 @@ export function watchers(world: World): { owner: number; tended: boolean }[] {
   return out;
 }
 
-/** Voices a player holds: steadings that stand with them, and the Kingstone if they keep it alone. */
+/** Voices a player holds: steadings that stand with them, the Kingstone if they keep it alone, and the Hearth if their town is the richer. */
 export function voicesHeld(world: World, owner: number): number {
   let n = 0;
   for (const s of world.sites) if (s.st && s.st.ally === owner) n++;
   if (world.crown && world.crown.keeper === owner) n += BALANCE.kingstoneVoices;
+  if (world.crown && (world.crown.hearth ?? NO_OWNER) === owner) n += 1;
   return n;
+}
+
+/** Who holds the Hearth, given who held it a second ago: a clear lead wins it, a thin one keeps it. */
+export function hearthHolder(world: World, was: number): number {
+  const scores = world.players.map((p) => prosperity(world, p.id));
+  let top = 0;
+  for (let o = 1; o < scores.length; o++) if (scores[o] > scores[top]) top = o;
+  const rest = Math.max(0, ...scores.filter((_, o) => o !== top));
+  const pct = was === top ? BALANCE.hearthKeep : Math.max(2, BALANCE.hearthLead - BALANCE.hearthLeadTier * callingTier(world, top, 'hearth'));
+  return scores[top] >= BALANCE.hearthMin && scores[top] * 100 >= rest * (100 + pct) ? top : NO_OWNER;
+}
+
+/** The Hearth for the HUD: each town's prosperity, who holds it, and what it takes. */
+export function hearthStatus(world: World): { holder: number; scores: number[]; min: number; leadPct: number } {
+  return { holder: world.crown?.hearth ?? NO_OWNER, scores: world.players.map((p) => prosperity(world, p.id)), min: BALANCE.hearthMin, leadPct: BALANCE.hearthLead };
 }
 
 /** Whether the keeper's Kingstone is tended by a manned Stockade (one more point a second). */
@@ -106,6 +126,12 @@ export function updateCrown(world: World): void {
       c.keeper = keeper;
       world.emit({ type: 'crownKeeper', keeper, was, x: site.x, y: site.y });
     }
+  }
+  const hearth = hearthHolder(world, c.hearth ?? NO_OWNER);
+  if (hearth !== (c.hearth ?? NO_OWNER)) {
+    const was = c.hearth ?? NO_OWNER;
+    c.hearth = hearth;
+    world.emit({ type: 'hearthHeld', owner: hearth, was });
   }
   for (const p of world.players) c.voices[p.id] = voicesHeld(world, p.id);
   if (world.tick < BALANCE.crownOpens) return;
