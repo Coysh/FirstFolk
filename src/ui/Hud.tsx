@@ -22,7 +22,7 @@ import { HowTo, SettingsPanel } from './Screens';
 import { DEED_KEYS, HOTKEYS } from '../input/input';
 import { lockLabel } from '../sim/commands';
 import { DEEDS, activePowers, deedCooldown, deedProblem, deedWait } from '../sim/deeds';
-import { caravanMax, caravanProblem, steadingsOf, suggestLoad } from '../sim/steadings';
+import { caravanMax, caravanProblem, routeThreat, steadingsOf, suggestLoad } from '../sim/steadings';
 import { STEADING_CHAR } from '../sim/steadingDefs';
 import { homeLevelName, prosperity } from '../sim/prosperity';
 import { CONTESTED, crownEta, crownPace, crownPct, crownSite } from '../sim/crown';
@@ -403,7 +403,7 @@ function Steadings({ game }: { game: Game }) {
               class="stead-send"
               disabled={!!problem || !load || load.n < 1}
               onClick={() => load && game.sendCaravan(s.id, load.good, load.n)}
-              title={problem || (load!.wanted ? `Send what they asked for: ${load!.n} ${load!.good}` : `Send a gift of ${load!.n} ${load!.good}: it earns a little favour`)}
+              title={problem || (routeThreat(w, PLAYER, s.id) ? '⚠ A rival post stands on this road: the cart would be waylaid. Man a post beside it first, or go another way' : load!.wanted ? `Send what they asked for: ${load!.n} ${load!.good}` : `Send a gift of ${load!.n} ${load!.good}: it earns a little favour`)}
             >
               🛒 {load && load.n > 0 ? `${load.n} ${load.good}` : 'Send'}
               {carts ? <small>{carts}/{caravanMax(w, PLAYER)}</small> : null}

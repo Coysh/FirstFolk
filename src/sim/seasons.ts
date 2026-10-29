@@ -23,8 +23,16 @@ export function ticksToNextSeason(tick: number): number {
   return seasonTicks() - (tick % seasonTicks());
 }
 
+/** Winter ice: the water is solid from a few seconds into winter until a few seconds before it ends. */
+export const iceAt = (tick: number) => seasonOf(tick) === WINTER && tick % seasonTicks() >= BALANCE.iceMargin && ticksToNextSeason(tick) > BALANCE.iceMargin;
+
 export function updateSeasons(world: World): void {
   const t = world.tick;
+  const ice = iceAt(t);
+  if (ice !== world.frozen) {
+    world.setFrozen(ice);
+    world.emit({ type: 'freeze', on: ice });
+  }
   if (t > 0 && t % seasonTicks() === 0) {
     const season = seasonOf(t);
     world.emit({ type: 'season', season });

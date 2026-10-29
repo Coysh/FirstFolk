@@ -98,7 +98,7 @@ export function holdsCrossing(world: World, b: Building): boolean {
 }
 
 export function defenceOf(world: World, b: Building): number {
-  const guard = (100 + playerMod(world, b.owner, 'guard') + 10 * callingTier(world, b.owner, 'stronghold')) + (holdsCrossing(world, b) ? BALANCE.bridgeWard[1] : 0);
+  const guard = (100 + playerMod(world, b.owner, 'guard') + 10 * callingTier(world, b.owner, 'stronghold') + BALANCE.homeGuardPct * (world.players[b.owner]?.homeLevel ?? 0)) + (holdsCrossing(world, b) ? BALANCE.bridgeWard[1] : 0);
   let d = Math.floor((b.guarded * BALANCE.guardStrength * guard) / 100);
   // The Kingstone shields the one folk who keeps it alone (not a contested stone).
   const crown = world.crown;
@@ -131,7 +131,7 @@ export function raidProblem(world: World, owner: number, targetId: number): stri
   if (!b || b.owner === owner || b.owner === NO_OWNER || !raidable(b)) return 'Pick a rival tower, outpost or stockade';
   if (!(world.explored[world.idx(b.x, b.y)] & (1 << owner))) return 'Your scouts haven’t seen it';
   if (cheb(b.x, b.y, hall.x, hall.y) > BALANCE.raidReach) return `Too far: raids reach ${BALANCE.raidReach} tiles from the Mustering Hall`;
-  if (!world.sameRegion(world.entranceIdx(hall), world.entranceIdx(b))) return 'No way there on foot: hold a ford, or bridge the water';
+  if (!world.routeOpen(world.entranceIdx(hall), world.entranceIdx(b))) return 'No way there on foot: hold a ford, or bridge the water';
   return '';
 }
 
@@ -140,7 +140,7 @@ export function launchRaid(world: World, owner: number, targetId: number): void 
   if (raidProblem(world, owner, targetId)) return;
   const hall = hallOf(world, owner)!;
   const target = world.buildings.get(targetId)!;
-  const path = world.pathfinder.find(world.entranceIdx(hall), world.entranceIdx(target));
+  const path = world.findRoute(world.entranceIdx(hall), world.entranceIdx(target));
   if (!path) return;
   const members: number[] = [];
   for (const s of world.settlers.values())
@@ -225,7 +225,12 @@ export function rally(world: World, owner: number): boolean {
     }
     if (target.owner !== owner || c.rallied || world.tick < p.rallyReady) continue;
     let n = 0;
-    for (const s of world.settlers.values()) if (s.owner === owner && !s.child && s.job.kind !== 'guard' && cheb(s.x, s.y, target.x, target.y) <= BALANCE.rallyRadius) n++;
+    for (const s of world.settlers.values())
+      if (s.owner === owner && !s.child && s.job.kind !== 'guard' && cheb(s.x, s.y, target.x, target.y) <= BALANCE.rallyRadius) {
+        n++;
+        // Everyone who answers drops their tools for a while: the work near the fight stops.
+        s.busy = Math.max(s.busy, BALANCE.rallyPause);
+      }
     c.rallied = true;
     // A hearth town turns out in numbers: two more hands a tier.
     c.militia = Math.min(BALANCE.rallyMax + 2 * callingTier(world, owner, 'hearth'), n);

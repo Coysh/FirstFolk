@@ -414,6 +414,9 @@ export class Game {
         case 'caravanSent':
           if (e.owner === PLAYER) audio.play('click');
           break;
+        case 'caravanWaylaid':
+          audio.stinger(e.owner === PLAYER ? 'loss' : 'clash');
+          break;
         case 'caravanArrived':
           if (e.owner === PLAYER) audio.play('deliver');
           break;

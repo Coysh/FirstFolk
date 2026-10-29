@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE, secs } from '../src/sim/balance';
 import { VALLEY_IDS, generateMap, isWalkableTerrain } from '../src/sim/mapgen';
-import { addFavour, caravanProblem, sendCaravan, steadingsOf, suggestLoad } from '../src/sim/steadings';
+import { addFavour, caravanProblem, openHands, sendCaravan, steadingsOf, suggestLoad } from '../src/sim/steadings';
 import { STEADING_CHAR } from '../src/sim/steadingDefs';
 import { hashWorld } from '../src/sim/hash';
 import { deserializeWorld, serializeWorld } from '../src/sim/save';
@@ -127,5 +127,60 @@ describe('steadings', () => {
     w.run(secs(60));
     loaded.run(secs(60));
     expect(hashWorld(loaded)).toBe(hashWorld(w));
+  });
+});
+
+describe('the road is dangerous, and the finale is big', () => {
+  const post = (w: World, owner: number, x: number, y: number) => {
+    const b = w.addBuilding('lookout', owner, x, y, true);
+    b.guarded = 1;
+    return b;
+  };
+
+  it('a cart that passes a rival post is waylaid, unless an escort stands beside it or a wagon train rolls', () => {
+    const w = duel();
+    const s = steadingsOf(w)[0];
+    wagon(w).stock.logs = 100;
+    sendCaravan(w, 0, s.id, 'logs', 10);
+    const c = w.caravans[0];
+    // A rival post right on the cart's road.
+    const ahead = c.path[Math.min(6, c.path.length - 1)];
+    const px = ahead % w.size;
+    const py = (ahead - px) / w.size;
+    post(w, 1, px, py);
+    w.run(secs(20));
+    expect(w.caravans.length).toBe(0);
+    expect(s.st!.favour[0]).toBe(0);
+    // The wagon train: the same road, and the cart gets through.
+    const w2 = duel();
+    const s2 = steadingsOf(w2)[0];
+    wagon(w2).stock.logs = 100;
+    sendCaravan(w2, 0, s2.id, 'logs', 10);
+    const c2 = w2.caravans[0];
+    const a2 = c2.path[Math.min(6, c2.path.length - 1)];
+    post(w2, 1, a2 % w2.size, (a2 - (a2 % w2.size)) / w2.size);
+    w2.players[0].buffs.timber = w2.tick + secs(90);
+    w2.run(secs(20));
+    expect(w2.caravans.length + w2.players[0].caravanned).toBeGreaterThan(0);
+  });
+
+  it('Open Hands delivers at once what a steading wants', () => {
+    const w = duel();
+    const s = steadingsOf(w)[0];
+    s.st!.want = { kind: 'goods', good: 'logs', n: 20, endsAt: w.tick + 1000, progress: [0, 0] };
+    wagon(w).stock.logs = 60;
+    expect(openHands(w, 0)).toMatch(/take/);
+    expect(s.st!.won[0]).toBe(1);
+    expect(wagon(w).stock.logs).toBe(40);
+  });
+
+  it('every steading asks for a Last Want when a Crown is nearly full', () => {
+    const w = duel();
+    w.tick = BALANCE.crownOpens;
+    w.run(20);
+    w.crown!.progress[0] = Math.ceil((BALANCE.crownNeed * (BALANCE.finalePct + 2)) / 100);
+    w.run(40);
+    const wants = steadingsOf(w).map((s) => s.st!.want);
+    expect(wants.every((x) => x?.last)).toBe(true);
   });
 });

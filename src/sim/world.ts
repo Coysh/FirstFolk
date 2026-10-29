@@ -1,6 +1,6 @@
 import { BALANCE } from './balance';
 import { BUILDINGS, FOODS, FOOD_VALUE, GOODS, costTotal, outputGood, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
-import { generateMap, isWalkableTerrain, type MapData } from './mapgen';
+import { Terrain, generateMap, isWalkableTerrain, type MapData } from './mapgen';
 import { PathFinder } from './path';
 import { Rng } from './rng';
 import type { Command } from './commands';
@@ -206,6 +206,8 @@ export type SimEvent =
   | { type: 'caravanSent'; owner: number; siteId: number; good: Good; n: number }
   | { type: 'caravanArrived'; owner: number; siteId: number; good: Good; n: number; won: boolean }
   | { type: 'caravanHome'; owner: number }
+  | { type: 'freeze'; on: boolean }
+  | { type: 'caravanWaylaid'; owner: number; siteId: number; good: Good; n: number; x: number; y: number }
   | { type: 'homesLevel'; owner: number; level: number; was: number }
   | { type: 'starfall'; siteId: number; x: number; y: number }
   | { type: 'workBegun'; owner: number; buildingType: BuildingType }
@@ -475,16 +477,44 @@ export class World {
   }
   /** Can anyone walk from a to b at all? (Ground only: a building in the way can still block a path.) */
   sameRegion(a: number, b: number): boolean {
+    if (this.iceOk) return true;
     const labels = this.regionLabels ?? this.buildRegions();
     return !labels[a] || !labels[b] || labels[a] === labels[b];
   }
 
-  /** Ground a person can stand on: dry land, or a finished bridge deck. */
+  /** Winter has frozen the water: every river and lake is walkable ice (see seasons.ts). Derived from the tick, never saved. */
+  frozen = false;
+  /** Ground a person can stand on: dry land, or a finished bridge deck. Settlers never use the ice: it is for the long road. */
   walkableGround(i: number): boolean {
     return isWalkableTerrain(this.map.terrain[i]) || this.deck[i] === 1;
   }
+  /** Set while a route is planned over the ice. */
+  private iceOk = false;
+  /** Freeze or thaw the water (see seasons.ts). */
+  setFrozen(on: boolean): void {
+    this.frozen = on;
+  }
+  /**
+   * A route for the folk who travel the long road (carts, scouts, warbands): in winter the frozen water
+   * is a road too, so a ford is no longer the only way across. Settlers at their daily work still keep to the land.
+   */
+  findRoute(from: number, to: number): number[] | null {
+    if (!this.frozen) return this.pathfinder.find(from, to);
+    const dry = this.pathfinder.find(from, to);
+    if (dry) return dry;
+    this.iceOk = true;
+    try {
+      return this.pathfinder.find(from, to);
+    } finally {
+      this.iceOk = false;
+    }
+  }
+  /** Can a cart, scout or warband get from a to b right now (over the ice if it is winter)? */
+  routeOpen(a: number, b: number): boolean {
+    return this.frozen || this.sameRegion(a, b);
+  }
   walkable(i: number): boolean {
-    return this.walkableGround(i) && this.buildingAt[i] === 0;
+    return (this.walkableGround(i) || (this.iceOk && this.map.terrain[i] === Terrain.Water)) && this.buildingAt[i] === 0;
   }
   cornerHeight(x: number, y: number): number {
     return this.map.heights[y * (this.size + 1) + x];

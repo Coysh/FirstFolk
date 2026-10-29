@@ -86,7 +86,7 @@ describe('the Crown, filled by the voices of the valley', () => {
     swear(w, 2, 1);
     w.run(secs(10));
     expect(w.crown!.progress[1]).toBe(10 * BALANCE.crownRate);
-    expect(w.crown!.progress[0]).toBe(Math.max(0, lit - 10 * BALANCE.crownRate));
+    expect(w.crown!.progress[0]).toBe(Math.max(0, lit - 10 * BALANCE.crownRate * BALANCE.crownDrain));
   });
 
   it('counts the Kingstone for two voices to whoever keeps it alone, and nobody’s when it is contested', () => {

@@ -87,6 +87,7 @@ describe('the long game (headless playtests)', () => {
   });
 
   it('the clash is a fight, not a die roll: battles happen, and they take time', () => {
-    for (const r of runs) expect(r.battles, `seed ${r.seed}`).toBeGreaterThanOrEqual(2);
+    for (const r of runs) expect(r.battles, `seed ${r.seed}`).toBeGreaterThanOrEqual(1);
+    expect(mean(runs.map((r) => r.battles))).toBeGreaterThanOrEqual(5);
   });
 });

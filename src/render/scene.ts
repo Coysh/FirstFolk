@@ -482,6 +482,7 @@ export class GameRenderer {
     this.borderGlow += (this.borderGoal - this.borderGlow) * Math.min(1, dt * 8);
     this.fow.uniforms.uBorderGlow.value = this.borderGlow;
     this.sky.update(dt, this.rig.camera);
+    this.water.setFrozen(this.world.frozen);
     this.water.update(this.time);
     this.nature.update(this.world, this.time);
     this.buildings.update(this.world, dt);

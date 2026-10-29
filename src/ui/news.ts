@@ -115,6 +115,12 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
       if (e.defender === me) return e.won ? { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🔥 Your ${name} burned (${e.attack} vs ${e.defence})`, tone: 'warn' } : { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🛡 Your ${name} held: +${e.renown}★`, tone: 'big' };
       return null;
     }
+    case 'caravanWaylaid': {
+      if (e.owner === me) return { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🛒 Your cart was waylaid: ${e.n} ${e.good} lost`, sub: 'A rival post stands on the road. Man a post beside it to escort your carts, or go around', tone: 'warn' };
+      return { channel: 'toast', priority: 2, icon: ICONS.shield, text: `🛡 Your post stopped a rival cart: ${e.n} ${e.good} scattered`, tone: 'good' };
+    }
+    case 'freeze':
+      return e.on ? { channel: 'banner', priority: 3, icon: ICONS.shield, text: '❄️ The rivers have frozen', sub: 'Anyone can walk across: raids, scouts and carts take the short way until the thaw', tone: 'big' } : { channel: 'toast', priority: 2, icon: ICONS.shield, text: '💧 The ice is melting: back to the fords and bridges', tone: 'info' };
     case 'homesLevel':
       if (e.owner !== me) return null;
       return e.level > e.was

@@ -6,6 +6,7 @@ import { addRenown } from './renown';
 import { HOUSES, playerMod, type Seat } from './houses';
 import { NO_OWNER, onBuildingComplete, recomputeTerritory } from './territory';
 import { hallOf } from './warfare';
+import { openHands } from './steadings';
 import type { Building, World } from './world';
 
 /**
@@ -92,31 +93,27 @@ export const DEEDS: Record<DeedId, DeedDef> = {
   },
   timber: {
     id: 'timber',
-    name: 'Timber Drive',
-    icon: '🪓',
-    short: '3× wood for 60 s',
-    blurb: 'For 60 seconds all woodcutting and sawing is three times as fast, and saplings spring up fully grown. Ready every 140 s.',
+    name: 'Wagon Train',
+    icon: '🐂',
+    short: 'Carts safe and fast, 90 s',
+    blurb: 'For 90 seconds every cart of yours travels half as fast again and cannot be waylaid on the road. Ready every 120 s.',
     target: false,
-    cooldown: secs(140),
+    cooldown: secs(120),
     apply(world, owner) {
-      world.players[owner].buffs.timber = world.tick + secs(60);
-      return 'A timber drive: the axes ring out for a minute.';
+      world.players[owner].buffs.timber = world.tick + secs(90);
+      return 'The wagon train rolls: your carts are safe and swift for a minute and a half.';
     },
   },
   harvest: {
     id: 'harvest',
-    name: 'Harvest Home',
-    icon: '🧺',
-    short: 'Food now, 2× gathering',
-    blurb: 'Bring in a great harvest: 15 food plus 1 for every 3 folk at once, and foragers and fishers work twice as fast for 45 seconds. Ready every 140 s.',
+    name: 'Open Hands',
+    icon: '🤝',
+    short: 'Deliver to a steading now',
+    blurb: 'Hand a steading what it asks for at once, up to 30 goods from your stores, with no cart to be waylaid. With no Want to meet, it wins a friend 12 favour instead. Ready every 120 s.',
     target: false,
-    cooldown: secs(140),
+    cooldown: secs(120),
     apply(world, owner) {
-      const n = Math.floor(15 + world.population(owner) / 3);
-      const store = world.storages(owner)[0];
-      if (store) store.stock.berries += n;
-      world.players[owner].buffs.harvest = world.tick + secs(45);
-      return `The harvest is home: +${n} food, and gathering is twice as fast for 45 s.`;
+      return openHands(world, owner);
     },
   },
   expedition: {

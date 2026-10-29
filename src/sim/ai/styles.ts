@@ -32,9 +32,9 @@ export interface StyleDef {
 export const STYLES: Record<BotStyle, StyleDef> = {
   balanced: { name: 'Balanced', towerPer: 8, towersFirst: false, towersOnlyWithAim: false, stockades: true, muster: true, raids: 1, houses: ['plough', 'spear', 'shield', 'hammer', 'horn', 'hearth', 'axe'] },
   expander: { name: 'Expander', towerPer: 5, towersFirst: true, towersOnlyWithAim: false, stockades: true, muster: false, raids: 0, houses: ['horn', 'shield', 'hearth', 'axe', 'plough', 'hammer', 'spear'] },
-  trader: { name: 'Trader', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: false, raids: 0, focus: 'trader', houses: ['plough', 'hammer', 'hearth', 'shield', 'axe', 'horn', 'spear'] },
-  mason: { name: 'Mason', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: false, raids: 0, focus: 'masons', houses: ['hammer', 'axe', 'shield', 'plough', 'hearth', 'horn', 'spear'] },
-  hearth: { name: 'Hearthfolk', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: false, raids: 0, focus: 'hearth', houses: ['plough', 'hearth', 'shield', 'hammer', 'axe', 'horn', 'spear'] },
+  trader: { name: 'Trader', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: true, raids: 0, focus: 'trader', houses: ['plough', 'hammer', 'hearth', 'shield', 'axe', 'horn', 'spear'] },
+  mason: { name: 'Mason', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: true, raids: 0, focus: 'masons', houses: ['hammer', 'axe', 'shield', 'plough', 'hearth', 'horn', 'spear'] },
+  hearth: { name: 'Hearthfolk', towerPer: 14, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: true, raids: 0, focus: 'hearth', houses: ['plough', 'hearth', 'shield', 'hammer', 'axe', 'horn', 'spear'] },
   raider: { name: 'Raider', focus: 'stronghold', towerPer: 9, towersFirst: false, towersOnlyWithAim: false, stockades: false, muster: true, raids: 2, houses: ['spear', 'shield', 'hammer', 'plough', 'axe', 'horn', 'hearth'] },
   warden: { name: 'Warden', focus: 'stronghold', towerPer: 12, towersFirst: false, towersOnlyWithAim: true, stockades: true, muster: true, raids: 0, houses: ['shield', 'hearth', 'plough', 'hammer', 'axe', 'horn', 'spear'] },
 };

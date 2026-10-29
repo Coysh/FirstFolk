@@ -1,7 +1,7 @@
 /**
  * Ablation: does a decision matter? A mirror match (both bots the same style, a fair duel) where the
  * player bot never takes one kind of decision; the cost in win rate is what that decision is worth.
- * Usage: npx tsx tools/ablate.ts [--games 40] [--seed 100] [--minutes 46] [--style balanced] [--kinds scout,deed,raid,bridge,rally,trade]
+ * Usage: npx tsx tools/ablate.ts [--games 40] [--seed 100] [--minutes 46] [--style balanced] [--kinds scout,deed,raid,bridge,rally,caravan]
  */
 import { playtest } from '../src/sim/playtest';
 import type { BotStyle } from '../src/sim/ai/styles';
@@ -12,7 +12,7 @@ const games = Number(str('games', '40'));
 const seed = Number(str('seed', '100'));
 const minutes = Number(str('minutes', '46'));
 const style = str('style', 'balanced') as BotStyle;
-const kinds = str('kinds', 'scout,deed,raid,bridge,rally,trade').split(',');
+const kinds = str('kinds', 'scout,deed,raid,bridge,rally,caravan').split(',');
 
 function winRate(ablate: string[]) {
   let wins = 0;

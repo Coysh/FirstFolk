@@ -102,6 +102,17 @@ export const BALANCE = {
   rallyMax: 8,
   rallyRadius: 14,
   rallyCooldown: secs(40),
+  /** Everyone who answers a Rally drops their work for this long: the defence costs production. */
+  rallyPause: secs(30),
+  /** A well-provisioned town's guards fight this much (percent) harder for each home level (tools, bread and ale). */
+  homeGuardPct: 6,
+  /** A cart within this many tiles of an enemy manned post is waylaid, unless one of its own manned posts stands within `escortRange`. */
+  tollRange: 4,
+  escortRange: 7,
+  /** The finale: when a Crown passes this share (percent), or this many ticks before the end, every steading posts a Last Want worth `finaleFavour`. */
+  finalePct: 70,
+  finaleBefore: secs(6 * 60),
+  finaleFavour: 55,
   surgePct: 30,
   interceptRange: 12,
   /** The Shield Wall: radius and extra defence. */
@@ -153,6 +164,8 @@ export const BALANCE = {
   crownOpens: secs(9 * 60),
   crownRate: 1,
   crownTended: 1,
+  /** The side that holds fewer voices loses its Crown this many times as fast as the other fills: a lead is never safe. */
+  crownDrain: 2,
   crownDiffCap: 2,
   /** The Kingstone is worth this many voices to whoever keeps it alone; a steading is worth one. */
   kingstoneVoices: 2,
@@ -206,6 +219,8 @@ export const BALANCE = {
   /** When nothing new has been seen or claimed for this long, a rumour reveals the nearest discovery. */
   rumourDelay: secs(45),
 
+  /** The ice holds from this many ticks into winter until this many before it ends. */
+  iceMargin: 100,
   /** Winter: warning lead time, extra appetite, construction speed. */
   winterWarning: secs(25),
   /** A guard on a post eats this much (percent) more than anyone else: every banner needs a spear, and a spear needs supper. */

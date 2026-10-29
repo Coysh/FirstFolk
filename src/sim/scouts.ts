@@ -41,7 +41,7 @@ export function scoutProblem(world: World, owner: number, x: number, y: number):
   const i = world.idx(x, y);
   if (!world.walkable(i)) return 'A scout can only go where people can walk';
   if (Math.max(Math.abs(x - hall.x), Math.abs(y - hall.y)) > BALANCE.scoutReach) return `Too far: scouts range ${BALANCE.scoutReach} tiles from your hall`;
-  if (!world.sameRegion(world.entranceIdx(hall), i)) return 'No way there on foot: find a ford, or bridge the water';
+  if (!world.routeOpen(world.entranceIdx(hall), i)) return 'No way there on foot: find a ford, or bridge the water';
   return '';
 }
 
@@ -49,7 +49,7 @@ export function scoutProblem(world: World, owner: number, x: number, y: number):
 export function sendScout(world: World, owner: number, x: number, y: number): void {
   if (scoutProblem(world, owner, x, y)) return;
   const hall = [...world.buildings.values()].find((b) => b.owner === owner && b.type === 'wagon')!;
-  const path = world.pathfinder.find(world.entranceIdx(hall), world.idx(x, y));
+  const path = world.findRoute(world.entranceIdx(hall), world.idx(x, y));
   if (!path || !path.length) return;
   const e = world.entrance(hall);
   world.scouts.push({ id: world.newId(), owner, path, step: 0, progress: 0, phase: 'out', wait: 0, x: e.x, y: e.y, seen: false, found: 0 });

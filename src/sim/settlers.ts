@@ -271,9 +271,6 @@ function workTicks(world: World, s: Settler, base: number, skill: Skill): number
   const player = world.players[s.owner];
   // Hunger slows everyone but food gatherers, who eat as they pick: a famine can't cripple its own cure.
   if (player.hungry && skill !== 'husbandry') t *= 1.4;
-  // Deeds: a timber drive or a harvest home.
-  if (skill === 'woodcraft' && player.buffs.timber > world.tick) t /= 3;
-  if (skill === 'husbandry' && player.buffs.harvest > world.tick) t /= 2;
   if (skill === 'husbandry') t = (t * 100) / (100 + 8 * callingTier(world, s.owner, 'hearth'));
   // Masons work stone and timber a little faster.
   if (skill !== 'husbandry') t = (t * 100) / (100 + 8 * callingTier(world, s.owner, 'masons'));
@@ -640,7 +637,7 @@ function thinkWork(world: World, s: Settler, job: Extract<Settler['job'], { kind
         const y = (job.tile - x) / world.size;
         if (!world.nodeAt[job.tile] && !world.buildingAt[job.tile]) {
           // A timber drive's saplings spring up fully grown.
-          world.addNode('tree', x, y, player.buffs.timber > world.tick ? 0 : BALANCE.saplingGrowTicks);
+          world.addNode('tree', x, y, BALANCE.saplingGrowTicks);
           world.emit({ type: 'saplingPlanted', x, y });
           gainXp(world, s, def.skill, b);
         }

@@ -72,7 +72,7 @@ export function crownPace(world: World, owner: number): number {
   if (mine === best) return 0;
   const diff = Math.min(BALANCE.crownDiffCap, Math.abs(mine - best));
   const rate = diff * BALANCE.crownRate + (mine > best && c.keeper === owner && tendedBy(world, owner) ? BALANCE.crownTended : 0);
-  return mine > best ? rate : -diff * BALANCE.crownRate;
+  return mine > best ? rate : -diff * BALANCE.crownRate * BALANCE.crownDrain;
 }
 
 /** Percent full (0..100) for a player. */

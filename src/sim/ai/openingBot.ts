@@ -4,7 +4,7 @@ import { deedCost, deedWait, outpostSpot } from '../deeds';
 import { HOUSES, HOUSE_TIMEOUT } from '../houses';
 import { workOwner } from '../works';
 import type { Discovery } from '../world';
-import { caravanMax, caravanProblem, steadingsOf, suggestLoad } from '../steadings';
+import { caravanMax, caravanProblem, openHandsUseful, routeThreat, steadingsOf, suggestLoad } from '../steadings';
 import type { World } from '../world';
 import { NO_OWNER } from '../territory';
 import { BALANCE } from '../balance';
@@ -226,7 +226,8 @@ export class OpeningBot {
       if (world.caravans.some((c) => c.owner === this.owner && c.siteId === s.id)) continue;
       const load = suggestLoad(world, this.owner, s);
       if (!load) continue;
-      const spare = world.stored(this.owner, load.good) - (trader ? keep[load.good] >> 1 : keep[load.good]);
+      // Early Wants are small and the first friends are worth a lot: keep less back before ten minutes.
+      const spare = world.stored(this.owner, load.good) - (trader || world.tick < 6000 ? keep[load.good] >> 1 : keep[load.good]);
       const dist = Math.max(Math.abs(s.x - hall.x), Math.abs(s.y - hall.y));
       let n = Math.min(load.n, spare);
       let score = 0;
@@ -240,7 +241,7 @@ export class OpeningBot {
         if (n < 12 || st.favour[this.owner] >= 70 || (st.ally === this.owner && st.favour[this.owner] >= 55)) continue;
         score = 20 - dist / 3;
       }
-      if (n >= 1 && !caravanProblem(world, this.owner, s.id, load.good, n) && (!best || score > best.score)) best = { site: s, good: load.good, n, score };
+      if (n >= 1 && !caravanProblem(world, this.owner, s.id, load.good, n) && (!best || score > best.score) && !routeThreat(world, this.owner, s.id)) best = { site: s, good: load.good, n, score };
     }
     if (!best) return false;
     world.enqueue({ type: 'caravan', owner: this.owner, siteId: best.site.id, good: best.good, n: best.n });
@@ -266,12 +267,11 @@ export class OpeningBot {
 
   /** Call on one ready house power, when it would help. */
   private useDeed(world: World, target: { x: number; y: number } | null): boolean {
-    const pop = world.population(this.owner);
     const seats = world.players[this.owner].seats;
     for (let k = 0; k < seats.length; k++) {
       if (deedWait(world, seats[k]) > 0) continue;
       const id = HOUSES[seats[k].house].power;
-      if (!canAfford(world, this.owner, deedCost(world, this.owner, id))) continue;
+      if (this.ablate.has(`deed:${id}`) || !canAfford(world, this.owner, deedCost(world, this.owner, id))) continue;
       let at: { x: number; y: number } | null = null;
       switch (id) {
         case 'raise': {
@@ -281,10 +281,10 @@ export class OpeningBot {
           break;
         }
         case 'timber':
-          at = world.stored(this.owner, 'logs') < 80 ? { x: 0, y: 0 } : null;
+          at = world.caravans.some((c) => c.owner === this.owner) ? { x: 0, y: 0 } : null;
           break;
         case 'harvest':
-          at = world.larder(this.owner) < pop ? { x: 0, y: 0 } : null;
+          at = openHandsUseful(world, this.owner) ? { x: 0, y: 0 } : null;
           break;
         case 'warhorn':
           at = hallOf(world, this.owner) && !world.players[this.owner].warhorn && world.tick >= BALANCE.raidsFrom ? { x: 0, y: 0 } : null;

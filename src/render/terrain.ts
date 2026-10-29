@@ -160,6 +160,14 @@ export class Water {
     this.mesh.receiveShadow = true;
   }
 
+  /** Ice: a pale, solid sheet in winter. */
+  setFrozen(on: boolean): void {
+    const m = this.mesh.material as THREE.MeshStandardMaterial;
+    m.color.setHex(on ? 0xe6f4fb : 0xffffff);
+    m.opacity = on ? 0.96 : 0.82;
+    m.roughness = on ? 0.05 : 0.18;
+  }
+
   update(time: number): void {
     const pos = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = pos.array as Float32Array;

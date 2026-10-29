@@ -768,6 +768,17 @@ So the Market is a chore that looks like a decision, which is why S1 removes it,
 - **Measured** (24 duels, seed 100+): median 35.6 min, hunger 1.0%, population 142, decisions a minute 2.0 / 2.3 / 3.7 / 3.8, 7.8 allegiance flips a game.
 - **Matrix after S2** (two seed blocks, 12 games both sides, 7 styles): Raider 66 / 71% (dominant), Balanced 57 / 58, Expander 59 / 50, Warden 56 / 52, Trader 50 / 51, Mason 35 / 39, Hearthfolk 27 / 29. A richer economy made war cheaper to afford and the economy styles do not yet defend themselves; S3 is about answers to the raid.
 
+### S3: contest and crescendo (v0.26.0)
+- **The road is dangerous.** A cart that passes within 4 tiles of a rival's *manned* post is stopped there and its goods scattered, unless one of its own manned posts stands within 7 tiles to escort it (`waylay` in `steadings.ts`). No new Command: posts along the trade road matter as much as the road, the bots test their route (`routeThreat`) before sending, and the 🛒 button warns.
+- **Winter freezes the water** (`seasons.ts`, `world.frozen`, derived from the tick). From 10 s into winter to 10 s before it ends every river and lake is ice, but only the long road uses it (`world.findRoute`): carts, scouts and raids can cross anywhere, while settlers at their daily work keep to the land, so there is no thaw sweep and no region rebuild. Borders do not change (`barriers()` ignores ice). The Water mesh turns to pale ice.
+- **Rally costs something.** Everyone who answers drops their tools for 30 s, so production near the fight stops.
+- **A lead is never safe:** the side with fewer voices loses its Crown twice as fast as the other fills (`crownDrain`). Crown lead changes rose from 0.4 to 1.5 a game and games with none fell from 15 of 24 to 5.
+- **The finale.** When either Crown passes 70% or six minutes remain, every steading drops its Want and posts a **Last Want**: twice the size, 40 s longer, worth 55 favour (`finaleOn`).
+- **Pruned by the ablation** (`tools/ablate.ts`): the powers that did nothing for the bot were replaced. *Timber Drive* (3× wood) is now **Wagon Train** (carts safe and 50% faster for 90 s); *Harvest Home* (a food burst, obsolete beside bread) is now **Open Hands** (hand a steading what it asks for now, from the stores, with no cart, or else +12 favour). Their passives are unchanged. A rich town's guards fight 6% harder per home level (`homeGuardPct`).
+- **Ablation after S3** (mirror Balanced, 30 games, ±9 noise): caravans **+23 points** (the new core decision), raids +10 (was 28), house powers as a whole −23 (the old powers cost the bot goods; replaced), scouting, bridging and rally about 0.
+- **Tried and rejected:** a town militia (+1 defence per adult near a post, up to 24) did not move Raider (69%); slowing raids (150 s cooldown) did not either (65%) and cut the battles; giving fine goods double favour as gifts did not lift Hearthfolk. Giving the economy bots a Mustering Hall made no difference (they already built one once the Crown was in play). **Open: Raider 58–65%, Hearthfolk 27%, Mason 35–40%.** The economy styles still win steadings late (their first voice comes at about 17:00, against 9:00 for Balanced) because their stores are thin when the first small Wants are posted.
+- **Measured** (24 duels, seed 100+): median 30.4 min, 3.0 lead changes and 13 comebacks (the winner trailed by 100 or more), Crown lead changes 1.5, longest bored stretch under a minute, decisions a minute 2.2 / 2.4 / 3.8 / 3.9, the last ten minutes the busiest (7.8 actions a minute against 3.6 in the first ten). A 100-game Balanced mirror is **49 : 51** by side, median 30.6 min, 53% comebacks.
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -1694,3 +1705,6 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 
 ### v0.25.0 A town that grows up (2026-10-29, branch dev/living-valley)
 - Farm, Bakehouse, Brewhouse, Mine and Smithy (grain, bread, ale, ore, tools); bread feeds two; huts grow into cottages and hall-houses on bread, ale and tools, with an upkeep; prosperity (computed) replaces renown as the rank gate; Wants ask for the new goods. Hunger 27.8% to 1.0%, population 101 to 142. A porter-starvation trap fixed (extra crews leave a quarter of adults free to carry). `SAVE_VERSION` 22.
+
+### v0.26.0 Contest and crescendo (2026-10-29, branch dev/living-valley)
+- Toll-post waylaying of carts (with escorts and a wagon train), winter ice for carts, scouts and raids, a Rally that costs production, a Crown that drains twice as fast for the side behind, Last Wants, Wagon Train and Open Hands replacing Timber Drive and Harvest Home, prosperity-strengthened guards. Raids still dominate the matrix; Hearthfolk is the weakest style (open). Tests: waylay, escort, Open Hands, the finale, winter ice.

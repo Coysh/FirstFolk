@@ -44,3 +44,28 @@ describe('seasons and settlement ranks', () => {
     expect(w.players[0].houseOffer?.choices.some((h) => h === 'spear' || h === 'shield')).toBe(true);
   });
 });
+
+describe('winter ice', () => {
+  it('freezes the water a little into winter and thaws it before spring, and only the long road uses it', async () => {
+    const { iceAt, seasonTicks } = await import('../src/sim/seasons');
+    const { World } = await import('../src/sim/world');
+    const w = new World({ seed: 7 });
+    w.ais = [];
+    const winter = seasonTicks() * 3;
+    expect(iceAt(winter + 5)).toBe(false);
+    expect(iceAt(winter + 150)).toBe(true);
+    expect(iceAt(winter + seasonTicks() - 5)).toBe(false);
+    expect(iceAt(seasonTicks() * 2)).toBe(false);
+    w.tick = winter + 150;
+    w.run(2);
+    expect(w.frozen).toBe(true);
+    // Find a water tile: settlers never stand on it, but a cart's route may cross it.
+    const water = w.map.terrain.findIndex((t) => t === 0);
+    expect(w.walkableGround(water)).toBe(false);
+    const a = w.entranceIdx([...w.buildings.values()].find((b) => b.type === 'wagon')!);
+    expect(w.routeOpen(a, water)).toBe(true);
+    w.tick = winter + seasonTicks() - 50;
+    w.run(100);
+    expect(w.frozen).toBe(false);
+  });
+});

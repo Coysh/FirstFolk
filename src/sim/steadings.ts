@@ -2,6 +2,7 @@ import { BALANCE, TICK_HZ, secs } from './balance';
 import type { Good } from './defs';
 import { GOODS } from './defs';
 import { callingTier } from './callings';
+import { BUILDINGS } from './defs';
 import { pay } from './events';
 import { watched } from './renown';
 import { STEADING_CHAR, steadingName } from './steadingDefs';
@@ -23,6 +24,8 @@ export interface Want {
   /** Goods asked for, or seconds of a manned post beside the steading. */
   n: number;
   endsAt: number;
+  /** A Last Want (the finale): twice the size, worth more. */
+  last?: boolean;
   /** Per player: goods delivered, or seconds a manned post has stood there. */
   progress: number[];
 }
@@ -56,6 +59,14 @@ export interface Caravan {
   y: number;
 }
 
+/** The finale: a Crown is nearly full, or the clock is nearly out. Every steading then asks for something big. */
+export function finaleOn(world: World): boolean {
+  const c = world.crown;
+  if (c && c.progress.some((p) => (p * 100) / BALANCE.crownNeed >= BALANCE.finalePct)) return true;
+  const limit = world.scenario.timeLimit;
+  return !!limit && world.tick >= limit - BALANCE.finaleBefore;
+}
+
 export const steadingsOf = (world: World): Discovery[] => world.sites.filter((s) => !!s.st);
 
 /** Give every steading site its people and its first Want's time. Called once the sites exist. */
@@ -83,7 +94,9 @@ export function ensureFavourSlots(world: World): void {
   for (const s of steadingsOf(world)) while (s.st!.favour.length < world.players.length) s.st!.favour.push(0), s.st!.won.push(0), s.st!.want?.progress.push(0);
 }
 
-const ADVANCED_WANTS: [Good, number, number][] = [['bread', 12, 20], ['ale', 8, 14], ['tools', 4, 8]];
+const ADVANCED_WANTS: [Good, number, number][] = [['bread', 16, 28], ['ale', 8, 16], ['tools', 5, 10]];
+/** Goods a grown-up town makes: a gift of them earns twice the favour. */
+const FINE_GOODS: Good[] = ['bread', 'ale', 'tools'];
 const GUARD_CHANCE = 4; // one Want in this many asks for a manned post, not goods
 
 function postWant(world: World, s: Discovery): void {
@@ -91,12 +104,13 @@ function postWant(world: World, s: Discovery): void {
   const char = STEADING_CHAR[st.char];
   const guard = world.rng.int(GUARD_CHANCE) === 0;
   // From ten minutes the folk ask for what a grown-up town makes, too.
-  const pool = world.tick >= secs(10 * 60) && world.rng.int(3) === 0 ? ADVANCED_WANTS : char.wants;
+  const pool = world.tick >= secs(10 * 60) && world.rng.int(2) === 0 ? ADVANCED_WANTS : char.wants;
   const [good, lo, hi] = pool[world.rng.int(pool.length)];
   // Early Wants are small, so the first minutes have something a young town can answer; they grow to full size by about 15:00.
   const scale = 50 + Math.min(50, Math.floor(world.tick / (TICK_HZ * 18)));
   const n = guard ? Math.round(BALANCE.guardTicks / TICK_HZ) : Math.max(6, Math.floor((world.rng.range(lo, hi) * scale) / 100));
-  st.want = { kind: guard ? 'guard' : 'goods', good, n, endsAt: world.tick + BALANCE.wantTicks, progress: new Array(world.players.length).fill(0) };
+  const last = finaleOn(world);
+  st.want = { kind: guard ? 'guard' : 'goods', good, n: last && !guard ? n * 2 : n, endsAt: world.tick + (last ? BALANCE.wantTicks + secs(40) : BALANCE.wantTicks), progress: new Array(world.players.length).fill(0), ...(last ? { last: true } : {}) };
   world.emit({ type: 'wantPosted', siteId: s.id, kind: st.want.kind, good, n });
 }
 
@@ -110,7 +124,7 @@ function endWant(world: World, s: Discovery, winner: number): void {
     return;
   }
   st.won[winner]++;
-  addFavour(world, s, winner, BALANCE.wantWin);
+  addFavour(world, s, winner, want.last ? BALANCE.finaleFavour : BALANCE.wantWin);
   for (const p of world.players) if (p.id !== winner) addFavour(world, s, p.id, -BALANCE.wantSnub);
   world.emit({ type: 'wantWon', siteId: s.id, owner: winner, kind: want.kind, good: want.good, n: want.n });
 }
@@ -142,12 +156,52 @@ function settleAllegiance(world: World, s: Discovery): void {
   world.emit({ type: 'steadingAlly', siteId: s.id, owner: ally, was });
 }
 
+/** The Open Hands power: what a steading could be given right now (a Want we can meet from the stores), if anything. */
+function openHandsPick(world: World, owner: number): { site: Discovery; n: number } | null {
+  let best: { site: Discovery; n: number } | null = null;
+  for (const s of steadingsOf(world)) {
+    const w = s.st!.want;
+    if (!(s.revealed & (1 << owner)) || !w || w.kind !== 'goods') continue;
+    const n = Math.min(Math.max(1, w.n - w.progress[owner]), world.stored(owner, w.good), BALANCE.caravanLoad - 10);
+    if (n >= 6 && (!best || n > best.n)) best = { site: s, n };
+  }
+  return best;
+}
+
+/** Can Open Hands do something worth doing right now? */
+export const openHandsUseful = (world: World, owner: number) => !!openHandsPick(world, owner) || steadingsOf(world).some((s) => s.st!.ally !== owner && s.revealed & (1 << owner) && s.st!.favour[owner] < 60);
+
+/** Hand a steading what it wants at once; or, with no Want to meet, win the least friendly one a little favour. */
+export function openHands(world: World, owner: number): string | null {
+  const pick = openHandsPick(world, owner);
+  if (pick) {
+    const w = pick.site.st!.want!;
+    pay(world, owner, { [w.good]: pick.n });
+    world.players[owner].caravanned += pick.n;
+    w.progress[owner] += pick.n;
+    if (w.progress[owner] >= w.n) endWant(world, pick.site, owner);
+    else addFavour(world, pick.site, owner, Math.min(BALANCE.giftFavour, Math.floor(pick.n / 4)));
+    return `${pick.site.st!.name} take ${pick.n} ${w.good} from your hands.`;
+  }
+  const poor = steadingsOf(world)
+    .filter((s) => s.st!.ally !== owner && s.revealed & (1 << owner))
+    .sort((a, b) => a.st!.favour[owner] - b.st!.favour[owner])[0];
+  if (!poor) return null;
+  addFavour(world, poor, owner, 12);
+  return `${poor.st!.name} are warmed by your open hands: +12 favour.`;
+}
+
 /** Wants, favour, allegiance and gifts. Runs every 10 ticks. */
 export function updateSteadings(world: World): void {
   if (world.tick % 10 !== 5) return;
   for (const s of steadingsOf(world)) {
     const st = s.st!;
     if (!st.want && world.tick >= st.nextWantAt) postWant(world, s);
+    // When the finale begins, every steading lays aside whatever small Want it had and asks for the big one.
+    if (st.want && !st.want.last && finaleOn(world)) {
+      st.want = null;
+      postWant(world, s);
+    }
     const want = st.want;
     if (want) {
       let winner = NO_OWNER;
@@ -182,7 +236,7 @@ export function caravanProblem(world: World, owner: number, siteId: number, good
   if (world.stored(owner, good) < Math.min(n, 1)) return `No ${good} in store`;
   const store = nearestStore(world, owner, s.x, s.y);
   if (!store) return 'No store to load from';
-  if (!world.sameRegion(world.entranceIdx(store), world.idx(s.x, s.y))) return 'No way there on foot: find a ford, or bridge the water';
+  if (!world.routeOpen(world.entranceIdx(store), world.idx(s.x, s.y))) return 'No way there on foot: find a ford, or bridge the water';
   return '';
 }
 
@@ -194,7 +248,7 @@ export function sendCaravan(world: World, owner: number, siteId: number, good: G
   if (caravanProblem(world, owner, siteId, good, n)) return;
   const s = world.sites.find((x) => x.id === siteId)!;
   const store = nearestStore(world, owner, s.x, s.y)!;
-  const path = world.pathfinder.find(world.entranceIdx(store), world.idx(s.x, s.y));
+  const path = world.findRoute(world.entranceIdx(store), world.idx(s.x, s.y));
   if (!path || !path.length) return;
   pay(world, owner, { [good]: n });
   const e = world.entrance(store);
@@ -216,15 +270,65 @@ function arrive(world: World, c: Caravan): void {
       won = true;
       endWant(world, s, c.owner);
     }
-  } else addFavour(world, s, c.owner, Math.min(BALANCE.giftFavour, Math.floor(c.n / 4)));
+  } else addFavour(world, s, c.owner, FINE_GOODS.includes(c.good) ? Math.min(BALANCE.giftFavour * 2, Math.floor(c.n / 2)) : Math.min(BALANCE.giftFavour, Math.floor(c.n / 4)));
   world.emit({ type: 'caravanArrived', owner: c.owner, siteId: c.siteId, good: c.good, n: c.n, won });
+}
+
+/** A manned post within `cheb` tiles of a point, belonging to anyone but `except` (or only to `only`). */
+function mannedPost(world: World, x: number, y: number, range: number, test: (owner: number) => boolean): boolean {
+  for (const b of world.buildings.values()) {
+    if (!b.done || !test(b.owner) || !BUILDINGS[b.type].garrison || b.guarded < 1) continue;
+    if (Math.max(Math.abs(b.x + 1 - x), Math.abs(b.y + 1 - y)) <= range) return true;
+  }
+  return false;
+}
+
+/**
+ * Toll posts: a cart that passes close to a rival's manned post is stopped there and its goods scattered, unless one
+ * of its own manned posts stands close by to escort it. Posts along the trade road matter as much as the road.
+ */
+function waylay(world: World): void {
+  for (const c of [...world.caravans]) {
+    if (c.phase !== 'out' || world.players[c.owner].buffs.timber > world.tick) continue;
+    if (!mannedPost(world, c.x, c.y, BALANCE.tollRange, (o) => o !== c.owner && o >= 0)) continue;
+    if (mannedPost(world, c.x, c.y, BALANCE.escortRange, (o) => o === c.owner)) continue;
+    world.caravans.splice(world.caravans.indexOf(c), 1);
+    world.emit({ type: 'caravanWaylaid', owner: c.owner, siteId: c.siteId, good: c.good, n: c.n, x: c.x, y: c.y });
+  }
+}
+
+/** Would a cart sent to this steading be waylaid on the road? (Same rule as `waylay`, checked along the route.) */
+const threatCache = new Map<string, { world: World; at: number; v: boolean }>();
+export function routeThreat(world: World, owner: number, siteId: number): boolean {
+  const key = `${owner}:${siteId}`;
+  const hit = threatCache.get(key);
+  if (hit && hit.world === world && world.tick - hit.at < 40 && world.tick >= hit.at) return hit.v;
+  const v = computeThreat(world, owner, siteId);
+  threatCache.set(key, { world, at: world.tick, v });
+  return v;
+}
+
+function computeThreat(world: World, owner: number, siteId: number): boolean {
+  const s = world.sites.find((x) => x.id === siteId);
+  if (!s) return false;
+  const store = nearestStore(world, owner, s.x, s.y);
+  if (!store) return false;
+  const path = world.findRoute(world.entranceIdx(store), world.idx(s.x, s.y));
+  if (!path) return false;
+  for (let k = 0; k < path.length; k += 2) {
+    const x = path[k] % world.size;
+    const y = (path[k] - x) / world.size;
+    if (mannedPost(world, x, y, BALANCE.tollRange, (o) => o !== owner && o >= 0) && !mannedPost(world, x, y, BALANCE.escortRange, (o) => o === owner)) return true;
+  }
+  return false;
 }
 
 /** Walk the carts; goods are handed over on arrival. */
 export function updateCaravans(world: World): void {
   if (!world.caravans.length) return;
+  if (world.tick % 10 === 0) waylay(world);
   for (const c of [...world.caravans]) {
-    c.progress += BALANCE.caravanSpeed;
+    c.progress += world.players[c.owner].buffs.timber > world.tick ? Math.floor((BALANCE.caravanSpeed * 3) / 2) : BALANCE.caravanSpeed;
     while (c.progress >= 1000 && c.step < c.path.length) {
       c.progress -= 1000;
       const i = c.path[c.step++];
@@ -258,5 +362,8 @@ export function suggestLoad(world: World, owner: number, s: Discovery): { good: 
   }
   const ch = STEADING_CHAR[st.char];
   const [good] = ch.wants.reduce((a, w) => (world.stored(owner, w[0]) > world.stored(owner, a[0]) ? w : a), ch.wants[0]);
-  return { good, n: Math.min(12, world.stored(owner, good)), wanted: false };
+  // A grown-up town gifts what it makes: bread, ale and tools are worth more than raw goods.
+  const fine = FINE_GOODS.reduce((a, g) => (world.stored(owner, g) > world.stored(owner, a) ? g : a), FINE_GOODS[0]);
+  const pick = world.stored(owner, fine) >= 14 ? fine : good;
+  return { good: pick, n: Math.min(12, world.stored(owner, pick)), wanted: false };
 }
