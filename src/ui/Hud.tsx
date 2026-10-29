@@ -6,7 +6,7 @@ import { CALLINGS, CALLING_IDS, CALLING_TIERS, callingScores, callingTitle } fro
 import { VALLEYS } from '../sim/mapgen';
 import { ORIGIN_IDS } from '../sim/origins';
 import { BRIDGE_MAX, BRIDGE_RANK, bestBridge, bridgeCost } from '../sim/bridges';
-import { BUILDINGS, BUILD_MENU, DISCOVERIES, FOODS, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
+import { BASIC_GOODS, BUILDINGS, BUILD_MENU, DISCOVERIES, FOODS, GOODS, GOOD_INFO, RANK_NAMES, SKILLS, type BuildingType, type Good } from '../sim/defs';
 import { NO_OWNER, territoryBox } from '../sim/territory';
 import { HOUSES, HOUSE_TIMEOUT } from '../sim/houses';
 import { BALANCE, TICK_HZ, secs } from '../sim/balance';
@@ -24,7 +24,7 @@ import { lockLabel } from '../sim/commands';
 import { DEEDS, activePowers, deedCooldown, deedProblem, deedWait } from '../sim/deeds';
 import { caravanMax, caravanProblem, steadingsOf, suggestLoad } from '../sim/steadings';
 import { STEADING_CHAR } from '../sim/steadingDefs';
-import { renownRate } from '../sim/renown';
+import { homeLevelName, prosperity } from '../sim/prosperity';
 import { CONTESTED, crownEta, crownPace, crownPct, crownSite } from '../sim/crown';
 import { starfallTick } from '../sim/happenings';
 import { SAGA } from '../sim/saga';
@@ -98,7 +98,7 @@ function TopBar({ game }: { game: Game }) {
   return (
     <header class="topbar">
       <div class="res">
-        {GOODS.filter((g) => (g !== 'planks' || showPlanks) && (g !== 'fish' || showFish)).map((g) => (
+        {GOODS.filter((g) => (g !== 'planks' || showPlanks) && (g !== 'fish' || showFish) && (BASIC_GOODS.includes(g) || w.players[PLAYER].produced[g] > 0 || w.stored(PLAYER, g) > 0)).map((g) => (
           <Res key={g} good={g} value={FOODS.includes(g) ? w.stored(PLAYER, g) + w.waiting(PLAYER, g) : w.stored(PLAYER, g)} waiting={FOODS.includes(g) ? w.waiting(PLAYER, g) : 0} warn={FOODS.includes(g) && (hungry || lowLarder)} />
         ))}
         <span class={`res-plaque ${pop >= housing ? 'full' : ''}`} title={`${pop} settlers (${children} children) · homes for ${housing}`}>
@@ -322,11 +322,6 @@ function RaceBar({ game }: { game: Game }) {
           ? '⚖️ Nobody holds the valley yet. The first steading to stand with you starts the Crown filling.'
           : `⚖️ Level at ${mine} voices each: the Crown is frozen. Win a Want, or take the Kingstone${site ? '' : ' when it falls'}.`;
   const tone = mine > theirs ? 'mine' : mine < theirs ? 'theirs' : 'contested';
-  const rp = (owner: number) => w.players[owner]?.renown ?? 0;
-  const rate = (owner: number) => {
-    const r = renownRate(w, owner);
-    return r.landmarks + r.land;
-  };
   return (
     <section class={`race ${folk ? 'folk-open' : ''}`} aria-label="The race for the Crown">
       <div class="race-head">
@@ -353,13 +348,13 @@ function RaceBar({ game }: { game: Game }) {
         {status}
         {c && site && c.keeper !== NO_OWNER ? <small> The Kingstone: {c.keeper === PLAYER ? 'yours (2 voices)' : c.keeper === CONTESTED ? 'contested (nobody’s voice)' : 'the rival’s (2 voices)'}.</small> : null}
       </button>
-      <div class="race-renown" title="Renown raises your rank, and settles a tie when the clock runs out">
-        <span>★ You {rp(PLAYER)}</span>
-        <span class="faint">+{rate(PLAYER)}/m</span>
+      <div class="race-renown" title="Prosperity raises your rank: people, cottages and hall-houses (bread, ale and tools), friends among the steadings and Great Works. It can fall as well as rise.">
+        <span>🏡 Prosperity {prosperity(w, PLAYER)}</span>
+        <span class="faint">{homeLevelName(w.players[PLAYER].homeLevel)}</span>
         {w.players[1] && (
           <>
-            <span>· Rival {rp(1)}</span>
-            <span class="faint">+{rate(1)}/m</span>
+            <span>· Rival {prosperity(w, 1)}</span>
+            <span class="faint">{homeLevelName(w.players[1].homeLevel)}</span>
           </>
         )}
       </div>
@@ -1188,7 +1183,7 @@ function InfoPanel({ game }: { game: Game }) {
       )}
       {b.done && def.job && def.job.kind !== 'plant' && (
         <p class="mats">
-          {def.job.kind === 'process' && (
+          {def.job.kind === 'process' && def.job.input && (
             <span title="Input">
               <img src={ICON[def.job.input]} alt="" /> {b.stock[def.job.input]} in
             </span>

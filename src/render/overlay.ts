@@ -8,7 +8,20 @@ import type { Building, World } from '../sim/world';
 import type { BuildingsView } from './buildings';
 import type { SitesView } from './sites';
 
+/** A glyph as an icon, for goods and buildings that have no painted art yet. */
+const glyph = (g: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="32" y="48" font-size="46" text-anchor="middle">${g}</text></svg>`)}`;
+
 export const ICON: Record<string, string> = {
+  grain: glyph('🌾'),
+  bread: glyph('🍞'),
+  ale: glyph('🍺'),
+  ore: glyph('⛓️'),
+  tools: glyph('🔨'),
+  farm: glyph('🌾'),
+  bakehouse: glyph('🍞'),
+  brewhouse: glyph('🍺'),
+  mine: glyph('⛏️'),
+  smithy: glyph('🔨'),
   logs: '/assets/icons/logs.png',
   planks: '/assets/icons/planks.png',
   stone: '/assets/icons/stone.png',
@@ -275,7 +288,7 @@ function bubbleFor(b: Building, world: World): { key: string; icon: string; glyp
     case 'full':
       return job && job.kind !== 'plant' ? { key: 'full', icon: ICON[job.good], glyph: '!', tone: 'warn' } : null;
     case 'noInput':
-      return job && job.kind === 'process' ? { key: 'noInput', icon: ICON[job.input], glyph: '···', tone: 'info' } : null;
+      return job && job.kind === 'process' && job.input ? { key: 'noInput', icon: ICON[job.input], glyph: '···', tone: 'info' } : null;
     case 'materials':
       return b.delivered.logs + b.delivered.stone + b.delivered.planks === 0 && b.work === 0 ? null : { key: 'mat', icon: ICON.hammer, glyph: '···', tone: 'info' };
     default:

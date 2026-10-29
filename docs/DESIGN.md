@@ -756,6 +756,18 @@ So the Market is a chore that looks like a decision, which is why S1 removes it,
 - **Bots** send carts for Wants they can finish (and gifts to steadings that aren't theirs yet), reach for steadings with the border, and `--ablate caravan` is available.
 - **Save:** `SAVE_VERSION` 21 (steadings live in the sites; `caravans`). Challenge fields removed.
 
+### S2: a town that grows up (v0.25.0)
+- **Five new goods and five buildings** (`defs.ts`): **Farm** (grain, no input: the fields are part of the model), **Bakehouse** (grain to bread; Journeyman Gatherer), **Brewhouse** (grain to ale; Hamlet), **Mine** (ore; Journeyman Mason), **Smithy** (ore to tools; Hamlet). `ProcessJob.input` is optional now. Single-input chains only; two-input recipes stay on the list.
+- **Bread feeds two** (`FOOD_VALUE`, `breadCredit`): a loaf is two meals, and `food()`/`larder()` count it so. Hunger went from **27.8% of the game to 1.0%**, and the town from 101 to 142 folk, because hunger no longer brakes everything.
+- **Homes grow up by themselves** (`prosperity.ts`). With bread and ale in stock the huts become *cottages* (every home holds one more); with tools as well, *hall-houses* (two more). The levels cost an upkeep (ale each minute, tools every three) and fall back after 40 s without it, so the chains must keep running. `births` use the level.
+- **Prosperity replaces renown as the rank gate**: people, homes' comfort, steadings standing with you and Great Works, computed, and it can fall. Village at 90, Town at 170 (`BALANCE.rankProsperity`). **Renown still accumulates** (a quiet tiebreak and the old end screen); deleting it outright was not done in this pass.
+- **Wants ask for the new goods** from 10:00 (bread, ale, tools), so the chains feed the Crown.
+- **A trap found and fixed:** extra crew in "family businesses" took every free adult, leaving no porters, so grain piled in the stores while bakehouses waited for it. Extra crews now leave a quarter of adults free to carry.
+- **Bots** build a farm after the first lookout, a bakehouse per two farms, then a brewhouse, a mine and a smithy, and extra sawpits (every workshop wants planks).
+- **UI:** the race card shows prosperity and home level instead of renown; new goods appear in the top bar once made; the new buildings and goods have emoji icons and code-built models until the Blender pass.
+- **Measured** (24 duels, seed 100+): median 35.6 min, hunger 1.0%, population 142, decisions a minute 2.0 / 2.3 / 3.7 / 3.8, 7.8 allegiance flips a game.
+- **Matrix after S2** (two seed blocks, 12 games both sides, 7 styles): Raider 66 / 71% (dominant), Balanced 57 / 58, Expander 59 / 50, Warden 56 / 52, Trader 50 / 51, Mason 35 / 39, Hearthfolk 27 / 29. A richer economy made war cheaper to afford and the economy styles do not yet defend themselves; S3 is about answers to the raid.
+
 ## 1. Design guardrails
 
 | Risk | Mitigation |
@@ -1679,3 +1691,6 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 - **New:** `steadings.ts`, `steadingDefs.ts`, the `caravan` Command, `render/caravans.ts`, the steading model, a voices board with a row per steading, steading pins, `tests/steadings.test.ts`. **Changed:** `crown.ts` (voices), `mapgen.ts` (`placeSteadings`), `territory.ts` (steadings push borders and are never "claimed"), the bots (carts, steadings as frontier targets).
 - **Save:** `SAVE_VERSION` 21.
 - **Measured** (24 duels, seed 100+): median 32.1 min (9 of 24 end on the clock), 2.2 renown lead changes, 10 comebacks, 7.6–9.4 allegiance flips a game, decisions a minute 2.0 / 3.0 / 3.7 / 4.0 (0–5 / 5–15 / 15–30 / last 10, was 2.2 / 2.1 / 2.6 / 2.7), no bored stretch over a minute. Style matrix (one block, seed 100, 12 games both sides): Raider 61, Balanced 58, Warden 53, Trader 52, Mason 44, Expander 42, Hearthfolk 39; median 30.8 min, 2.1 lead changes. One block is noisy; S2's bread chain is meant to lift Hearthfolk and Mason.
+
+### v0.25.0 A town that grows up (2026-10-29, branch dev/living-valley)
+- Farm, Bakehouse, Brewhouse, Mine and Smithy (grain, bread, ale, ore, tools); bread feeds two; huts grow into cottages and hall-houses on bread, ale and tools, with an upkeep; prosperity (computed) replaces renown as the rank gate; Wants ask for the new goods. Hunger 27.8% to 1.0%, population 101 to 142. A porter-starvation trap fixed (extra crews leave a quarter of adults free to carry). `SAVE_VERSION` 22.

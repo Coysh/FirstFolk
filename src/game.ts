@@ -933,7 +933,11 @@ export class Game {
 }
 
 
+/** Buildings with no painted icon yet get their emoji drawn as one. */
+const GLYPHS: Record<string, string> = { farm: '🌾', bakehouse: '🍞', brewhouse: '🍺', mine: '⛏️', smithy: '🔨' };
 export function icon(type: BuildingType | string): string {
+  const g = GLYPHS[type];
+  if (g) return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="32" y="50" font-size="48" text-anchor="middle">${g}</text></svg>`)}`;
   return `/assets/icons/${type === 'wagon' ? 'hut' : type}.png`;
 }
 

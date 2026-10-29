@@ -318,12 +318,12 @@ export class BuildingsView {
       }
     } else if (def.job && def.job.kind !== 'plant') {
       counts[def.job.good] = Math.min(8, b.stock[def.job.good]);
-      if (def.job.kind === 'process') counts[def.job.input] = Math.min(4, b.stock[def.job.input]);
+      if (def.job.kind === 'process' && def.job.input) counts[def.job.input] = Math.min(4, b.stock[def.job.input]);
     }
     const pkey = GOODS.map((g) => counts[g] ?? 0).join(',');
     if (pkey !== v.pileKey) {
       v.pileKey = pkey;
-      this.rebuildPiles(v, counts, def.job?.kind === 'process' ? { ...spots, [def.job.input]: [0.7, 0.75] } : spots);
+      this.rebuildPiles(v, counts, def.job?.kind === 'process' && def.job.input ? { ...spots, [def.job.input]: [0.7, 0.75] } : spots);
     }
 
     // Ambient life: chimney smoke from homes, campfire at the wagon, dust from busy workshops.

@@ -26,7 +26,7 @@ export function updateLogistics(world: World): void {
     for (const b of world.buildings.values()) {
       if (b.owner !== player.id || !b.done) continue;
       const job = BUILDINGS[b.type].job;
-      if (!job || job.kind !== 'process') continue;
+      if (!job || job.kind !== 'process' || !job.input) continue;
       // Keep a reserve in store so workshops never starve construction.
       while (porters.length && b.stock[job.input] + b.incoming[job.input] < job.inputCap && world.stored(player.id, job.input) > job.reserve) {
         const src = nearestSource(world, player.id, job.input, b);

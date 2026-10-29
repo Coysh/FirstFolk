@@ -331,6 +331,69 @@ export function buildingGeometry(type: BuildingType, opts: BuildingModelOpts = {
       b.add(box(0.03, 0.26, 0.38), opts.crest ?? 0xc0392b, { pos: [0.55, 1.32, -0.37] });
       break;
     }
+    case 'farm': {
+      // A farmhouse and barn behind three plots of wheat in rows.
+      cottage(b, C.plaster, C.thatch, 0.9, 0.7, 0.5, -0.1, -0.5);
+      b.add(box(0.5, 0.42, 0.6), C.wood, { pos: [0.7, 0.21, -0.55] });
+      b.add(gableRoof(0.7, 0.62, 0.34), C.thatchDark, { pos: [0.7, 0.42, -0.55], rot: [0, Math.PI / 2, 0] });
+      for (const [x, z] of [[-0.55, 0.55], [0.05, 0.55], [0.65, 0.55]] as const) {
+        b.add(box(0.5, 0.05, 0.5), 0x6b4a32, { pos: [x, 0.025, z] });
+        for (let i = 0; i < 4; i++) b.add(cone(0.05, 0.22, 4), i % 2 ? C.thatchLight : C.thatch, { pos: [x - 0.18 + i * 0.12, 0.16, z], sway: 1.2 });
+      }
+      b.add(cyl(0.02, 0.02, 0.5, 5), C.wood, { pos: [-1.0, 0.25, 0.9] });
+      b.add(box(0.2, 0.14, 0.02), C.cloth, { pos: [-1.0, 0.45, 0.9] });
+      break;
+    }
+    case 'bakehouse': {
+      // A stone-footed cottage with a big domed oven and a smoking chimney, loaves cooling on a rack.
+      cottage(b, C.plaster, C.thatchDark, 1.0, 0.8, 0.5, 0, -0.1);
+      b.add(sphere(0.36, 9, 6), C.stone, { pos: [0.72, 0.18, 0.15], scale: [1, 0.85, 1] });
+      b.add(box(0.2, 0.16, 0.04), C.door, { pos: [0.72, 0.14, 0.5] });
+      b.add(cone(0.05, 0.1, 5), C.ember, { pos: [0.72, 0.16, 0.54], sway: 2.4 });
+      b.add(box(0.16, 0.5, 0.16), C.stoneDark, { pos: [-0.35, 0.8, -0.3] });
+      b.add(box(0.5, 0.04, 0.2), C.lightWood, { pos: [-0.5, 0.2, 0.62] });
+      for (const x of [-0.65, -0.5, -0.35]) b.add(sphere(0.06, 5, 4), 0xc58a45, { pos: [x, 0.27, 0.62], scale: [1.4, 0.8, 1] });
+      break;
+    }
+    case 'brewhouse': {
+      // A long low hall with a copper kettle and a stack of barrels, a hop vine up the wall.
+      cottage(b, C.wattle, C.thatch, 1.15, 0.8, 0.5, 0, -0.15);
+      b.add(sphere(0.2, 8, 6), 0xb87333, { pos: [0.7, 0.3, 0.35] });
+      b.add(cyl(0.08, 0.1, 0.12, 8), 0xb87333, { pos: [0.7, 0.52, 0.35] });
+      for (const [x, z] of [[-0.75, 0.55], [-0.5, 0.65], [-0.62, 0.4]] as const) {
+        b.add(cyl(0.12, 0.12, 0.26, 8), C.wood, { pos: [x, 0.13, z] });
+        b.add(cyl(0.125, 0.125, 0.02, 8), C.iron, { pos: [x, 0.07, z] });
+        b.add(cyl(0.125, 0.125, 0.02, 8), C.iron, { pos: [x, 0.2, z] });
+      }
+      b.add(box(0.1, 0.34, 0.1), C.stoneDark, { pos: [0.4, 0.82, -0.4] });
+      break;
+    }
+    case 'mine': {
+      // A rocky hillside with a timber-framed adit, a rail cart and a spoil heap.
+      b.add(dodeca(0.85), C.rockDark, { pos: [-0.1, 0.45, -0.3], scale: [1.35, 0.9, 1] });
+      b.add(dodeca(0.5), C.rock, { pos: [0.6, 0.3, -0.5], scale: [1, 0.8, 1] });
+      b.add(box(0.5, 0.52, 0.1), 0x1d140c, { pos: [-0.1, 0.28, 0.4] });
+      for (const x of [-0.38, 0.18]) b.add(box(0.08, 0.6, 0.1), C.darkTimber, { pos: [x, 0.3, 0.42] });
+      b.add(box(0.7, 0.08, 0.12), C.darkTimber, { pos: [-0.1, 0.6, 0.42] });
+      b.add(box(0.28, 0.16, 0.2), C.iron, { pos: [-0.1, 0.12, 0.85] });
+      for (const x of [-0.2, 0.0]) b.add(cyl(0.06, 0.06, 0.03, 6), C.stoneDark, { pos: [x, 0.05, 0.96], rot: [Math.PI / 2, 0, 0] });
+      b.add(dodeca(0.22), 0x57606b, { pos: [0.7, 0.1, 0.6] });
+      b.add(dodeca(0.16), 0x57606b, { pos: [0.95, 0.07, 0.45] });
+      break;
+    }
+    case 'smithy': {
+      // A low stone forge: a hooded hearth glowing orange, an anvil outside, a tall chimney.
+      b.add(box(1.15, 0.12, 0.95), C.stoneDark, { pos: [0, 0.06, -0.1] });
+      b.add(box(1.05, 0.5, 0.8), C.stone, { pos: [0, 0.37, -0.1] });
+      b.add(gableRoof(0.95, 1.2, 0.4), C.darkTimber, { pos: [0, 0.62, -0.1], rot: [0, Math.PI / 2, 0] });
+      b.add(box(0.2, 0.9, 0.2), C.stoneDark, { pos: [0.4, 0.9, -0.3] });
+      b.add(box(0.34, 0.26, 0.04), 0x1d140c, { pos: [-0.1, 0.3, 0.32] });
+      b.add(cone(0.1, 0.16, 5), C.ember, { pos: [-0.1, 0.22, 0.34], sway: 2.4 });
+      b.add(box(0.26, 0.1, 0.14), C.iron, { pos: [0.55, 0.25, 0.62] });
+      b.add(box(0.12, 0.14, 0.12), C.iron, { pos: [0.55, 0.13, 0.62] });
+      b.add(box(0.05, 0.3, 0.05), C.wood, { pos: [-0.6, 0.15, 0.55], rot: [0, 0, 0.5] });
+      break;
+    }
     case 'longhouse': {
       // A long timber hall with a turf-and-thatch roof running the length of the plot.
       b.add(box(1.8, 0.12, 1.2), C.stoneDark, { pos: [0, 0.02, -0.1] });
@@ -590,6 +653,23 @@ export function goodGeometry(good: Good): THREE.BufferGeometry {
     b.add(box(0.36, 0.03, 0.1), 0xd9b07a, { pos: [0.01, 0.032, 0.005] });
   }
   else if (good === 'stone') b.add(box(0.16, 0.1, 0.12), C.stone);
+  else if (good === 'grain') {
+    b.add(cone(0.08, 0.22, 6), C.thatchLight, { pos: [0, 0.1, 0] });
+    b.add(cyl(0.02, 0.02, 0.1, 5), C.thatchDark, { pos: [0, 0.02, 0] });
+  } else if (good === 'bread') {
+    b.add(sphere(0.09, 7, 5), 0xc58a45, { scale: [1.5, 0.8, 1] });
+    b.add(sphere(0.05, 5, 4), 0xdda75e, { pos: [0, 0.05, 0], scale: [1.6, 0.6, 1] });
+  } else if (good === 'ale') {
+    b.add(cyl(0.085, 0.085, 0.16, 8), C.wood, { pos: [0, 0.08, 0] });
+    b.add(cyl(0.09, 0.09, 0.02, 8), C.iron, { pos: [0, 0.04, 0] });
+    b.add(cyl(0.09, 0.09, 0.02, 8), C.iron, { pos: [0, 0.13, 0] });
+  } else if (good === 'ore') {
+    b.add(dodeca(0.09), 0x57606b, { pos: [0, 0.07, 0] });
+    b.add(ico(0.04, 0), 0xc9a24a, { pos: [0.04, 0.12, 0.03] });
+  } else if (good === 'tools') {
+    b.add(box(0.04, 0.2, 0.04), C.wood, { pos: [0, 0.1, 0], rot: [0, 0, 0.3] });
+    b.add(box(0.14, 0.06, 0.05), C.iron, { pos: [-0.03, 0.2, 0], rot: [0, 0, 0.3] });
+  }
   else if (good === 'fish') {
     b.add(sphere(0.06, 6, 4), 0x8fa9b8, { scale: [2.2, 0.8, 1] });
     b.add(cone(0.05, 0.08, 4), 0x6f8a99, { pos: [-0.16, 0, 0], rot: [0, 0, Math.PI / 2] });

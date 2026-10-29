@@ -3,6 +3,7 @@ import { rankSeat } from './houses';
 import { NO_OWNER, recomputeTerritory } from './territory';
 import { crowned, crownLeader } from './crown';
 import { addRenown } from './renown';
+import { prosperity } from './prosperity';
 import { BALANCE, secs } from './balance';
 import { TIER_XP, tradeTitle } from './trades';
 import type { World } from './world';
@@ -115,6 +116,14 @@ export const objectives = {
       evaluate: (w, o) => ({ current: w.crown ? w.crown.progress[o] : 0, target: BALANCE.crownNeed }),
     };
   },
+  /** What the town amounts to right now: people, how well they live, friends and wonders (see prosperity.ts). */
+  prosperity(n: number): Objective {
+    return {
+      id: `prosperity-${n}`,
+      label: `Reach prosperity ${n}`,
+      evaluate: (w, o) => ({ current: Math.min(n, prosperity(w, o)), target: n }),
+    };
+  },
   /** Family deeds called on (see deeds.ts). */
   deeds(n: number): Objective {
     return {
@@ -173,10 +182,10 @@ export const LANDFALL: Scenario = {
     with_(objectives.deeds(1), 'Hamlet', 'Your Great House (above the build bar) lends a power: click it, or press Z. Its card says what it does.'),
     with_(objectives.landmarks(1), 'Hamlet', 'Landmarks pay renown every minute you hold them, while a manned post (or your hall) stands within 9 tiles.'),
     with_(objectives.building('sawpit'), 'Hamlet', 'A Carpenter can run a Sawpit: planks build Watchtowers.'),
-    with_(objectives.renown(250), 'Hamlet', 'Renown: watched landmarks, land, raids, discoveries, crafts and Market Day all add to it.'),
+    with_(objectives.prosperity(BALANCE.rankProsperity[0]), 'Hamlet', 'Prosperity: people, cottages (bread and ale on the tables), friends among the steadings and Great Works all add to it.'),
     with_(objectives.building('watchtower'), 'Village', 'Watchtowers push hard: build them at the border to take land from your rival.'),
-    with_(objectives.renown(650), 'Village', 'Great Works: one of each in the valley. Beat your rival to them.'),
-    with_(objectives.crown(), 'The Crowning', 'A star falls about 14:00 and lights the Kingstone. Keep a manned post beside it, with no rival post there, and the Crown fills. Burn their post to freeze it, then take it.'),
+    with_(objectives.prosperity(BALANCE.rankProsperity[1]), 'Village', 'Hall-houses want tools as well as bread and ale. Great Works: one of each in the valley, beat your rival to them.'),
+    with_(objectives.crown(), 'The Crowning', 'Hold more voices of the valley than your rival and the Crown fills: win steadings with carts, or keep the Kingstone that falls about 14:00 with a manned post.'),
   ],
 };
 

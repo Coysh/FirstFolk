@@ -1,3 +1,4 @@
+import { GOODS } from '../sim/defs';
 import * as THREE from 'three';
 import { BUILDINGS, type Good, type Skill, type Tool } from '../sim/defs';
 import { tierOf } from '../sim/trades';
@@ -166,13 +167,7 @@ export class SettlersView {
     this.apron = mk(new THREE.BoxGeometry(0.15, 0.2, 0.03).translate(0, HIP_Y + 0.1, art ? 0.118 : 0.085), mat(), true);
     this.badge = mk(new THREE.OctahedronGeometry(0.03).translate(0, 0.36, art ? 0.098 : 0.085), new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0x6b4a00, metalness: 0.6, roughness: 0.3 }), false);
     this.feather = mk((art ? new THREE.ConeGeometry(0.018, 0.16, 4).rotateZ(-0.7).translate(0.115, 0.6, -0.02) : new THREE.ConeGeometry(0.018, 0.16, 4).rotateZ(-0.5).translate(0.07, 0.62, 0)), new THREE.MeshStandardMaterial({ color: 0xfff6e0, flatShading: true }), false);
-    this.cargo = {
-      logs: mk(goodGeometry('logs').scale(1.3, 1.3, 1.3), vmat, false),
-      planks: mk(goodGeometry('planks').scale(1.3, 1.3, 1.3), vmat, false),
-      stone: mk(goodGeometry('stone').scale(1.3, 1.3, 1.3), vmat, false),
-      berries: mk(goodGeometry('berries').scale(1.3, 1.3, 1.3), vmat, false),
-      fish: mk(goodGeometry('fish').scale(1.3, 1.3, 1.3), vmat, false),
-    };
+    this.cargo = Object.fromEntries(GOODS.map((g) => [g, mk(goodGeometry(g).scale(1.3, 1.3, 1.3), vmat, false)])) as typeof this.cargo;
   }
 
   /** Sim-space position of a settler (tile units, centre of tile = +0.5). */
@@ -362,7 +357,7 @@ export class SettlersView {
   }
 
   update(world: World, alpha: number, time: number, dt: number): void {
-    const counts = { tool: { axe: 0, pick: 0, hammer: 0, shovel: 0, basket: 0, saw: 0, spear: 0 } as Record<Tool, number>, cargo: { logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 } as Record<Good, number> };
+    const counts = { tool: { axe: 0, pick: 0, hammer: 0, shovel: 0, basket: 0, saw: 0, spear: 0 } as Record<Tool, number>, cargo: Object.fromEntries(GOODS.map((g) => [g, 0])) as Record<Good, number> };
     let i = 0;
     let nApron = 0;
     let nBadge = 0;

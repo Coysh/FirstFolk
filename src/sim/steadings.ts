@@ -1,4 +1,4 @@
-import { BALANCE, TICK_HZ } from './balance';
+import { BALANCE, TICK_HZ, secs } from './balance';
 import type { Good } from './defs';
 import { GOODS } from './defs';
 import { callingTier } from './callings';
@@ -83,13 +83,16 @@ export function ensureFavourSlots(world: World): void {
   for (const s of steadingsOf(world)) while (s.st!.favour.length < world.players.length) s.st!.favour.push(0), s.st!.won.push(0), s.st!.want?.progress.push(0);
 }
 
+const ADVANCED_WANTS: [Good, number, number][] = [['bread', 12, 20], ['ale', 8, 14], ['tools', 4, 8]];
 const GUARD_CHANCE = 4; // one Want in this many asks for a manned post, not goods
 
 function postWant(world: World, s: Discovery): void {
   const st = s.st!;
   const char = STEADING_CHAR[st.char];
   const guard = world.rng.int(GUARD_CHANCE) === 0;
-  const [good, lo, hi] = char.wants[world.rng.int(char.wants.length)];
+  // From ten minutes the folk ask for what a grown-up town makes, too.
+  const pool = world.tick >= secs(10 * 60) && world.rng.int(3) === 0 ? ADVANCED_WANTS : char.wants;
+  const [good, lo, hi] = pool[world.rng.int(pool.length)];
   // Early Wants are small, so the first minutes have something a young town can answer; they grow to full size by about 15:00.
   const scale = 50 + Math.min(50, Math.floor(world.tick / (TICK_HZ * 18)));
   const n = guard ? Math.round(BALANCE.guardTicks / TICK_HZ) : Math.max(6, Math.floor((world.rng.range(lo, hi) * scale) / 100));

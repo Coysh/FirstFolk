@@ -35,6 +35,7 @@ const ICONS = {
   shield: '/assets/icons/shield.png',
   berries: '/assets/icons/berries.png',
   lookout: '/assets/icons/lookout.png',
+  hut: '/assets/icons/hut.png',
 };
 const icon = (type: string) => `/assets/icons/${type === 'wagon' ? 'hut' : type}.png`;
 
@@ -114,6 +115,11 @@ export function newsFor(world: World, e: SimEvent, me = 0): News | null {
       if (e.defender === me) return e.won ? { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🔥 Your ${name} burned (${e.attack} vs ${e.defence})`, tone: 'warn' } : { channel: 'toast', priority: 3, icon: ICONS.shield, text: `🛡 Your ${name} held: +${e.renown}★`, tone: 'big' };
       return null;
     }
+    case 'homesLevel':
+      if (e.owner !== me) return null;
+      return e.level > e.was
+        ? { channel: 'toast', priority: 3, icon: ICONS.hut, text: e.level === 1 ? '🏡 Your homes grow into cottages' : '🏘 Your homes grow into hall-houses', sub: e.level === 1 ? 'Bread and ale on the tables: every home holds one more' : 'And tools in the forge: every home holds two more', tone: 'big' }
+        : { channel: 'toast', priority: 2, icon: ICONS.hut, text: '⚠ Your homes are shrinking back', sub: 'The bread, ale or tools ran out', tone: 'warn' };
     case 'wantPosted': {
       const st = world.sites.find((s) => s.id === e.siteId)?.st;
       if (!st) return null;

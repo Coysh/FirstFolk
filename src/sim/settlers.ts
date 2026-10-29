@@ -160,9 +160,11 @@ export function assignJobs(world: World): void {
         s.tool = 'spear';
         walkTo(world, s, world.entranceIdx(b));
       }
-    // A family business: extra hands come from the head worker's family when they can.
+    // A family business: extra hands come from the head worker's family when they can, but never the town's last carriers
+    // (every workshop needs goods brought and taken away, and an over-staffed town starves its own chains).
+    const carriers = Math.max(0, Math.ceil(adults / BALANCE.porterShare) - carrying);
     for (const b of world.buildings.values()) {
-      if (!idle.length) break;
+      if (idle.length <= carriers) break;
       const def = BUILDINGS[b.type];
       const working = hands.get(b.id) ?? 0;
       if (b.owner !== player.id || !b.done || !def.job || !working || working >= workSlots(b)) continue;
@@ -561,12 +563,12 @@ function thinkWork(world: World, s: Settler, job: Extract<Settler['job'], { kind
       if (def.kind !== 'plant' && b.stock[def.good] >= def.outputCap && selfDeliver(world, s, job, b, def.good)) return;
       if (def.kind === 'process') {
         if (b.stock[def.good] >= def.outputCap) return wait(b, s, 'Output full, waiting for carriers', 'full', 20);
-        if (b.stock[def.input] - b.reserved[def.input] <= 0) {
+        if (def.input && b.stock[def.input] - b.reserved[def.input] <= 0) {
           const scarce = world.stored(s.owner, def.input) <= def.reserve;
           const name = GOOD_INFO[def.input].name.toLowerCase();
           return wait(b, s, scarce ? `Saving ${name} for building (keeps ${def.reserve} in store)` : `Waiting for ${name}`, 'noInput', 15);
         }
-        b.stock[def.input]--;
+        if (def.input) b.stock[def.input]--;
         s.busy = workTicks(world, s, def.workTicks, def.skill);
         s.anim = 'work';
         s.faceTile = world.idx(b.x + 1, b.y + BUILDINGS[b.type].size - 1);

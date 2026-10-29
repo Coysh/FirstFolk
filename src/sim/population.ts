@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, FOODS, SKILLS, outputGood, type BuildingType, type Good, type Skill } from './defs';
+import { BUILDINGS, FOODS, FOOD_VALUE, SKILLS, outputGood, type BuildingType, type Good, type Skill } from './defs';
 import { playerMod } from './houses';
 import { callingTier } from './callings';
 import { craftXp, walkTo } from './settlers';
@@ -70,7 +70,7 @@ function checkBirths(world: World, player: PlayerState): void {
         members++;
         if (!s.child) adults++;
       }
-    const room = (BUILDINGS[home.type].housing ?? 0) - members;
+    const room = (BUILDINGS[home.type].housing ?? 0) + player.homeLevel - members;
     if (adults < 2 || room <= 0) continue;
     const e = world.entrance(home);
     const n = 1;
@@ -85,6 +85,11 @@ function checkBirths(world: World, player: PlayerState): void {
 function eat(world: World, player: PlayerState): void {
   // Eat whichever food is most plentiful, from the fullest pile: a store, or a gatherer's own basket
   // (so a full producer waiting for carriers is eaten from, and starts gathering again).
+  // Half a loaf left over feeds the next mouth.
+  if (player.breadCredit > 0) {
+    player.breadCredit--;
+    return;
+  }
   let best: Building | undefined;
   let food: Good = 'berries';
   for (const b of world.buildings.values()) {
@@ -93,7 +98,7 @@ function eat(world: World, player: PlayerState): void {
     const own = outputGood(b.type);
     for (const g of FOODS) {
       if (!store && own !== g) continue;
-      if (b.stock[g] - b.reserved[g] > 0 && (!best || b.stock[g] > best.stock[food])) {
+      if (b.stock[g] - b.reserved[g] > 0 && (!best || (FOOD_VALUE[g] ?? 1) > (FOOD_VALUE[food] ?? 1) || ((FOOD_VALUE[g] ?? 1) === (FOOD_VALUE[food] ?? 1) && b.stock[g] > best.stock[food]))) {
         best = b;
         food = g;
       }
@@ -101,6 +106,7 @@ function eat(world: World, player: PlayerState): void {
   }
   if (best) {
     best.stock[food]--;
+    if (food === 'bread') player.breadCredit++;
     // Hysteresis: folk stay hungry until there's a real buffer again, so hunger can't flap meal by meal.
     if (player.hungry && world.larder(player.id) >= Math.max(4, Math.floor(world.population(player.id) / 8))) {
       player.hungry = false;

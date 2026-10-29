@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import { BUILDINGS, FOODS, GOODS, costTotal, outputGood, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
+import { BUILDINGS, FOODS, FOOD_VALUE, GOODS, costTotal, outputGood, type BuildingType, type DiscoveryKind, type Good, type NodeKind, type Skill, type Tool } from './defs';
 import { generateMap, isWalkableTerrain, type MapData } from './mapgen';
 import { PathFinder } from './path';
 import { Rng } from './rng';
@@ -14,6 +14,7 @@ import { DIFFICULTY, type Difficulty, type Rules } from './rules';
 import { NO_OWNER, onBuildingComplete, recomputeTerritory, updateExploration } from './territory';
 import { updateRenown, type RenownSource } from './renown';
 import type { DeedId } from './deeds';
+import { updateProsperity } from './prosperity';
 import { initSteadings, updateCaravans, updateSteadings, type Caravan, type SteadingState } from './steadings';
 import { emptyCalling, updateCallings, callingTier, type CallingId } from './callings';
 import { updateBridges, type Bridge } from './bridges';
@@ -32,7 +33,7 @@ import { styleOf, type BotStyle } from './ai/styles';
 import { updateReavers, updateWarbands, type Warband } from './warfare';
 
 export type Stock = Record<Good, number>;
-export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0 });
+export const emptyStock = (): Stock => ({ logs: 0, planks: 0, stone: 0, berries: 0, fish: 0, grain: 0, bread: 0, ale: 0, ore: 0, tools: 0 });
 export type Skills = Record<Skill, number>;
 export const emptySkills = (): Skills => ({ woodcraft: 0, stonework: 0, husbandry: 0 });
 
@@ -205,6 +206,7 @@ export type SimEvent =
   | { type: 'caravanSent'; owner: number; siteId: number; good: Good; n: number }
   | { type: 'caravanArrived'; owner: number; siteId: number; good: Good; n: number; won: boolean }
   | { type: 'caravanHome'; owner: number }
+  | { type: 'homesLevel'; owner: number; level: number; was: number }
   | { type: 'starfall'; siteId: number; x: number; y: number }
   | { type: 'workBegun'; owner: number; buildingType: BuildingType }
   | { type: 'workLost'; owner: number; buildingType: BuildingType; winner: number }
@@ -252,6 +254,12 @@ export interface PlayerState {
   taken: number;
   /** Goods this settlement has carried to steadings by caravan (the Merchants calling reads it). */
   caravanned: number;
+  /** Half a loaf left over from a meal (a loaf feeds two). */
+  breadCredit: number;
+  /** Consecutive checks the homes' upkeep could not be paid (see prosperity.ts). */
+  homeLack: number;
+  /** How well the homes live: 0 huts, 1 cottages (bread and ale on the tables), 2 hall-houses (and tools). See prosperity.ts. */
+  homeLevel: number;
   /** Families build their own huts when there's room and timber (see population.ts). */
   autoHomes: boolean;
   /** The furthest this player has trailed the leader in renown (for comeback honours). */
@@ -615,7 +623,7 @@ export class World {
   }
 
   private setupPlayer(owner: number, start: { x: number; y: number }, originId?: OriginId, dynasty?: Dynasty): void {
-    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', onceEvents: [], rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, caravanned: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, origin: originId ?? '', style: 'balanced', raidReady: 0, rallyReady: 0, scoutReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
+    this.players[owner] = { id: owner, hungry: false, mealAccum: 0, newcomerCooldown: 0, produced: emptyStock(), unlocked: [], claimed: 0, rumourAt: BALANCE.rumourDelay, seats: [], mods: {}, houseOffer: null, winters: 0, rank: 0, event: null, nextEventAt: BALANCE.firstEvent, lastEvent: '', onceEvents: [], rivalSeen: false, renown: 0, renownBy: {}, renownFrac: [0, 0, 0], calling: emptyCalling(), taken: 0, maxDeficit: 0, caravanned: 0, breadCredit: 0, homeLevel: 0, homeLack: 0, autoHomes: false, boosts: [], legends: [], crafts: emptySkills(), buffs: { timber: 0, harvest: 0 }, deedsUsed: 0, origin: originId ?? '', style: 'balanced', raidReady: 0, rallyReady: 0, scoutReady: 0, raidsWon: 0, repelled: 0, warhorn: false, shieldWall: null };
     const wagon = this.addBuilding('wagon', owner, start.x - 1, start.y - 1, true);
     onBuildingComplete(this, wagon);
     for (const g of GOODS) wagon.stock[g] = Math.round((BALANCE.startStock[g] ?? 0) * this.rules.startStock);
@@ -677,7 +685,7 @@ export class World {
   /** All edible goods in storage. */
   food(owner: number): number {
     let n = 0;
-    for (const g of FOODS) n += this.stored(owner, g);
+    for (const g of FOODS) n += this.stored(owner, g) * (FOOD_VALUE[g] ?? 1);
     return n;
   }
 
@@ -697,8 +705,8 @@ export class World {
    */
   larder(owner: number): number {
     let n = this.food(owner);
-    for (const g of FOODS) n += this.waiting(owner, g);
-    return n;
+    for (const g of FOODS) n += this.waiting(owner, g) * (FOOD_VALUE[g] ?? 1);
+    return n + (this.players[owner]?.breadCredit ?? 0);
   }
 
   /** Mouths to feed: everyone, with guards on a post counting extra (see BALANCE.guardAppetitePct). */
@@ -716,7 +724,8 @@ export class World {
 
   housing(owner: number): number {
     let n = 0;
-    for (const b of this.buildings.values()) if (b.owner === owner && b.done) n += BUILDINGS[b.type].housing ?? 0;
+    const level = this.players[owner]?.homeLevel ?? 0;
+    for (const b of this.buildings.values()) if (b.owner === owner && b.done) n += (BUILDINGS[b.type].housing ?? 0) + (b.type === 'wagon' || !BUILDINGS[b.type].housing ? 0 : level);
     return n;
   }
 
@@ -813,6 +822,7 @@ export class World {
     updateBridges(this);
     if (this.tick % 20 === 7) updateCallings(this);
     if (this.tick % 20 === 9) updateSaga(this);
+    if (this.tick % 100 === 35) updateProsperity(this);
     for (const cmd of this.pendingCommands) {
       this.commandLog.push({ tick: this.tick, cmd });
       applyCommand(this, cmd);
@@ -906,7 +916,7 @@ export class World {
   }
 }
 
-const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'wantPosted', 'wantWon', 'steadingAlly', 'caravanArrived', 'starfall', 'crownKeeper', 'crownQuarter', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
+const MAJOR_EVENTS = new Set<SimEvent['type']>(['raidLaunched', 'raidResolved', 'wantPosted', 'wantWon', 'steadingAlly', 'caravanArrived', 'homesLevel', 'starfall', 'crownKeeper', 'crownQuarter', 'deed', 'craftUp', 'workBegun', 'holdingChanged', 'rivalSighted', 'discovered', 'rumour', 'houseOffered', 'houseSeated', 'married', 'season', 'rankUp', 'valleyEvent', 'claimed', 'unlocked', 'chapterComplete', 'familyApproaching', 'familySettled']);
 
 /** Ticks for a berry to regrow (a Bountiful Valley halves it). */
 export const berryRegrow = (w: World) => (hasOmen(w, 'bountiful') ? BALANCE.berryRegrowTicks / 2 : BALANCE.berryRegrowTicks);

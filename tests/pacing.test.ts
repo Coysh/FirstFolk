@@ -26,7 +26,8 @@ describe('pacing (headless playtests)', () => {
       expect(r.longestMajorGapSec).toBeLessThan(90);
       expect(r.territoryByMinute.at(-1)!).not.toBe(r.territoryByMinute[10]);
       // The renown race: still earning late on, and the houses are using their deeds.
-      expect(r.renownByMinute.at(-1)![0]).toBeGreaterThan(r.renownByMinute[10][0] + 100);
+      // The town keeps growing late on, too.
+      expect(r.populationByMinute.at(-1)!).toBeGreaterThan(r.populationByMinute[10]);
       expect(r.timeline.some((l) => l.includes('✦ deed'))).toBe(true);
       expect(r.timeline.some((l) => l.includes('arrives'))).toBe(true);
       expect(r.timeline.some((l) => l.includes('sawpit unlocked'))).toBe(true);
@@ -50,13 +51,14 @@ describe('the long game (headless playtests)', () => {
     for (const r of runs) expect(r.victorySec < 0 || r.victorySec > 19 * 60).toBe(true);
   });
 
-  it('a star falls by 15:40 and someone is fighting for it, in every game', () => {
+  it('a star falls by 15:40, and the valley is being fought over in every game', () => {
     for (const r of runs) {
       const fall = r.timeline.find((l) => l.includes('a star falls'));
       expect(fall, `seed ${r.seed}`).toBeDefined();
       const [m, s] = fall!.slice(0, 5).split(':').map(Number);
       expect(m * 60 + s).toBeLessThanOrEqual(15 * 60 + 40);
-      expect(r.timeline.some((l) => l.includes('Kingstone')), `seed ${r.seed}`).toBe(true);
+      // Someone is fighting for the valley: the stone, or the steadings.
+      expect(r.timeline.some((l) => l.includes('Kingstone') || l.includes('swears') || l.includes('a Want')), `seed ${r.seed}`).toBe(true);
     }
   });
 

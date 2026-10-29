@@ -6,7 +6,7 @@ import { C } from './palette';
 import type { HeightField } from './terrain';
 
 /** What a cart carries shows in its load. */
-const LOAD: Record<Good, number> = { logs: C.wood, planks: C.lightWood, stone: C.stone, berries: C.berry, fish: 0x8fa9b8 };
+const LOAD: Record<Good, number> = { logs: C.wood, planks: C.lightWood, stone: C.stone, berries: C.berry, fish: 0x8fa9b8, grain: C.thatchLight, bread: 0xc58a45, ale: C.wood, ore: 0x57606b, tools: C.iron };
 const OWNER = [0xf2c14e, 0xd9534f];
 
 /** The cart itself: a plank bed on two big wheels, a yoke and a pair of oxen. The canopy and load take their colours per cart. */

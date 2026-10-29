@@ -143,8 +143,16 @@ export class OpeningBot {
       // Like a player following the goals: the first Lookout as soon as there are homes.
       [count('lookout') === 0 && count('hut') >= 2, 'lookout', target ?? undefined],
       [world.isUnlocked(this.owner, 'sawpit') && count('sawpit') === 0, 'sawpit'],
+      // Every new workshop wants planks: a second and third sawpit as the town grows.
+      [world.isUnlocked(this.owner, 'sawpit') && count('sawpit') >= 1 && count('sawpit') < 1 + Math.floor(pop / 28) && world.stored(this.owner, 'planks') < 16 && world.stored(this.owner, 'logs') > 40, 'sawpit'],
       [world.isUnlocked(this.owner, 'watchtower') && count('watchtower') === 0, 'watchtower', target ?? undefined],
       [world.isUnlocked(this.owner, 'storehouse') && count('storehouse') === 0, 'storehouse'],
+      // A town that eats bread grows: a farm, a bakehouse, then ale, and tools for the finest homes.
+      [count('lookout') >= 1 && count('farm') < Math.max(1, Math.ceil(pop / (st.focus === 'hearth' ? 12 : 18))) && (count('farm') === 0 ? pop >= 14 : hungry || pop >= 30), 'farm'],
+      [count('bakehouse') < Math.ceil(count('farm') / 2) || (count('bakehouse') === 0 && count('farm') >= 1), 'bakehouse'],
+      [count('brewhouse') === 0 && count('bakehouse') >= 1 && count('farm') >= 2 && pop >= 30, 'brewhouse'],
+      [count('mine') === 0 && count('brewhouse') >= 1 && pop >= 40, 'mine'],
+      [count('smithy') === 0 && count('mine') >= 1, 'smithy'],
       ...(st.towersFirst ? [push, keep] : [keep]),
       ...(st.raids === 2 ? [muster] : []),
       // The late game's race: always have one Great Work under way.
@@ -211,7 +219,7 @@ export class OpeningBot {
     const hall = hallOf(world, this.owner);
     if (!hall) return false;
     const trader = STYLES[this.style].focus === 'trader';
-    const keep: Record<Good, number> = { logs: 22, planks: 8, stone: 10, berries: 26, fish: 26 };
+    const keep: Record<Good, number> = { logs: 22, planks: 8, stone: 10, berries: 26, fish: 26, grain: 10, bread: 20, ale: 6, ore: 4, tools: 3 };
     let best: { site: Discovery; good: Good; n: number; score: number } | null = null;
     for (const s of steadingsOf(world)) {
       const st = s.st!;

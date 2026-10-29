@@ -148,7 +148,7 @@ export const BALANCE = {
    * fills its Crown, `crownRate` a second (`crownTended` with a stockade standing watch). The Crown
    * is full at `crownNeed`. Rivals' progress drains at `crownDecay` while someone else keeps the stone.
    */
-  crownNeed: 1300,
+  crownNeed: 1100,
   /** The Crown opens at this tick: from then it fills, a point a second for each voice of the valley you hold beyond the rival's (at most `crownDiffCap`), and one more while a manned Stockade tends the Kingstone you keep. */
   crownOpens: secs(9 * 60),
   crownRate: 1,
@@ -179,6 +179,10 @@ export const BALANCE = {
   favourFade: secs(20),
   guardTicks: secs(80),
   giftEvery: secs(60),
+  /** Homes: ale is drunk every `homeUpkeepAle` ticks once they are cottages, tools used every `homeUpkeepTools` once they are hall-houses. A rank asks for this much prosperity (Village, Town). */
+  homeUpkeepAle: secs(60),
+  homeUpkeepTools: secs(180),
+  rankProsperity: [90, 170] as [number, number],
   /** A steading that stands with you pushes your border out: radius and power. */
   steadingReach: [7, 70] as [number, number],
   /** Caravans: a cart's pace (movement progress per tick), the most a settlement runs at once, and the biggest load. */

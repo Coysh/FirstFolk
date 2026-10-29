@@ -1,13 +1,17 @@
 import { BALANCE, secs } from './balance';
 
-export type Good = 'logs' | 'stone' | 'berries' | 'planks' | 'fish';
-export const GOODS: readonly Good[] = ['logs', 'planks', 'stone', 'berries', 'fish'];
+export type Good = 'logs' | 'stone' | 'berries' | 'planks' | 'fish' | 'grain' | 'bread' | 'ale' | 'ore' | 'tools';
+export const GOODS: readonly Good[] = ['logs', 'planks', 'stone', 'berries', 'fish', 'grain', 'bread', 'ale', 'ore', 'tools'];
+/** The goods the first town works with; the rest arrive with farms and forges (shown in the top bar once produced). */
+export const BASIC_GOODS: readonly Good[] = ['logs', 'planks', 'stone', 'berries', 'fish'];
 /** Goods settlers eat, in the order they reach for them. */
-export const FOODS: readonly Good[] = ['berries', 'fish'];
+export const FOODS: readonly Good[] = ['bread', 'berries', 'fish'];
+/** Meals in one unit of a food: a loaf feeds two. */
+export const FOOD_VALUE: Partial<Record<Good, number>> = { bread: 2 };
 
 export type NodeKind = 'tree' | 'rock' | 'bush' | 'fish';
 
-export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'stockade' | 'musterhall' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary';
+export type BuildingType = 'wagon' | 'woodcutter' | 'forester' | 'quarry' | 'forager' | 'fisher' | 'hut' | 'longhouse' | 'lookout' | 'watchtower' | 'stockade' | 'musterhall' | 'sawpit' | 'storehouse' | 'outpost' | 'henge' | 'meadhall' | 'granary' | 'farm' | 'bakehouse' | 'brewhouse' | 'mine' | 'smithy';
 
 export type Tool = 'axe' | 'pick' | 'basket' | 'hammer' | 'shovel' | 'saw' | 'spear';
 
@@ -38,7 +42,8 @@ export interface PlantJob {
 /** Turns an input good delivered by porters into an output good at the workplace. */
 export interface ProcessJob {
   kind: 'process';
-  input: Good;
+  /** What porters bring to it; a farm or a mine works with none. */
+  input?: Good;
   good: Good;
   workTicks: number;
   tool: Tool;
@@ -338,6 +343,66 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildable: true,
     requires: { skill: 'woodcraft', tier: 1 },
   },
+  farm: {
+    type: 'farm',
+    name: 'Farm',
+    icon: '🌾',
+    blurb: 'Fields of wheat tended by a farming family. Grain is for the bakehouse and the brewhouse. Needs a Journeyman Gatherer.',
+    cost: { logs: 5, planks: 2 },
+    buildTicks: secs(10),
+    size: 2,
+    job: { kind: 'process', good: 'grain', workTicks: secs(6), tool: 'basket', skill: 'husbandry', inputCap: 0, outputCap: 8, reserve: 0 },
+    buildable: true,
+    requires: { skill: 'husbandry', tier: 1 },
+  },
+  bakehouse: {
+    type: 'bakehouse',
+    name: 'Bakehouse',
+    icon: '🍞',
+    blurb: 'Bakes grain into bread, and a loaf feeds two. The cure for a hungry town. Needs a Journeyman Gatherer.',
+    cost: { logs: 4, planks: 3, stone: 3 },
+    buildTicks: secs(11),
+    size: 2,
+    job: { kind: 'process', input: 'grain', good: 'bread', workTicks: secs(4), tool: 'basket', skill: 'husbandry', inputCap: 4, outputCap: 8, reserve: 0 },
+    buildable: true,
+    requires: { skill: 'husbandry', tier: 1 },
+  },
+  brewhouse: {
+    type: 'brewhouse',
+    name: 'Brewhouse',
+    icon: '🍺',
+    blurb: 'Brews grain into ale. A town with bread and ale on its tables builds cottages. From Hamlet.',
+    cost: { logs: 5, planks: 4, stone: 4 },
+    buildTicks: secs(12),
+    size: 2,
+    job: { kind: 'process', input: 'grain', good: 'ale', workTicks: secs(5), tool: 'basket', skill: 'husbandry', inputCap: 4, outputCap: 8, reserve: 0 },
+    buildable: true,
+    rank: 1,
+  },
+  mine: {
+    type: 'mine',
+    name: 'Mine',
+    icon: '⛓️',
+    blurb: 'Digs ore from the hills. Ore is for the smithy. Needs a Journeyman Mason.',
+    cost: { logs: 5, planks: 3, stone: 4 },
+    buildTicks: secs(12),
+    size: 2,
+    job: { kind: 'process', good: 'ore', workTicks: secs(8), tool: 'pick', skill: 'stonework', inputCap: 0, outputCap: 8, reserve: 0 },
+    buildable: true,
+    requires: { skill: 'stonework', tier: 1 },
+  },
+  smithy: {
+    type: 'smithy',
+    name: 'Smithy',
+    icon: '🔨',
+    blurb: 'Forges ore into tools. A town with tools builds the finest homes. From Hamlet.',
+    cost: { logs: 4, planks: 4, stone: 6 },
+    buildTicks: secs(13),
+    size: 2,
+    job: { kind: 'process', input: 'ore', good: 'tools', workTicks: secs(7), tool: 'hammer', skill: 'stonework', inputCap: 4, outputCap: 8, reserve: 0 },
+    buildable: true,
+    rank: 1,
+  },
   storehouse: {
     type: 'storehouse',
     name: 'Storehouse',
@@ -352,11 +417,16 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
 };
 
-export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'storehouse', 'watchtower', 'stockade', 'musterhall', 'longhouse', 'henge', 'meadhall', 'granary'];
+export const BUILD_MENU: BuildingType[] = ['woodcutter', 'forager', 'quarry', 'forester', 'hut', 'lookout', 'fisher', 'sawpit', 'farm', 'bakehouse', 'storehouse', 'watchtower', 'stockade', 'brewhouse', 'mine', 'smithy', 'musterhall', 'longhouse', 'henge', 'meadhall', 'granary'];
 
 export const GREAT_WORKS: BuildingType[] = ['henge', 'meadhall', 'granary'];
 
 export const GOOD_INFO: Record<Good, { name: string; icon: string }> = {
+  grain: { name: 'Grain', icon: '🌾' },
+  bread: { name: 'Bread', icon: '🍞' },
+  ale: { name: 'Ale', icon: '🍺' },
+  ore: { name: 'Ore', icon: '⛓️' },
+  tools: { name: 'Tools', icon: '🔨' },
   logs: { name: 'Logs', icon: '🪵' },
   planks: { name: 'Planks', icon: '🟫' },
   stone: { name: 'Stone', icon: '🪨' },
