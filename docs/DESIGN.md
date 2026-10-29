@@ -24,6 +24,7 @@ FirstFolk is a fast, single-player browser settlement builder. It combines Settl
   - **New sinks:** Great Works and Market Day.
 
   See §0b.
+- **The Living Valley (v0.24–v0.28, branch `dev/living-valley`), superseding some of the above:** four neutral steadings won by ox-cart caravans, a Crown filled by the *voices of the valley*, a grown-up economy (bread, ale, tools; cottages and hall-houses) with prosperity gating the ranks, winter ice and waylaid carts, Last Wants, Challenges and Market Day removed, and a harness that measures decisions and ablations. See §0i.
 
 ---
 
@@ -785,6 +786,32 @@ So the Market is a chore that looks like a decision, which is why S1 removes it,
 - **The end report** now says how the valley was won: steadings that stood with you, goods carried, home level and prosperity. The first-person "road you walked" line counts steadings won and carts sent as *Trade*.
 - **Icons:** the five new buildings and goods use their emoji as icons (`icon()` in `game.ts`, `ICON` in `overlay.ts`) until painted ones exist.
 - **Not done:** Blender models for the steading, the caravan and the five new buildings (all are code-built, and the art test excludes the steading), new audio stingers (existing ones are reused), and OpenAI-painted crests. They remain the first art tasks.
+
+### S5: iterate, and the bug that hid the whole design (v0.28.0)
+**The finding.** Every matrix run in S1 to S4 showed Raider on top (58–71%) and Hearthfolk at the bottom (23–29%), and I spent S3 on knobs (a town militia, slower raids, a Mustering Hall for the economy styles, double favour for fine goods) that did nothing. Tracing *when* each bot sent its first cart (a small script: first cart, first Want won, first ally) found it: `OpeningBot.caravan` looked for `hallOf`, which is the **Mustering Hall**, not the founders' hall, so no bot could send a cart until it had built one (8 to 12 minutes in, or never). The steadings had been played almost entirely through guard Wants. One line fixed it; the bots now send their first cart at 2 to 3 minutes. **Lesson:** when a style loses everywhere, check that it can do the new thing at all before tuning numbers.
+
+**Before and after the fix** (24 duels, seed 100+, then three seed blocks of the style matrix):
+
+| | with the bug | fixed |
+|---|---|---|
+| Raider | 58–71% | 56–58% |
+| Hearthfolk | 23–29% | 31–38% |
+| Balanced | 54–65% | 53–61% |
+| Expander | 46–63% | 41–52% |
+| Trader / Mason / Warden | 40–63% | 45–58% |
+| Dominance alarms | 1–3 a block | none above 61% |
+
+**Retuned** for the faster start: the Crown is 1,500 (it was 1,100 for the buggy game, which made it too slow, then too fast), gifts earn up to 8 favour (fine goods 16), early gifts can be small.
+
+**Measured, final** (24 duels, seed 100+): median **33.8 min**, 2.7 lead changes, 8 comebacks, 8 of 24 end on the clock, decisions a minute **2.9 / 2.9 / 3.5 / 3.7** (0–5 / 5–15 / 15–30 / last 10), no minute without a decision or a contest, the last ten minutes the busiest (**7.1** actions a minute against **4.0** in the first ten), 11 allegiance flips a game. **A 100-game Balanced mirror is 51 : 49 by side** (median 29.6 min, 31% comebacks).
+
+**Matrix, three seed blocks** (12 games both sides, 7 styles): Balanced 53 / 59 / 61, Raider 56 / 56 / 58, Warden 51 / 58 / 52, Trader 51 / 50 / 58, Expander 51 / 52 / 41, Mason 49 / 45 / 46, Hearthfolk 38 / 31 / 35. Blocks 300 and 500 were not used for tuning. **Hearthfolk is still the weakest** (it builds farms and homes and defends least); it is the first thing to look at next.
+
+**Ablation, final** (mirror Balanced, 30 games, seed 900, ±9 noise): without caravans **−30 points**, without house powers −23, without raids −17, without scouting −10, without Rally −10, without bridging 0 (it only matters on some valleys). Every decision but bridging costs at least the 8-point bar.
+
+**Failed experiments, kept so they are not tried again:** a town militia; slower raids; economy styles with a Mustering Hall (already built); double favour for fine goods as a fix for Hearthfolk (it was the bug); the Crown at 1,800 (games ran 45 minutes with the bug).
+
+**What a human should look at** (the sims cannot say whether it is fun): the first five minutes now carry a goal (a steading's smoke is visible at 0:00 and the first Want arrives at 2:30); whether sending carts feels like a decision or a chore (the 🛒 button picks the goods for you); whether the Crown card is readable; whether winter's ice (raids that cross anywhere) is exciting or unfair; Wagon Train and Open Hands as house powers; and the end of a game. Hearthfolk-style play (bread, homes, no spears) is the weakest road.
 
 ## 1. Design guardrails
 
@@ -1718,3 +1745,6 @@ Rival difficulty was re-measured over 16 seeds: Hardy (120) gives the player abo
 
 ### v0.27.0 Clarity and feel (2026-10-29, branch dev/living-valley)
 - Watch a valley (AI vs AI spectator), a lighter top bar, a report that says how the valley was won, emoji icons for the new goods and buildings, `tools/watch-shot.mjs`, `tools/town-shot.mjs`, `tools/steading-shot.mjs`.
+
+### v0.28.0 Iterate (2026-10-29, branch dev/living-valley)
+- Fixed the bot bug that kept carts off the road until a Mustering Hall existed; the Crown is 1,500; gifts are stronger; bots send carts while two sites are under way. Final measurements and the failed experiments are in §0i. 176 tests pass.

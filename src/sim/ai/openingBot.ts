@@ -88,6 +88,8 @@ export class OpeningBot {
     const sites = [...world.buildings.values()].filter((b) => b.owner === this.owner && !b.done).length;
     // A Kingstone with no post of ours beside it is worth putting down a Great Work for.
     const kingstone = crownSite(world);
+    // Sending a cart builds nothing, so a town with two sites under way can still answer a steading.
+    if (!this.ablate.has('caravan') && this.caravan(world)) return;
     if (sites >= (kingstone && !watched(world, this.owner, kingstone.x, kingstone.y) ? 4 : 2)) return;
     const emptyHuts = [...world.buildings.values()].filter((b) => b.owner === this.owner && isHome(b.type) && b.familyId === 0).length;
     const count = (t: BuildingType) => world.countBuildings(this.owner, t, true);
@@ -104,7 +106,6 @@ export class OpeningBot {
     const target = this.frontierTarget(world);
     if (!this.ablate.has('deed') && this.useDeed(world, target)) return;
     if (!this.ablate.has('raid') && this.raid(world)) return;
-    if (!this.ablate.has('caravan') && this.caravan(world)) return;
     if (!this.ablate.has('bridge') && world.tick % (this.thinkEvery * 4) === 0 && this.bridge(world)) return;
     const hungry = world.larder(this.owner) < 12;
     const home: BuildingType = world.isUnlocked(this.owner, 'longhouse') && this.affordable(world, 'longhouse') ? 'longhouse' : 'hut';
@@ -216,7 +217,8 @@ export class OpeningBot {
    */
   private caravan(world: World): boolean {
     if (world.caravans.filter((c) => c.owner === this.owner).length >= caravanMax(world, this.owner)) return false;
-    const hall = hallOf(world, this.owner);
+    // (The Mustering Hall is `hallOf`; carts leave from the founders' wagon and its hall.)
+    const hall = [...world.buildings.values()].find((b) => b.owner === this.owner && b.type === 'wagon');
     if (!hall) return false;
     const trader = STYLES[this.style].focus === 'trader';
     const keep: Record<Good, number> = { logs: 22, planks: 8, stone: 10, berries: 26, fish: 26, grain: 10, bread: 20, ale: 6, ore: 4, tools: 3 };
@@ -238,7 +240,7 @@ export class OpeningBot {
         score = 100 + (st.ally !== this.owner ? 30 : 0) - dist / 2 - (st.want.progress[1 - this.owner] ?? 0);
       } else {
         n = Math.min(n, 16);
-        if (n < 12 || st.favour[this.owner] >= 70 || (st.ally === this.owner && st.favour[this.owner] >= 55)) continue;
+        if (n < (world.tick < 6000 ? 6 : 12) || st.favour[this.owner] >= 70 || (st.ally === this.owner && st.favour[this.owner] >= 55)) continue;
         score = 20 - dist / 3;
       }
       if (n >= 1 && !caravanProblem(world, this.owner, s.id, load.good, n) && (!best || score > best.score) && !routeThreat(world, this.owner, s.id)) best = { site: s, good: load.good, n, score };

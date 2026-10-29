@@ -180,7 +180,7 @@ export function openHands(world: World, owner: number): string | null {
     world.players[owner].caravanned += pick.n;
     w.progress[owner] += pick.n;
     if (w.progress[owner] >= w.n) endWant(world, pick.site, owner);
-    else addFavour(world, pick.site, owner, Math.min(BALANCE.giftFavour, Math.floor(pick.n / 4)));
+    else addFavour(world, pick.site, owner, Math.min(BALANCE.giftFavour, Math.floor(pick.n / 2)));
     return `${pick.site.st!.name} take ${pick.n} ${w.good} from your hands.`;
   }
   const poor = steadingsOf(world)
@@ -270,7 +270,7 @@ function arrive(world: World, c: Caravan): void {
       won = true;
       endWant(world, s, c.owner);
     }
-  } else addFavour(world, s, c.owner, FINE_GOODS.includes(c.good) ? Math.min(BALANCE.giftFavour * 2, Math.floor(c.n / 2)) : Math.min(BALANCE.giftFavour, Math.floor(c.n / 4)));
+  } else addFavour(world, s, c.owner, FINE_GOODS.includes(c.good) ? Math.min(BALANCE.giftFavour * 2, c.n) : Math.min(BALANCE.giftFavour, Math.floor(c.n / 2)));
   world.emit({ type: 'caravanArrived', owner: c.owner, siteId: c.siteId, good: c.good, n: c.n, won });
 }
 

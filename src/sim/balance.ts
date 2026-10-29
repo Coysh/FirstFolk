@@ -159,7 +159,7 @@ export const BALANCE = {
    * fills its Crown, `crownRate` a second (`crownTended` with a stockade standing watch). The Crown
    * is full at `crownNeed`. Rivals' progress drains at `crownDecay` while someone else keeps the stone.
    */
-  crownNeed: 1100,
+  crownNeed: 1500,
   /** The Crown opens at this tick: from then it fills, a point a second for each voice of the valley you hold beyond the rival's (at most `crownDiffCap`), and one more while a manned Stockade tends the Kingstone you keep. */
   crownOpens: secs(9 * 60),
   crownRate: 1,
@@ -184,7 +184,7 @@ export const BALANCE = {
   wantTicks: secs(170),
   wantWin: 35,
   wantSnub: 8,
-  giftFavour: 6,
+  giftFavour: 8,
   allyFavour: 50,
   allyLead: 20,
   keepFavour: 40,
